@@ -1,4 +1,5 @@
 #include "machine.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
@@ -82,6 +83,60 @@ std::string Machine::cstr(uint32_t addr, uint32_t max) const {
 uint32_t Machine::reg(int r) const { uint32_t v; uc_reg_read(uc_, r, &v); return v; }
 void Machine::setreg(int r, uint32_t v) { uc_reg_write(uc_, r, &v); }
 uint32_t Machine::esp() const { return reg(UC_X86_REG_ESP); }
+
+// ---- guest EIP profiler (THEOC_PROFILE) --------------------------------------
+// UC_HOOK_BLOCK fires once per basic-block entry with the block's byte size; we
+// accumulate size per block-start EIP (Σ instruction bytes ≈ work ≈ time). Only
+// guest code (game/mvos, < 0x50000000) is counted; host trap/stub/scratch pages
+// are skipped. Dumped as a rolling window so the top-N tracks the current screen.
+void Machine::block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user) {
+    auto* self = static_cast<Machine*>(user);
+    uint32_t a = (uint32_t)addr;
+    if (a >= 0x50000000) return;                 // host trap/stub/scratch — ignore
+    self->prof_[a] += size;
+    if ((++self->prof_ticks_ & 0x3ffff) == 0) {  // check the clock ~every 256k blocks
+        auto now = std::chrono::steady_clock::now();
+        if (now - self->prof_last_ >= std::chrono::seconds(3)) {
+            self->prof_dump();
+            self->prof_last_ = now;
+            self->prof_.clear();
+        }
+    }
+}
+
+void Machine::prof_dump() {
+    if (prof_.empty()) return;
+    std::vector<std::pair<uint32_t, uint64_t>> v(prof_.begin(), prof_.end());
+    std::sort(v.begin(), v.end(),
+              [](auto& a, auto& b) { return a.second > b.second; });
+    uint64_t total = 0;
+    for (auto& e : v) total += e.second;
+    std::fprintf(stderr, "\n--- [profile] top guest blocks (window Σ=%llu) ---\n",
+                 (unsigned long long)total);
+    uint32_t mv = prof_mvos_base_ ? prof_mvos_base_ : 0x10000000u;
+    for (size_t i = 0; i < v.size() && i < 15; ++i) {
+        uint32_t a = v[i].first;
+        double pct = total ? 100.0 * (double)v[i].second / (double)total : 0.0;
+        char lbl[40];
+        if (a >= mv && a < mv + 0x200000) std::snprintf(lbl, sizeof lbl, "mvos+%#x", a - mv);
+        else std::snprintf(lbl, sizeof lbl, "game %#010x", a);
+        std::fprintf(stderr, "  %5.1f%%  %-18s (Σ%llu)\n", pct, lbl,
+                     (unsigned long long)v[i].second);
+    }
+}
+
+void Machine::enable_profiling(uint32_t mvos_base) {
+    profiling_ = true;
+    prof_mvos_base_ = mvos_base;
+    prof_last_ = std::chrono::steady_clock::now();
+    uc_hook h;
+    // begin=1 > end=0 → hook the whole address space; we filter in the callback.
+    uc_check(uc_hook_add(uc_, &h, UC_HOOK_BLOCK, (void*)&Machine::block_hook,
+                         this, 1, 0),
+             "uc_hook_add(profile)");
+    std::fprintf(stderr, "[profile] guest block profiler ON "
+                 "(rolling top-15 every 3s; mvos base %#x)\n", mvos_base);
+}
 
 void Machine::add_code_traps(uint32_t base, uint32_t nslots, TrapFn fn,
                              bool map_region) {

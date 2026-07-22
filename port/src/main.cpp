@@ -209,6 +209,11 @@ int main(int argc, char** argv) {
     // Start — the game (menu / state machine) ----------------------------------
     bool start_ok = false;
     if (init_ok && (open_ok || std::getenv("THEOC_START_ANYWAY"))) {
+        // Optional guest-code profiler: drive the UI into the slow view and read
+        // the rolling top-N dumps (THEOC_PROFILE=1). Enabled just before Start so
+        // boot/ctors aren't in the sample.
+        if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
+
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";
         m.write(argv_str, kArg0, sizeof kArg0);

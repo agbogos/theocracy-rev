@@ -1,9 +1,11 @@
 // Unicorn i386 wrapper: guest memory, the HLE trap layer, and the
 // native->guest "call a guest function" primitive.
 #pragma once
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <unicorn/unicorn.h>
 
@@ -103,6 +105,12 @@ public:
 
     uc_engine* uc() const { return uc_; }
 
+    // Guest EIP profiler (THEOC_PROFILE): a size-weighted basic-block histogram
+    // over guest code, printed as a rolling top-N every few seconds so the dump
+    // tracks whatever is on screen. Drive the UI into the slow view and read the
+    // live windows; hot addresses are labelled game/mvos for the Ghidra DBs.
+    void enable_profiling(uint32_t mvos_base);
+
     // Address of the last invalid memory access (for diagnostics).
     uint32_t last_fault_addr() const { return last_fault_addr_; }
     uint32_t last_fault_eip() const { return last_fault_eip_; }
@@ -117,6 +125,14 @@ private:
     static void code_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     static bool mem_hook(uc_engine*, int type, uint64_t addr, int size,
                          int64_t value, void* user);
+    static void block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
+    void prof_dump();
+
+    bool profiling_ = false;
+    uint32_t prof_mvos_base_ = 0;
+    uint64_t prof_ticks_ = 0;
+    std::unordered_map<uint32_t, uint64_t> prof_;   // block-start EIP -> Σ bytes
+    std::chrono::steady_clock::time_point prof_last_;
 
     struct TrapRegion { uint32_t lo, hi; TrapFn fn; };
     uc_engine* uc_ = nullptr;

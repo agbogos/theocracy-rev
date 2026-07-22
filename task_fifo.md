@@ -8,8 +8,11 @@ already landed and `user-test.md` for the manual QA pass.
 
 1. **Province-view performance** — the last open functional bug. Slow after
    `setitimer`; also slow on the Win VM, so likely genuine sim/CPU load, not
-   timer-gated. Sample the guest hot EIP in province mode: one heavy function
-   (sim) vs. death-by-a-thousand-traps vs. host present cost.
+   timer-gated. **Tool built:** `THEOC_PROFILE=1` (Machine block profiler) prints
+   a rolling top-15 of hot guest blocks every 3s, labelled `game`/`mvos+off`
+   (mvos off = libmvos *file* addr; Ghidra addr = +0x10000). Needs UI-driving
+   into province view; then map the hot addresses in Ghidra to the heavy
+   function (sim vs. blit vs. trap caller).
 
 2. **Long-session stability** — soak-test a 10+ min session. Suspects: the
    green-run/timer trampoline and the soft-threaded sound mixer (slow ESP drift
