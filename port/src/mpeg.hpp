@@ -15,6 +15,10 @@ struct MpegMovie {
     int samplerate = 22050;
     std::vector<std::vector<uint16_t>> frames;  // RGB565, width*height each
     size_t frame_i = 0;
+    // Decoded audio, resampled to the host device format: interleaved stereo
+    // S16 @ 22050 Hz. `audio_pos` = samples already pushed to the mixer.
+    std::vector<int16_t> audio;
+    size_t audio_pos = 0;
     bool playing = false;
     uint32_t display = 0;  // guest cDisplay*
     int move_x = 0, move_y = 0;

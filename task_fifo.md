@@ -13,11 +13,11 @@ Tracking only. Not a design doc. Update as items land.
 - Gameplay/UI audio (`/dev/dsp` → SDL via soft-thread green-run)
 - Keyboard (eKeyCode + Intuition type 8/0x10)
 - Game cursor + click anim; setitimer → TimerSystem::Proc
+- Movie audio (libav decode → swresample to 22050/S16/stereo → mixer, paced per video frame)
 
 ## Outstanding (FIFO — prefer top)
 
 1. **Province mode slow** — still slow after setitimer; also seen on Win VM. Heavier than realm map (CPU/sim load, not timer-gated). Investigate guest hot path / host cost when ready.
-2. **Movie audio** — cutscenes are video-only today (libav decode paints frames; no MPEG audio → mixer/SDL). Gameplay SFX work; intros/logos stay silent.
 
 ### Notes
 - `THEOC_START_SEC` default 600; `0` = unlimited (covers long intros).

@@ -255,7 +255,8 @@ Save dialog creates a `cVOEditRow`; `Process` probes shift via
 | Item | Status |
 |------|--------|
 | **Audio** | SDL 22050 Hz stereo; `/dev/dsp` open/write mixes into host queue |
-| **MPEG** | libav → RGB565; paced to stream fps in `SMPEG_playvideoframe` (was turbo free-run) |
+| **MPEG video** | libav → RGB565; paced to stream fps in `SMPEG_playvideoframe` (was turbo free-run) |
+| **MPEG audio** | libav audio stream → `swresample` to 22050/S16/stereo, stored per movie; `SMPEG_playvideoframe` pushes one frame's samples (2-frame lead) into the same mixer queue, so cutscene sound tracks the fps-paced video |
 | **Cursor** | Guest `cSprite` via real `SwapBuffers__Fv` Before/AfterSwapBuffer; HLE present only |
 
 ```sh

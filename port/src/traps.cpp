@@ -764,6 +764,8 @@ void TrapLayer::register_builtins() {
         if (!mov || mov->frames.empty()) return 0;
         mov->playing = true;
         mov->frame_i = 0;
+        mov->audio_pos = 0;
+        if (mov->has_audio) ensure_audio();   // open the SDL device for cutscene sound
         // First frame shows immediately; subsequent frames wait on next_frame_at.
         mov->next_frame_at = std::chrono::steady_clock::now();
         m.w32(h + 4, 1);
@@ -833,6 +835,27 @@ void TrapLayer::register_builtins() {
                     fr.data() + (size_t)y * (size_t)mov->width,
                     (uint32_t)copy_w * 2);
         }
+        // Feed this frame's audio into the host mixer. Video is paced to fps
+        // (the hold loop above sleeps in real time), so pushing one frame's
+        // worth of samples per frame tracks the SDL callback's 22050 Hz drain.
+        // Keep ~2 frames of lead so the callback never underruns mid-cutscene.
+        if (mov->has_audio && !mov->audio.empty()) {
+            double fps = mov->fps > 1.0 ? mov->fps : 15.0;
+            size_t chans = (size_t)mov->channels;              // 2 (stereo)
+            size_t per_frame = (size_t)(mov->samplerate / fps + 0.5) * chans;
+            size_t frames_shown = mov->frame_i;                // already advanced
+            size_t target = (frames_shown + 2) * per_frame;    // 2-frame lead
+            if (target > mov->audio.size()) target = mov->audio.size();
+            if (target > mov->audio_pos) {
+                size_t n = target - mov->audio_pos;
+                audio_push(mov->audio.data() + mov->audio_pos, n * sizeof(int16_t));
+                if (mov->audio_pos == 0)
+                    std::printf("  [audio] cutscene sound: %zu samp @ %d Hz\n",
+                                mov->audio.size() / chans, mov->samplerate);
+                mov->audio_pos = target;
+            }
+        }
+
         // Present so the user sees the cutscene (play loop may not call
         // SwapBuffers between frames).
         if (video_.is_open()) {

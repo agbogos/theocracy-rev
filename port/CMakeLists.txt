@@ -20,7 +20,7 @@ add_executable(theoc
 
 target_include_directories(theoc PRIVATE ${BREW}/include)
 target_link_directories(theoc PRIVATE ${BREW}/lib)
-target_link_libraries(theoc PRIVATE unicorn SDL2 avformat avcodec avutil swscale)
+target_link_libraries(theoc PRIVATE unicorn SDL2 avformat avcodec avutil swscale swresample)
 target_compile_options(theoc PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # NOTE: M1 runs entirely inside Unicorn's own guest address space, so the host
