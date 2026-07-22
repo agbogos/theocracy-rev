@@ -447,11 +447,43 @@ void TrapLayer::register_builtins() {
     };
 
     // ---- abort / exit -------------------------------------------------------
-    // Fatal() ends in abort. For bring-up we log and return so the caller can
-    // continue (same philosophy as pure-HLE Fatal). exit/_exit still stop the
-    // current call() cleanly (no guest EH unwind → no stack smash).
-    t["abort"] = [](Machine&, uint32_t) -> uint32_t {
-        std::fprintf(stderr, "  [abort] ignored (bring-up)\n");
+    // Fatal() ends in abort. Default (bring-up): log and return so the caller
+    // can continue past non-critical Fatals. THEOC_LOUD_ABORT=1: dump a guest
+    // backtrace and stop the current call() so a real fault surfaces here
+    // instead of hiding as a silent OpenSubsystems restart / continued run.
+    // exit/_exit always stop the current call() cleanly (no guest EH unwind).
+    t["abort"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        static const bool loud = std::getenv("THEOC_LOUD_ABORT") != nullptr;
+        if (!loud) {
+            std::fprintf(stderr, "  [abort] ignored (bring-up; THEOC_LOUD_ABORT=1 to trap)\n");
+            return 0;
+        }
+        const uint32_t mvos = mvos_base_ ? mvos_base_ : 0x10000000u;
+        auto label = [mvos](uint32_t a) -> std::string {
+            char b[48];
+            if (a >= mvos && a < mvos + 0x200000)
+                std::snprintf(b, sizeof b, "mvos+%#x", a - mvos);
+            else if (a >= 0x08048000 && a < 0x08a00000)
+                std::snprintf(b, sizeof b, "game %#010x", a);
+            else
+                std::snprintf(b, sizeof b, "%#010x", a);
+            return b;
+        };
+        std::fprintf(stderr, "\n=== [abort] LOUD: guest abort()/Fatal — backtrace ===\n");
+        try {
+            std::fprintf(stderr, "  called from %s\n", label(m.r32(esp)).c_str());
+        } catch (...) {}
+        // Walk the g++ 2.95 EBP frame chain: [ebp]=saved ebp, [ebp+4]=ret addr.
+        uint32_t ebp = m.reg(UC_X86_REG_EBP);
+        for (int i = 0; i < 24 && ebp; ++i) {
+            uint32_t ret = 0, next = 0;
+            try { ret = m.r32(ebp + 4); next = m.r32(ebp); } catch (...) { break; }
+            if (ret) std::fprintf(stderr, "  #%-2d %s\n", i, label(ret).c_str());
+            if (next <= ebp) break;   // frame pointers must ascend, else bail
+            ebp = next;
+        }
+        std::fprintf(stderr, "=== stopping call (unset THEOC_LOUD_ABORT to continue past) ===\n\n");
+        m.request_stop();
         return 0;
     };
     auto stop = [](Machine& m, uint32_t) -> uint32_t {

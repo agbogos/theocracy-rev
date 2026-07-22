@@ -265,10 +265,10 @@ THEOC_SKIP_MOVIES=1 ./port/build/theoc   # fast boot
 ```
 
 ### Remaining debt
-- Fatal/abort policy (non-fatal in bring-up)
 - Long-session stability, multiplayer
 - Province-view performance (also on Win VM)
 - *(R_386_COPY shared storage — fixed in G12)*
+- *(Fatal/abort policy — loud mode added in G13; default stays non-fatal)*
 
 ## G11 — keyboard eKeyCode + Intuition pipe (done)
 
@@ -313,10 +313,34 @@ VVC (game) = 0x601bc3e0   VKeyboard = 0x601ba230   …   (all populated, no sync
 Single Player → Realm Shell        0 unimplemented, 0 faults
 ```
 
+## G13 — loud abort mode (done)
+
+Guest `Fatal()` ends in `abort()` (an HLE'd libc import). Default bring-up policy
+keeps it **non-fatal** — log and return — so the caller can continue past
+non-critical Fatals; the happy path is abort-free so this never fires in normal
+play. The risk was that a *real* fault could hide as a silent continue / restart.
+
+**`THEOC_LOUD_ABORT=1`** turns `abort` into a diagnostic: walk the g++ 2.95 EBP
+frame chain (`[ebp]`=saved ebp, `[ebp+4]`=ret) and print a labeled backtrace,
+then `Machine::request_stop()` the current call so the failure surfaces here.
+Addresses are tagged `game 0x080…` or `mvos+0x…` so each drops straight into the
+matching Ghidra DB (mvos offset = the libmvos file address).
+
+```
+=== [abort] LOUD: guest abort()/Fatal — backtrace ===
+  called from mvos+0x951d2
+  #0  mvos+0x548f1
+  #1  mvos+0x54f8b
+  #2  game 0x0814bae8
+  #3  game 0x0825721d      <- ctor #104 @0x8257190
+  #4  0xdead0000           <- call() STOP sentinel
+```
+
 ## Build / run
 
 ```sh
 cmake -S port -B port/build && cmake --build port/build
 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc \
   data/cd/linux/theocracy.real data/cd/linux/libmvos.so.0.9
+# THEOC_LOUD_ABORT=1   trap guest abort()/Fatal with a backtrace + stop
 ```
