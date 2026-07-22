@@ -1,7 +1,6 @@
-// Minimal ELF32 (i386) reader for theocracy.real — dependency-free.
-// We only need: PT_LOAD segments, .dynsym/.dynstr, and the REL relocation
-// sections (.rel.plt / .rel.got / .rel.bss). No section is trusted beyond
-// what the M1 loader consumes; everything is bounds-checked against the file.
+// Minimal ELF32 (i386) reader — dependency-free.
+// Supports ET_EXEC (theocracy.real) and ET_DYN (libmvos.so): PT_LOAD,
+// .dynsym/.dynstr, and all SHT_REL sections. Bounds-checked against the file.
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -35,21 +34,36 @@ struct Rel { uint32_t r_offset, r_info; };
 #pragma pack(pop)
 
 // e_type / p_type / sh_type
-enum { ET_EXEC = 2, EM_386 = 3 };
-enum { PT_LOAD = 1 };
+enum { ET_REL = 1, ET_EXEC = 2, ET_DYN = 3, EM_386 = 3 };
+enum { PT_LOAD = 1, PT_DYNAMIC = 2 };
 enum { PF_X = 1, PF_W = 2, PF_R = 4 };
-enum { SHT_REL = 9, SHT_DYNSYM = 11 };
+enum { SHT_REL = 9, SHT_DYNSYM = 11, SHT_DYNAMIC = 6 };
 enum { SHN_UNDEF = 0 };
 // i386 relocation types
-enum { R_386_32 = 1, R_386_COPY = 5, R_386_GLOB_DAT = 6, R_386_JMP_SLOT = 7,
-       R_386_RELATIVE = 8 };
+enum {
+    R_386_NONE = 0, R_386_32 = 1, R_386_PC32 = 2,
+    R_386_COPY = 5, R_386_GLOB_DAT = 6, R_386_JMP_SLOT = 7,
+    R_386_RELATIVE = 8,
+};
+// st_info helpers
+enum { STB_LOCAL = 0, STB_GLOBAL = 1, STB_WEAK = 2 };
+enum { STT_NOTYPE = 0, STT_OBJECT = 1, STT_FUNC = 2 };
+inline uint8_t st_bind(uint8_t info) { return info >> 4; }
+inline uint8_t st_type(uint8_t info) { return info & 0xf; }
+
+// DT_* tags we care about
+enum { DT_NULL = 0, DT_NEEDED = 1, DT_INIT = 12, DT_FINI = 13,
+       DT_INIT_ARRAY = 25, DT_INIT_ARRAYSZ = 27 };
 
 inline uint32_t rel_sym(uint32_t info)  { return info >> 8; }
 inline uint32_t rel_type(uint32_t info) { return info & 0xff; }
 
 struct Segment { uint32_t vaddr, memsz, filesz, offset, flags; };
-struct Symbol  { std::string name; uint32_t value, size; uint16_t shndx;
-                 bool undef() const { return shndx == SHN_UNDEF; } };
+struct Symbol  {
+    std::string name; uint32_t value, size; uint16_t shndx; uint8_t info;
+    bool undef() const { return shndx == SHN_UNDEF; }
+    bool weak()  const { return st_bind(info) == STB_WEAK; }
+};
 struct Reloc   { std::string section; uint32_t offset, sym, type; };
 struct Section { std::string name; uint32_t addr, size, offset, type; };
 
@@ -63,16 +77,28 @@ public:
     }
 
     const Ehdr& ehdr() const { return *reinterpret_cast<const Ehdr*>(buf_.data()); }
+    uint16_t type() const { return ehdr().e_type; }
+    bool is_dyn() const { return type() == ET_DYN; }
+    bool is_exec() const { return type() == ET_EXEC; }
     const std::vector<Segment>& segments() const { return segs_; }
     const std::vector<Symbol>&  dynsyms()  const { return syms_; }
     const std::vector<Reloc>&   relocs()   const { return rels_; }
     const std::vector<Section>& sections() const { return secs_; }
     const std::vector<uint8_t>& bytes()    const { return buf_; }
+    uint32_t dt_init() const { return dt_init_; }   // 0 if none (file-relative VA)
+    uint32_t dt_fini() const { return dt_fini_; }
 
     const Symbol& sym(uint32_t i) const { return syms_.at(i); }
     const Section* find_section(const std::string& n) const {
         for (auto& s : secs_) if (s.name == n) return &s;
         return nullptr;
+    }
+
+    // Dynsym index of a name, or (uint32_t)-1.
+    uint32_t find_sym_idx(const std::string& name) const {
+        for (uint32_t i = 0; i < syms_.size(); ++i)
+            if (syms_[i].name == name) return i;
+        return (uint32_t)-1;
     }
 
 private:
@@ -81,6 +107,7 @@ private:
     std::vector<Symbol>  syms_;
     std::vector<Reloc>   rels_;
     std::vector<Section> secs_;
+    uint32_t dt_init_ = 0, dt_fini_ = 0;
 
     template <class T> const T* at(uint32_t off, uint32_t n = 1) const {
         if (uint64_t(off) + uint64_t(sizeof(T)) * n > buf_.size())
@@ -94,8 +121,8 @@ private:
             throw std::runtime_error("not an ELF file");
         if (e.e_ident[4] != 1 /*ELFCLASS32*/ || e.e_machine != EM_386)
             throw std::runtime_error("not ELF32 i386");
-        if (e.e_type != ET_EXEC)
-            throw std::runtime_error("not ET_EXEC");
+        if (e.e_type != ET_EXEC && e.e_type != ET_DYN)
+            throw std::runtime_error("not ET_EXEC/ET_DYN");
 
         for (int i = 0; i < e.e_phnum; ++i) {
             const Phdr& p = *at<Phdr>(e.e_phoff + i * e.e_phentsize);
@@ -103,8 +130,6 @@ private:
                 segs_.push_back({p.p_vaddr, p.p_memsz, p.p_filesz, p.p_offset, p.p_flags});
         }
 
-        // Section headers: locate .dynsym (+ its .dynstr via sh_link) and the
-        // REL sections. Names come from .shstrtab (e_shstrndx).
         const Shdr* sh = at<Shdr>(e.e_shoff, e.e_shnum);
         const Shdr& shstr = sh[e.e_shstrndx];
         auto secname = [&](uint32_t nameoff) -> std::string {
@@ -130,7 +155,7 @@ private:
             const char* nm = reinterpret_cast<const char*>(
                 buf_.data() + dynstr.sh_offset + st[i].st_name);
             syms_.push_back({std::string(nm), st[i].st_value, st[i].st_size,
-                             st[i].st_shndx});
+                             st[i].st_shndx, st[i].st_info});
         }
 
         for (int i = 0; i < e.e_shnum; ++i) {
@@ -141,6 +166,20 @@ private:
             for (uint32_t r = 0; r < nrel; ++r)
                 rels_.push_back({name, rl[r].r_offset,
                                  rel_sym(rl[r].r_info), rel_type(rl[r].r_info)});
+        }
+
+        // DT_INIT / DT_FINI from SHT_DYNAMIC or PT_DYNAMIC content via section.
+        for (int i = 0; i < e.e_shnum; ++i) {
+            if (sh[i].sh_type != SHT_DYNAMIC) continue;
+            uint32_t n = sh[i].sh_size / 8;
+            for (uint32_t k = 0; k < n; ++k) {
+                int32_t tag; uint32_t val;
+                std::memcpy(&tag, buf_.data() + sh[i].sh_offset + k * 8, 4);
+                std::memcpy(&val, buf_.data() + sh[i].sh_offset + k * 8 + 4, 4);
+                if (tag == DT_NULL) break;
+                if (tag == DT_INIT) dt_init_ = val;
+                if (tag == DT_FINI) dt_fini_ = val;
+            }
         }
     }
 };

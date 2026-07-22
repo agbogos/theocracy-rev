@@ -12,8 +12,11 @@
 namespace guestmap {
 constexpr uint32_t TRAP_BASE = 0x77000000;  // 1 byte per import; RX
 constexpr uint32_t VT_TRAP_BASE = 0x78000000; // 1 byte per synthesized vtable slot; RX
+constexpr uint32_t PLUGIN_TRAP_BASE = 0x76000000; // synthetic dlsym exports (Query/Create*)
 constexpr uint32_t STUB_BASE = 0x79000000;    // tiny guest x87 stub for float returns
 constexpr uint32_t FLOAT_SCRATCH = STUB_BASE + 0x800;
+constexpr uint32_t GUEST_FB_BASE = 0x53000000; // RGB565 framebuffer for HLE OpenDisplay
+constexpr uint32_t GUEST_FB_SIZE = 0x00400000; // 4 MB (≥ 1600×1200×2)
 constexpr uint32_t SINGLETON_BASE = 0x51000000; // backing for pointer singletons
 constexpr uint32_t SINGLETON_SIZE = 0x00100000;
 constexpr uint32_t NULL_FRAME = 0x52000000;     // shared zeroed "unloaded" anim frame-header
@@ -21,10 +24,17 @@ constexpr uint32_t NULL_FRAME_SIZE = 0x00001000;
 constexpr uint32_t HEAP_BASE = 0x60000000;  // bump allocator arena
 constexpr uint32_t HEAP_SIZE = 0x08000000;  // 128 MB
 constexpr uint32_t STACK_TOP = 0x70000000;  // grows down
-constexpr uint32_t STACK_SIZE = 0x00200000; // 2 MB
+constexpr uint32_t STACK_SIZE = 0x01000000; // 16 MB (was 2 MB; Fatal/abort storms overflowed)
 constexpr uint32_t SCRATCH    = 0x50000000; // fake cApplication `this`, etc.
 constexpr uint32_t SCRATCH_SIZE = 0x00100000;
+constexpr uint32_t STUB_CODE  = 0x54000000; // RX page for guest call stubs (driver vtables)
+constexpr uint32_t STUB_CODE_SIZE = 0x00010000;
 constexpr uint32_t STOP_ADDR  = 0xDEAD0000; // sentinel return addr for call()
+constexpr uint32_t ERRNO_ADDR = 0x50000f00; // guest errno for __errno_location
+// Synthetic glibc data objects for UND STT_OBJECT symbols (not callable traps).
+// __ctype_b lives here — InputChFilter does `testb $0x40, 1(%eax,%edx,2)`.
+constexpr uint32_t LIBC_DATA  = 0x55000000;
+constexpr uint32_t LIBC_DATA_SIZE = 0x00001000;
 }
 
 // A trap fires with the guest ESP pointing at the return address; args follow
@@ -78,11 +88,30 @@ public:
     // True if the most recent call() returned to the STOP sentinel (i.e. the
     // guest function returned normally rather than timing out / stopping early).
     bool last_returned() const { return last_returned_; }
+    // True if a trap requested stop mid-call (abort/exit/Fatal) — EIP lands on
+    // STOP but it is not a clean guest `ret`.
+    bool last_aborted() const { return last_aborted_; }
+
+    // From a trap handler: end the current call() immediately (no guest unwind).
+    // Sets EIP to STOP_ADDR and marks last_aborted. Use for abort/exit/_exit.
+    void request_stop();
+
+    // From a trap handler: continue the outer uc_emu_start at a new EIP/ESP
+    // instead of returning to the trap's caller (no nested uc_emu_start).
+    // Used e.g. to green-run the sound mixer after SwapBuffers present.
+    void redirect_guest(uint32_t eip, uint32_t esp);
 
     uc_engine* uc() const { return uc_; }
 
     // Address of the last invalid memory access (for diagnostics).
     uint32_t last_fault_addr() const { return last_fault_addr_; }
+    uint32_t last_fault_eip() const { return last_fault_eip_; }
+    uint32_t last_fault_esp() const { return last_fault_esp_; }
+    // Up to 16 words from the guest stack at the last fault (valid if faulted).
+    const uint32_t* last_fault_stack(int* n) const {
+        if (n) *n = last_fault_stack_n_;
+        return last_fault_stack_;
+    }
 
 private:
     static void code_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
@@ -93,6 +122,12 @@ private:
     uc_engine* uc_ = nullptr;
     std::vector<TrapRegion> regions_;
     bool last_returned_ = false;
+    bool last_aborted_ = false;
+    bool stop_requested_ = false;
     bool trap_raw_ = false;          // handler took over EIP/stack; skip ret-emulation
     uint32_t last_fault_addr_ = 0;
+    uint32_t last_fault_eip_ = 0;
+    uint32_t last_fault_esp_ = 0;
+    uint32_t last_fault_stack_[16]{};
+    int last_fault_stack_n_ = 0;
 };

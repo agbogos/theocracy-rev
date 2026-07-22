@@ -1,0 +1,293 @@
+# Guest libmvos — architecture pivot
+
+**Status: G1 bring-up achieved (2026-07-22).** Pure-HLE MVOS (`mvos.cpp` / `video.cpp`) is left in tree but **not linked**. The host now maps **both** `theocracy.real` and `libmvos.so.0.9` under Unicorn and HLE-only the OS boundary.
+
+## Why
+
+See the project discussion: guest libmvos front-loads “it runs with real engine code”; pure HLE front-loads a native engine rewrite. We chose guest libmvos.
+
+## Layout
+
+| Region | VA |
+|--------|-----|
+| game (ET_EXEC) | native `0x08048000+` |
+| libmvos (ET_DYN) | **`0x10000000`** (`guestlink::MVOS_BASE`) |
+| HLE traps | `0x77000000` (unchanged) |
+| heap / stack / scratch | `0x60` / `0x70` / `0x50` (unchanged) |
+
+## Linker (`port/src/guestlink.{hpp,cpp}`)
+
+1. Map both PT_LOAD sets (libmvos text mapped **RWX** so text relocs apply).
+2. Build global symbol table (game defs preferred).
+3. Apply game’s **79 `R_386_COPY`** from libmvos → game `.bss`, then **rebind** those names so DSO `GLOB_DAT` hits the main copy.
+4. Resolve UND:
+   - game: **194 → libmvos**, **38 → HLE**
+   - mvos: **19 → game** (Init/Start/EH/builtins…), **105 → HLE**
+   - unique HLE surface: **~119** (libc / pthread / dl / SMPEG / sockets…)
+5. Apply **~17.7k** relocs (`RELATIVE` / `32` / `PC32` / `GLOB_DAT` / `JMP_SLOT`).
+
+## Run sequence
+
+```
+libmvos DT_INIT → libmvos .ctors (10) → game .ctors (215) → Init__12cApplication
+```
+
+## G1 result (first successful run)
+
+```
+COPY relocs applied: 79
+game UND -> mvos: 194, -> HLE: 38
+mvos UND -> game: 19,  -> HLE: 105
+relocs applied: 17700
+DT_INIT returned
+mvos .ctors: 10 ok
+game .ctors: 104 ok, then FAULT
+  UC_ERR_WRITE_UNMAPPED at eip=0x10053273 accessing 0x6fdffffc
+  (= stack growth past STACK_TOP-STACK_SIZE; Fatal/abort storm)
+Init returned  (still reached after partial ctors)
+```
+
+## G2 — FS HLE + stack/abort (done)
+
+**1. FS HLE** (`traps.cpp`): `fopen`/`fclose`/`fread`/`fwrite`/`fseek`/`ftell`/`feof`/`fflush`/`_IO_getc`, `open`/`close`/`read`/`write`, `remove`, `__xstat`. Guest paths `data/…` resolve under `$THEOC_DATA` (default `data/game`). `/dev/*` returns stub handles (zeros).
+
+**3. Stack + tame abort**: guest stack **2 MB → 16 MB**; `abort`/`exit`/`_exit` call `Machine::request_stop()` (`uc_emu_stop` + EIP→STOP) so Fatal does not unwind through guest EH into a stack smash. Ctors that abort are counted and **skipped**, not fatal to the host.
+
+### G2 result
+
+```
+mvos .ctors:  10 ok
+game .ctors: 177 ok, 0 aborted, 1 faulted (of 215)
+  fault: ctor #177 @0x818a880  FETCH_UNMAPPED eip=0 accessing 0
+  (null call target — separate from FS/abort; remaining 38 ctors not run)
+Init returned
+all 9 subsystem flags 0 → 1   (clean transition; G1 had pre-set 1s from partial state)
+implemented traps: 17 (104k calls)   UNIMPLEMENTED: 1 (gettimeofday ×1)
+```
+
+No more Fatal/fopen storm in the log. Remaining wall is **ctor #177 null call** (likely a function pointer / vtable / pthread callback still stubbed to 0), then the other 38 ctors.
+
+## G3 — COPY/reloc order + provider fix (done)
+
+**Root cause of ctor #177 `eip=0`:** two linker bugs:
+
+1. **COPY before mvos reloc** — game received pre-reloc zero vtable slots.
+2. **COPY source was the game's own .bss** — `R_386_COPY` symbols are *defined* in the game at the destination; prefer-game symbol lookup made `provider == dst`, so COPY was a no-op and mvos `R_386_32` immediates in ctors pointed at empty game vtables.
+
+**Fix:** relocate mvos fully first (local defs always win for mvos `R_386_32`); COPY from `mvos_defs` only; rebind; re-apply mvos GOT only; then game relocs.
+
+### G3 result
+
+```
+mvos .ctors:  10 ok
+game .ctors: 215 ok, 0 aborted, 0 faulted   ← full set clean
+Init returned
+all 9 flags 0 → 1
+implemented traps: 18 (~114k calls)
+UNIMPLEMENTED: 3 low-freq (see trap report)
+```
+
+## G4 — plugins, OpenSubsystems, Start (in progress)
+
+### Landed
+- Libc: `strncmp`, `__strtol_internal`, `__strtod_internal`, `gettimeofday`, `strcat`, sockets/`pipe`/`fcntl`/`sem_*`/`setitimer` stubs
+- **Synthetic `dlopen`/`dlsym`**: `QueryDevice` + `Create*Device` → guest device objects
+- **Flag/EnvSystem/singleton sync** (game↔mvos COPY split — permanent linker fix still TODO)
+- Minimal `data/game/mvos.cfg` + mvos.cfg loader @ `0x94640`
+- **`cIntuition` construction** after OpenSubsystems
+- **HLE `OpenDisplay`** (patch libmvos entry → SDL RGB565 window)
+- Boot sequence: DT_INIT → mvos ctors → cfg → game ctors → Init → OpenSubsystems → Intuition → Start
+
+### G4 result
+```
+Init ok, OpenSubsystems ok (all 4 plugins + SoundCard/IPC)
+[video] window 800x600 depth-code 5
+[HLE] OpenDisplay 800x600 depth 5 -> ok
+Start FAULTED in cVOBitmap::Paint (cGD* null @ +0x14)
+```
+
+## G5 — cGD_LFB16 + SwapBuffers present (done)
+
+HLE `OpenDisplay` now builds a guest **`cGD_LFB16`** (layout from ctor `0x6bb30`):
+
+| Off | Field |
+|-----|--------|
+| +0 / +4 | w / h |
+| +8 | framebuffer → `GUEST_FB_BASE` |
+| +0xc | depth code 5 |
+| +0x10 | pitch = w×2 |
+| +0x14 | `__vt_9cGD_LFB16` @ mvos+`0xa2820` |
+
+Wired onto the VVC device at `+0`, `+4`, and `+0x14` (PaintTree path). **`SwapBuffers`** patched to copy guest LFB → SDL and `present()`.
+
+### G5 result
+```
+[HLE] cGD_LFB16 @… fb=0x53000000 800x600 pitch=1600 vt=0x100a2820
+[HLE] OpenDisplay 800x600 depth 5 -> ok
+SinglePalette font [data/fonts/small_black.mft]
+Start (menu loop — timed out waiting for input)
+implemented traps: 42  (~3.1M calls)   UNIMPLEMENTED: 0
+```
+
+**The main menu is running** under guest libmvos (refresh/paint/present loop). No faults.
+
+### G5b — mode-switch pitch tear (fixed)
+
+Movies open **640×480**, then the menu opens **800×600**. `Video::open` used to
+`return true` if a window already existed, so SDL stayed at 640×480 (pitch 1280)
+while the guest `cGD_LFB16` painted at pitch **1600**. Presenting that buffer with
+the wrong stride produces the CRT-streak / multi-tile menu background.
+
+**Fix:** recreate the SDL texture + host FB (and `SDL_SetWindowSize`) whenever
+`w`/`h` change; `SwapBuffers` also re-opens if GD dims disagree with the window.
+
+```
+[video] window 640x480 …
+… movies …
+[video] window 800x600 …
+[HLE] cGD_LFB16 … 800x600 pitch=1600
+```
+
+## G6 — SDL input → mouse/keyboard queues (done)
+
+| Piece | Implementation |
+|-------|----------------|
+| Mouse/pointer devices | Full `cMouse`/`cPointer` ring buffers (0x100 × 12-byte events) |
+| `EVENT_Move` / `EVENT_Buttons` | Host-side queue writes (same layout as libmvos) |
+| Keyboard | Key-matrix + ring for a few scancodes (Esc/Enter/Space/arrows) |
+| Cursor | Host cursor hidden (game draws its own) |
+| Wiring | `Video::set_event_hook` → `TrapLayer::on_sdl_event` during `present`/`pump` |
+
+Verified: `[input] mouse btn mask=…` and key events log during the menu loop.
+
+```sh
+DYLD_LIBRARY_PATH=/opt/homebrew/lib THEOC_START_SEC=60 THEOC_VIDEO_HOLD=3 \
+  ./port/build/theoc
+```
+
+## G6b — input fix + CD check + software cursor (done)
+
+Root causes of “input does nothing / no cursor / insert disc”:
+
+1. **Mouse ring indices swapped** — `+0x08` is **read**, `+0x0c` is **write** (empty when equal). Fixed enqueue.
+2. **UI polls Intuition, not only VMouse** — `GetIPointerPos` → `Intuition+0xa0`, `GetIMouseButtons` → `+0xa8`. SDL now writes those every move/click.
+3. **CD check** — `VM_GetCDRomName` opens `/mnt/cdrom/cd.key` and expects body `"Theocracy"`. Host remaps `/mnt/cdrom/*` → `data/cd/*` (override with `THEOC_CD`).
+4. **Cursor** — host cursor hidden but game sprite never set; **magenta crosshair** drawn on the FB each `SwapBuffers`.
+
+## G7 — MPEG path + SMPEG skip HLE (done)
+
+Yes — 640×480 is the intro/logo mode; the hang was MPEG, not resolution.
+
+**Root cause (round 1):** `SMPEG_new` was unimplemented (returned 0) while `SMPEG_error` also returned 0 (“no error”), so `External_PlayAnim` treated a **NULL mpeg** as success and entered the play path → lockup. Movies also looked under `data/game/movie/` instead of the CD tree.
+
+**Fix (round 1):**
+- Path: `movie/*.mpg` and bare `*.mpg` → `$THEOC_CD/movie/…` (default `data/cd/movie/`)
+- Full SMPEG HLE: open succeeds if file exists; **status always `SMPEG_STOPPED`** so the play loop exits immediately (skip cutscenes). Set `THEOC_SKIP_MOVIES=1` to succeed even without files.
+
+**Root cause (round 2 — freeze with *and* without skip):** after SMPEG open the path still:
+1. constructs **`cDisplay`** (`__8cDisplayPvUsUsUsUcUiUlUl`, from libsmpeg `MPEGextra.cpp`) — was UND→TODO no-op
+2. allocates a streaming audio `cMemBlock` sized from **`SMPEG_Info.samplerate`** (`Sample_Size[fmt] * chans * samplerate/5`)
+
+With a zeroed `cDisplay` + `samplerate=0` → `MemBlock.Alloc(0)` → `Fatal` → `abort` ignored → Start re-opens subsystems in a loop (looked like a hard freeze). **Independent of `THEOC_SKIP_MOVIES`.**
+
+**Fix (round 2):**
+- HLE `cDisplay` ctor (layout: Address/+0, W/H/Pitch u16, Red/Green/Blue masks, bpp)
+- Fill `SMPEG_Info` with realistic audio (stereo 22050) + video 640×480 even when skipping
+
+```
+Movie (local):ubi_logo.mpg / logo.mpg / intro.mpg
+[smpeg] SMPEG_new OK … (skip playback)
+[HLE] cDisplay @… 640x480 pitch=1280 bpp=16
+Inint menu buttons begin ...
+Inint menu buttons done.
+[HLE] OpenDisplay 800x600 …
+Start (menu loop) ok
+UNIMPLEMENTED: 0
+```
+
+## G8 — menu click → Single Player / realm shell (done)
+
+**Root cause of dead menu:** HLE `SwapBuffers` replaced the real one, which calls
+`MouseRefresh` → `PushMouseInput` to drain VMouse into **Intuition+0x28**
+(8-byte events). `BeginRefresh` → `ProcessInputs` only looks at that ring.
+We wrote VMouse + Intuition pointer fields but never the +0x28 pipe → no
+`ProcessTree` → MasterVO never got button ids.
+
+**Fix:**
+- SDL motion/button → push Intuition events (type 1 move, type 4 button edges)
+- Mouse/pointer devices get a noop function table at `+0x20` (GameSession_LoadSettings
+  calls `VMouse[+0x20][+0x18]`)
+- `THEOC_AUTO_MENU=1` synthesizes a click on Single Player (`menu.cfg` 20,250)
+
+```
+AUTO_MENU aim/L-down/L-up
+Single Player
+Loading Game / GameSetings Using Default / Loading OK
+Shell Changed to Realm Shell
+Setup VOConsole …
+play.mft / small_black.mft
+Start (timed out in realm UI)
+```
+
+## G9 — realm playable (partial / user-verified)
+
+Interactive play works end-to-end under guest-libmvos + HLE. User-verified:
+
+- Start a game from the main menu
+- Interact with units (select / move)
+- Units animate and move on the map
+- Diplomacy actions (e.g. declare war)
+
+So the core loop — menu → setup → realm shell → input → sim response → present —
+is **running**. G9 is not “done” as polish, but **playability is established**.
+
+### G9b — save-name popup crash (fixed)
+
+Save dialog creates a `cVOEditRow`; `Process` probes shift via
+`(*([VKeyboard+0x84]+0x10))(VKeyboard, 0x37/0x38)`. Synthetic keyboard left
+`+0x84` null → fault `accessing 0x10`. Also ensure `save/` dirs for writes.
+
+**Fix:** keyboard shell gets a driver function table at `+0x84` with
+`Plugin_KeyMatrix` (reads matrix @ `+0x0c`); `fopen` mkdir-p for write modes.
+
+## G10 — polish: audio + MPEG + cursor (partial)
+
+| Item | Status |
+|------|--------|
+| **Audio** | SDL 22050 Hz stereo; `/dev/dsp` open/write mixes into host queue |
+| **MPEG** | libav → RGB565; paced to stream fps in `SMPEG_playvideoframe` (was turbo free-run) |
+| **Cursor** | Guest `cSprite` via real `SwapBuffers__Fv` Before/AfterSwapBuffer; HLE present only |
+
+```sh
+THEOC_SKIP_MOVIES=1 ./port/build/theoc   # fast boot
+./port/build/theoc                       # real intros
+```
+
+### Remaining debt
+- R_386_COPY rebind, Fatal/abort policy
+- Long-session stability, multiplayer
+- Province-view performance (also on Win VM)
+
+## G11 — keyboard eKeyCode + Intuition pipe (done)
+
+Earlier G6 used a few **PC scancodes** (Enter=`0x1c`, Space=`0x39`, arrows=`0x48`…).
+libmvos `eKeyCode` is a **custom dense enum** from `KeyTableConvert` in
+`libmvos_keyboard_x` (XKeysym table): Esc=`0x01`, `1`–`0`=`0x02`–`0x0b`,
+`a`–`z`=`0x0c`–`0x25`, arrows=`0x32`–`0x35`, ShiftL/R=`0x37`/`0x38`,
+Return=`0x48`, Space=`0x51`, etc.
+
+Also: UI only sees keys via **Intuition+0x28** event types **8 (down) / 0x10 (up)**
+→ `ProcessInputs` → `ProcessTree` (`cVOEditRow` handles type 8). Writing the
+matrix alone is not enough for text fields.
+
+**Fix:** full SDL scancode → eKey map; push type 8/0x10; matrices + qualifier
+byte (`Intuition+0xb0`); VKeyboard ring write idx at `+0x7c`; focus-lost clears
+matrices (ReleaseAll).
+
+## Build / run
+
+```sh
+cmake -S port -B port/build && cmake --build port/build
+DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc \
+  data/cd/linux/theocracy.real data/cd/linux/libmvos.so.0.9
+```

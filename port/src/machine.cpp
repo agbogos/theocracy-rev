@@ -25,6 +25,13 @@ bool Machine::mem_hook(uc_engine*, int, uint64_t addr, int, int64_t, void* user)
     return false;   // unhandled -> the access still faults
 }
 
+void Machine::request_stop() {
+    stop_requested_ = true;
+    setreg(UC_X86_REG_EIP, STOP_ADDR);
+    trap_raw_ = true;                 // skip ret-emulation; leave EIP on STOP
+    uc_emu_stop(uc_);                 // end the current uc_emu_start promptly
+}
+
 void Machine::return_double(double v) {
     // Lazily install the `FLD qword [FLOAT_SCRATCH]; RET` stub (RWX page).
     static bool installed = false;
@@ -41,6 +48,13 @@ void Machine::return_double(double v) {
     setreg(UC_X86_REG_EIP, STUB_BASE);   // stack untouched -> stub's RET returns to caller
     trap_raw_ = true;
 }
+
+void Machine::redirect_guest(uint32_t eip, uint32_t esp) {
+    setreg(UC_X86_REG_EIP, eip);
+    setreg(UC_X86_REG_ESP, esp);
+    trap_raw_ = true;
+}
+
 Machine::~Machine() { if (uc_) uc_close(uc_); }
 
 void Machine::map(uint32_t addr, uint32_t size, uint32_t prot) {
@@ -111,18 +125,30 @@ uint32_t Machine::call(uint32_t addr, const std::vector<uint32_t>& args,
     for (auto it = args.rbegin(); it != args.rend(); ++it) { sp -= 4; w32(sp, *it); }
     sp -= 4; w32(sp, STOP_ADDR);              // return address sentinel
     setreg(UC_X86_REG_ESP, sp);
+    stop_requested_ = false;
+    last_aborted_ = false;
     uc_err e = uc_emu_start(uc_, addr, STOP_ADDR, timeout_us, 0);
-    if (e != UC_ERR_OK) {
+    if (e != UC_ERR_OK && !stop_requested_) {
+        last_fault_eip_ = reg(UC_X86_REG_EIP);
+        last_fault_esp_ = reg(UC_X86_REG_ESP);
+        last_fault_stack_n_ = 0;
+        for (int i = 0; i < 16; ++i) {
+            try {
+                last_fault_stack_[i] = r32(last_fault_esp_ + 4u * i);
+                last_fault_stack_n_ = i + 1;
+            } catch (...) { break; }
+        }
         char msg[160];
         std::snprintf(msg, sizeof msg,
                       "%s at eip=%#x accessing %#x", uc_strerror(e),
-                      reg(UC_X86_REG_EIP), last_fault_addr_);
+                      last_fault_eip_, last_fault_addr_);
         setreg(UC_X86_REG_ESP, saved_sp);
         throw std::runtime_error(msg);
     }
     // Timeout returns UC_ERR_OK but leaves EIP wherever it stopped; a clean
-    // return lands on the STOP sentinel.
-    last_returned_ = (reg(UC_X86_REG_EIP) == STOP_ADDR);
+    // return lands on the STOP sentinel. abort/exit uses request_stop().
+    last_aborted_ = stop_requested_;
+    last_returned_ = (reg(UC_X86_REG_EIP) == STOP_ADDR) && !stop_requested_;
     uint32_t ret = reg(UC_X86_REG_EAX);
     setreg(UC_X86_REG_ESP, saved_sp);         // cdecl: caller restores stack
     return ret;

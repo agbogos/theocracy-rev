@@ -6,7 +6,9 @@
 // texture-update + present is the entire contract.
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <vector>
+#include <SDL2/SDL.h>
 
 class Video {
 public:
@@ -26,6 +28,10 @@ public:
     // (or a demo run) can see it. Returns early if the window is closed.
     void keep_open_for(int seconds);
 
+    // Optional: called for every SDL_Event during pump() (input → guest).
+    using EventHook = std::function<void(const SDL_Event&)>;
+    void set_event_hook(EventHook h) { event_hook_ = std::move(h); }
+
     bool is_open() const { return win_ != nullptr; }
     int width() const { return w_; }
     int height() const { return h_; }
@@ -40,4 +46,5 @@ private:
     void* tex_ = nullptr;   // SDL_Texture*
     int w_ = 0, h_ = 0, depth_ = 0;
     std::vector<uint16_t> fb_;
+    EventHook event_hook_;
 };

@@ -1,17 +1,27 @@
 // HLE trap layer: maps each imported symbol (by slot) to a native handler.
-// Unimplemented imports log once and return 0 — that log IS the M1/M2 worklist.
+// Unimplemented imports log once and return 0 — that log IS the worklist.
+// Guest-libmvos path: also hosts FS (fopen/open/…) against $THEOC_DATA and
+// tame abort/exit that request_stop() the current Machine::call.
 #pragma once
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "machine.hpp"
+#include "video.hpp"
+#include "mpeg.hpp"
+#include <SDL2/SDL.h>
+#include <chrono>
+#include <deque>
+#include <mutex>
 
 class TrapLayer {
 public:
     // names[slot] = imported symbol name in trap-slot order.
     explicit TrapLayer(std::vector<std::string> names);
+    ~TrapLayer();
 
     // TrapFn entry point (bind to Machine::install_traps).
     uint32_t dispatch(Machine& m, uint32_t slot, uint32_t esp);
@@ -20,6 +30,12 @@ public:
     void report() const;
 
     uint32_t nslots() const { return (uint32_t)names_.size(); }
+
+    Video& video() { return video_; }
+
+    // After guest link: synthetic dlopen plugins + HLE OpenDisplay patch.
+    // mvos_base is guestlink::MVOS_BASE. Maps plugin trap window + guest FB.
+    void install_plugins_and_video(Machine& m, uint32_t mvos_base);
 
     // Guest trap address for an imported symbol (TRAP_BASE + slot), or 0 if the
     // symbol isn't imported. Lets the host invoke an import handler directly.
@@ -48,6 +64,10 @@ private:
     }
     std::string format(Machine& m, const std::string& fmt, uint32_t esp, int argidx);
 
+    // Guest path "data/…" → host under $THEOC_DATA (default data/game).
+    std::string resolve_path(const std::string& guest) const;
+    void set_errno(Machine& m, int err);
+
     std::vector<std::string> names_;
     std::vector<uint64_t>    hits_;
     std::unordered_map<std::string, Handler> table_;
@@ -56,4 +76,85 @@ private:
     uint32_t heap_next_;
     std::unordered_map<uint32_t, uint32_t> alloc_sz_;
     uint32_t bump_alloc(uint32_t size);
+    // RX stub page for guest-callable driver methods (heap is RW only).
+    uint32_t stub_next_ = 0;
+    uint32_t stub_alloc(Machine& m, uint32_t size);
+
+    // Host-side FILE* / fd table, keyed by the guest FILE* (or guest fd for open).
+    struct HostFile {
+        FILE* fp = nullptr;
+        int   host_fd = -1;
+        bool  stub = false;     // /dev/* that we fake
+        bool  audio = false;    // /dev/dsp → host SDL mixer
+        bool  eof = false;
+    };
+    std::unordered_map<uint32_t, HostFile> files_;   // guest FILE*
+    std::unordered_map<int, HostFile> fds_;          // guest fd → host
+    int next_fd_ = 3;
+    std::string data_root_;
+    Video video_;
+    std::string smpeg_error_;   // last SMPEG_error message (host)
+    MpegStore mpeg_;
+    // SDL audio: OSS /dev/dsp writes are mixed into a ring and played out.
+    SDL_AudioDeviceID audio_dev_ = 0;
+    std::mutex audio_mu_;
+    std::deque<int16_t> audio_q_;
+    void ensure_audio();
+    void audio_push(const void* data, size_t nbytes);
+    static void audio_callback(void* userdata, Uint8* stream, int len);
+    // Green-thread stand-ins for pthread_create (sound mixer Main loop).
+    // Each present redirects guest into Entry once (Main patched to one-shot).
+    struct SoftThread {
+        uint32_t entry = 0;
+        uint32_t arg = 0;  // cThread*
+    };
+    std::vector<SoftThread> soft_threads_;
+    bool sound_main_patched_ = false;
+    bool redirecting_sound_ = false;
+    std::chrono::steady_clock::time_point next_sound_slice_{};
+    void patch_sound_main_oneshot(Machine& m);
+    // If a soft thread needs a slice, rewrite trap return into Entry(arg).
+    // Returns true if redirect_guest was used (caller must return 0 raw).
+    bool maybe_redirect_sound(Machine& m, uint32_t esp);
+
+    // Synthetic dlopen handles and dlsym names → guest trap addresses.
+    std::unordered_map<uint32_t, std::string> dl_handles_;  // handle → so name
+    uint32_t next_dl_handle_ = 0xD1000001;
+    std::string last_dlerror_;
+    uint32_t plugin_trap_base_ = 0;
+    uint32_t mvos_base_ = 0;           // set in install_plugins_and_video
+    uint32_t gd_ = 0;                  // last constructed cGD_LFB16
+    Machine* machine_ = nullptr;       // for input injection during pump
+    uint8_t mouse_buttons_ = 0;        // current button mask (bit0 L, bit1 R, bit2 M)
+    int mouse_x_ = 0, mouse_y_ = 0;
+    std::vector<std::string> plugin_exports_;  // slot → name
+    uint32_t dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp);
+    uint32_t make_device(Machine& m, const char* kind);
+    void on_sdl_event(const SDL_Event& e);
+    // Host-side cMouse/cPointer EVENT_* (queue format from libmvos).
+    void mouse_event_move(uint32_t dev, int32_t x, int32_t y);
+    void mouse_event_buttons(uint32_t dev, uint8_t buttons);
+    void update_intuition_pointer(int x, int y, uint8_t buttons);
+    // Intuition+0x28 input ring (8-byte events) — what ProcessInputs drains.
+    // Still written from SDL as a belt-and-braces path; guest MouseRefresh
+    // (via real SwapBuffers__Fv) also fills it from VMouse.
+    uint32_t intuition_obj() const;
+    void push_intuition_event(uint32_t type, uint32_t payload);
+    void push_intuition_move(int x, int y);
+    void push_intuition_button_edges(uint8_t prev, uint8_t now);
+    void draw_software_cursor();  // fallback if no game pointer sprite
+    // Fallback click anim if timer not armed; primary path is guest TimerProc.
+    void tick_pointer_click_anim();
+    uint32_t pointer_sprite() const;  // Intuition→screen→sprite, or 0
+
+    // setitimer(ITIMER_REAL) / SIGALRM — host-polled, fires guest TimerSystem::Proc.
+    // (No real signals into Unicorn; we tick from present.)
+    uint32_t sigalrm_handler_ = 0;  // guest sa_handler (_TimerFunction)
+    bool     timer_armed_ = false;
+    std::chrono::steady_clock::time_point timer_next_{};
+    std::chrono::microseconds timer_interval_{0};
+    std::chrono::microseconds timer_value_{0};  // last it_value (for get-old)
+    // If due, redirect trap return → _TimerFunction (no nested uc_emu_start).
+    // Returns true if redirect_guest was used.
+    bool maybe_redirect_timer(Machine& m, uint32_t esp);
 };

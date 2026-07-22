@@ -51,15 +51,22 @@ Game-side Ghidra pass debunked the M1 guess: `DAT_085bf980` is **not** a mysteri
 
 **RENDER LOOP LIVE — the game drives the SDL window (this session).** Reimplemented the three render-boundary imports natively (`mvos.cpp`, from libmvos originals): `ActivateScreen__10cIntuition` (`0x9d830` — game's `cScreen` header IS a `cVModeRequest` w/h/depth@+0/+4/+8, root cVObject@+0x14; opens the SDL window + stores screen at `Intuition+0x24`, the active screen the render path reads), `BeginRefresh__7cScreen` (`0x9d2a0` → `Video::pump()`), `EndRefresh__7cScreen` (`0x9d2d0` → `Video::present()`; real one does `PaintTree(root, *(VVC+0x14))` + `SwapBuffers`). Plus a `cLocaleEntry` text placeholder (ctor points `+0x10` at the key string → non-null button labels). **`cApplication::Start` now runs end-to-end, NO fault**: boot → `Init` → `MainMenu_Run` builds all 11 buttons → `ActivateScreen` opens the window → `BeginRefresh`/`EndRefresh` loop presents frames, waiting on the event pipe (15s emulation timeout, clean). Placeholder gradient bg drawn on activation. `THEOC_START=1`.
 
-## Next: M2 continued (start here) — WIDGET CONTENT + INPUT
-The window is driven by the game but paints only a placeholder bg. To render actual menu content:
-1. **`cGD` bound to `Video::fb()`** at `VVC+0x14` (RGB565), + a **`PaintTree` walk** in `EndRefresh` (PaintTree is libmvos-internal, not a trap — reimplement the tree walk, or call the guest's virtual `Paint` per child).
-2. **`cGD` draw primitives** — `cGD::Box`/`Frame`/`FrameAlpha`/`HLine_`/`VLine_`/`Tile`, `PutText` → RGB565 writes (libmvos `cGD_LFB*` is the reference) + the widget `Paint` methods (`cVOAButton::Paint`, `cVOBitmap::Paint` are imports).
-3. **Font/bitmap decode** — `.mft` fonts (glyph metrics @ `cData_Font+0x40`, replaces `NULL_FRAME`) + `.raw` bitmaps; the real lazy-load (payload vtable slot 2). Pulls in binary `cFile` + real `cSystemMemory`. Then `cLocaleDataBase::Load` for real labels.
-4. **Input** — SDL events → `cKeyboard`/`cMouse`/`cPointer` (menu loop waits on the event pipe for a selection). Contract in `vvc_x-backend.md`.
-- **Threading** (`Launch__7cThread`) stays inert (single-Unicorn); not blocking.
-Full list in `docs/porting/m2-core.md`.
+## Status (2026-07-22) — game is playable
 
+Guest-libmvos path: dual ELF + HLE OS boundary + SDL present + Intuition input.
+**User-verified:** start game, move units, declare war. See `docs/porting/guest-libmvos.md`
+(G1–G9). G9 is **partially complete** (core loop running; polish open).
+
+### G10 polish (landed, partial)
+- **Audio:** SDL mixer; OSS `/dev/dsp` writes play on host
+- **MPEG:** libav decode (link `avformat/avcodec/avutil/swscale`); `THEOC_SKIP_MOVIES=1` to skip
+- **Cursor:** still debug crosshair (real sprite paint deferred)
+
+### Next
+1. Real game pointer sprite paint
+2. Hardening: COPY rebind, Fatal/abort, long sessions
+3. Deeper gameplay / multiplayer
+Run: `DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc`
 ## Gotchas / conventions (will bite you)
 - **Shell is zsh with `noclobber` ON** — use `>|` to overwrite files in Bash calls, or redirects fail with "file exists".
 - **Ghidra is via MCP, ONE binary at a time**; the user switches the open file manually — ask them. Load the ghidra MCP tool schemas via ToolSearch (`select:mcp__ghidra__...`) before calling.

@@ -8,7 +8,10 @@
 # reloc reference tables the docs depend on; no copyrighted content).
 /linux/
 /data/cd/
-/data/game/
+# Ignore the extracted game data, but keep our hand-authored mvos.cfg (normally
+# installed by inst.linux; the libmvos cfg loader reads it as data/game/mvos.cfg).
+/data/game/*
+!/data/game/mvos.cfg
 
 # ── Build artifacts ───────────────────────────────────────────────────────
 /port/build/
