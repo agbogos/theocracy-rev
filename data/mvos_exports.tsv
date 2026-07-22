@@ -1,0 +1,2400 @@
+00059090	__5cFont	cFont::cFont()
+000c6d30	__ti10cConsoleVO	cConsoleVO type_info node
+00085590	AddFirstType__10cMsgCenterP12cMsgTypeNode	cMsgCenter::AddFirstType(cMsgTypeNode *)
+00082490	VM_GetSoundCard__Fv	VM_GetSoundCard()
+00092350	Cleanup__11cLinuxTimer	cLinuxTimer::Cleanup()
+000aee76	_12cApplication.Timer	_12cApplication.Timer
+000adba0	__vt_7cThread	cThread virtual table
+000c7400	__ti7cThread	cThread type_info node
+0004c250	GetType__7cDirent	cDirent::GetType()
+000a896c	__vt_7cString.10cMemBlock_	cString virtual table (base cMemBlock_)
+0005f130	GetPrev__C6cHNode	cHNode::GetPrev() const
+000af080	__vt_7cStream	cStream virtual table
+0008af20	__3cGDG3PTRRC10cDimensionUl	cGD::cGD(PTR, const cDimension &, unsigned long)
+000920f0	Print_Dec__Fl	Print_Dec(long)
+0007ee70	GetPalette16__12cPaletteFull	cPaletteFull::GetPalette16()
+00096fa0	__tf9cFFHidden	cFFHidden type_info function
+0007e970	Brightness__8cPaletteUl	cPalette::Brightness(unsigned long)
+0005e490	LFB32_PutBitmap8	LFB32_PutBitmap8
+000a8480	__vt_13cSoundChannel	cSoundChannel virtual table
+0008c530	Paint__9cSprClickR3cGDGt6tPoint1Zl	cSprClick::Paint(cGD &, tPoint<long>)
+00044c70	Key__10cConsoleVO8eKeyCodei	cConsoleVO::Key(eKeyCode, int)
+00097660	Notify__10cVOSliderVRC10sVOMessage	cVOSliderV::Notify(const sVOMessage &)
+000aae40	__vt_9cMasterVO	cMasterVO virtual table
+00054cf0	Read__5cFilePvUl	cFile::Read(void *, unsigned long)
+00084ba0	GetCString__10cOldString	cOldString::GetCString()
+00082e30	__tf19cSoundServerChannel	cSoundServerChannel type_info function
+000971f0	__tft5tNode1Z12cLocaleEntry	tNode<cLocaleEntry> type_info function
+000c70ec	__ti11cIPCBrowser	cIPCBrowser type_info node
+0005f440	UnLink__5cNode	cNode::UnLink()
+00096120	GetWorkingDirectory__Fv	GetWorkingDirectory()
+00064660	PutAnimBitmapAdd_I__9cGD_LFB15R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000857a0	__12cMsgReceiver	cMsgReceiver::cMsgReceiver()
+0008b0b0	SetEmulationMode__13cVModeRequest9eVModeEmu	cVModeRequest::SetEmulationMode(eVModeEmu)
+0005e190	LFB32_VLineAdd	LFB32_VLineAdd
+00047900	SetHotkey__10cVOAButton8eKeyCodeUc	cVOAButton::SetHotkey(eKeyCode, unsigned char)
+000575f0	_._10cData_Font	cData_Font::~cData_Font()
+000826e0	__tf16cSoundCard_Dummy	cSoundCard_Dummy type_info function
+00058720	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlRC10cRectangleP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, const cRectangle &, cPaletteFull *)
+000934f0	SetBlockMode__11cIPCO_TCPIPb	cIPCO_TCPIP::SetBlockMode(bool)
+000921f0	__tf8Log_File	Log_File type_info function
+0005c6c0	LFB16_Fill	LFB16_Fill
+000811f0	GetMasterVolume__16cSoundCard_Dummy	cSoundCard_Dummy::GetMasterVolume()
+000908e0	GetFormat__Q25sWave7sFormat	sWave::sFormat::GetFormat()
+0005b770	CheckAll__19cHeap_Compatibility	cHeap_Compatibility::CheckAll()
+00080160	GetR__C6cColor	cColor::GetR() const
+000876f0	VM_GetVVC__Fv	VM_GetVVC()
+0004a720	Alloc__13cAnimSkeletonUl	cAnimSkeleton::Alloc(unsigned long)
+00043670	Edit__10cVOConsole	cVOConsole::Edit()
+00085660	__tf12cMsgTypeNode	cMsgTypeNode type_info function
+0009b68c	__vt_7cDirent	cDirent virtual table
+00090ec0	Round__6DOUBLE	DOUBLE::Round()
+000a0808	__vt_12cLocaleEntry	cLocaleEntry virtual table
+000a8b14	__vt_12cMsgTypeNode	cMsgTypeNode virtual table
+0006b7b0	VLine__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::VLine(const tPoint<long> &, unsigned long, cColor)
+000479f0	IsNetworkRequired__12cApplication	cApplication::IsNetworkRequired()
+0007ba00	__10cMemBlock_RC10cMemBlock_	cMemBlock_::cMemBlock_(const cMemBlock_ &)
+0008fd60	AddRequester__8cVObjectP8cVObjectb	cVObject::AddRequester(cVObject *, bool)
+00080970	GetSampleRate__7cSample	cSample::GetSampleRate()
+000959e0	__19cEventManager_Linux	cEventManager_Linux::cEventManager_Linux()
+000838e0	SetSpeed__25cSoundChannel_SoftwareMixUs	cSoundChannel_SoftwareMix::SetSpeed(unsigned short)
+0005ef10	__6cHList	cHList::cHList()
+00047870	SetText__10cVOAButtonPCc	cVOAButton::SetText(const char *)
+000c742c	__ti10cSemaphore	cSemaphore type_info node
+0008b0a0	SetBufferTech__13cVModeRequest11eBufferTech	cVModeRequest::SetBufferTech(eBufferTech)
+00076310	PutBitmapLMask_I__9cGD_SFB16R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005b830	GetMemoryTop__19cHeap_Compatibility	cHeap_Compatibility::GetMemoryTop()
+00042bc0	ChangeShell__8cConsoleP6cShell	cConsole::ChangeShell(cShell *)
+00096ae0	__thunk_112_Deletion__10cVOEditRow	[thunk 112] cVOEditRow::Deletion()
+00092150	__tf12Log_SafeFile	Log_SafeFile type_info function
+0005fcd0	SFB8_SaveBitmap	SFB8_SaveBitmap
+000528d0	__8cEditRowUc	cEditRow::cEditRow(unsigned char)
+00098c70	__tf13cEventManager	cEventManager type_info function
+00084f50	__12cMsgTypeNodePcb	cMsgTypeNode::cMsgTypeNode(char *, bool)
+00050830	__tf12cData_Sample	cData_Sample type_info function
+0004a5b0	Info__13cAnimSkeleton	cAnimSkeleton::Info()
+00075d60	VLineAlfa__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00092590	_ActivateTimer__18cTimerSystem_LinuxR7cVTimer	cTimerSystem_Linux::_ActivateTimer(cVTimer &)
+000c729c	__ti7cSprite	cSprite type_info node
+000aeff8	TimerSystem	TimerSystem
+00093e70	SetConnectionID__11cIPCO_TCPIPi	cIPCO_TCPIP::SetConnectionID(int)
+00074a90	VLineAdd__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+00091e70	GetVolume__9cCD_Linux	cCD_Linux::GetVolume()
+000957e0	Wait__5cTask	cTask::Wait()
+000c71c8	__ti22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix type_info node
+0006f7f0	Line__9cGD_LFB24RCt6tPoint1ZlT1G6cColor	cGD_LFB24::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+000c71d8	__ti10cSoundCard	cSoundCard type_info node
+00079ee0	__tf15cIPCBrowser_IPX	cIPCBrowser_IPX type_info function
+00095830	__tf5cTask	cTask type_info function
+0007a380	__17cIPCOStream2Block	cIPCOStream2Block::cIPCOStream2Block()
+00052fe0	__9cEnvClassPCc	cEnvClass::cEnvClass(const char *)
+00090350	__opt6tPoint1Zl__7sMCoord	sMCoord::operator tPoint<long>()
+00049d60	Paint__11cVOPulldownR3cGDRCt6tPoint1ZlRC10cRectangle	cVOPulldown::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00083440	GetDataSLEWSL__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataSLEWSL()
+000adbfc	__vt_19cEventManager_Linux	cEventManager_Linux virtual table
+00095a30	Add__19cEventManager_LinuxPv	cEventManager_Linux::Add(void *)
+000c727c	__ti11cGD_Minimal	cGD_Minimal type_info node
+000808f0	Next__7cRandom	cRandom::Next()
+0005ec90	__11cLibPointerPCc	cLibPointer::cLibPointer(const char *)
+00095d50	__5cPipeii	cPipe::cPipe(int, int)
+00085e20	SwapBuffers__4cVVC	cVVC::SwapBuffers()
+000af1a0	__vt_10cVODragBox	cVODragBox virtual table
+00078d70	IsGaranteed__5cIPCO	cIPCO::IsGaranteed()
+00092060	_GLOBAL_.D.__ls__C10Log_StdoutPCc	Log_Stdout::_GLOBAL_.D.__ls(const char *) const
+00078790	VLineAlfa__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0005edc0	GetLength__C6cHList	cHList::GetLength() const
+000c7168	__ti12cVOMultiLine	cVOMultiLine type_info node
+0009b254	__vt_13cAnimSkeleton.t9tMemBlock1ZUc	cAnimSkeleton virtual table (base tMemBlock<unsigned char>)
+00082590	SetMasterVolume__6cMixerRC7cVolume	cMixer::SetMasterVolume(const cVolume &)
+0005f380	GetLast__C5cList	cList::GetLast() const
+0007bc40	PushObject__11cMemoryPipePCvUl	cMemoryPipe::PushObject(const void *, unsigned long)
+00055240	__9cTextFilePCc	cTextFile::cTextFile(const char *)
+00050490	__18cSharedData_BitmapPCc	cSharedData_Bitmap::cSharedData_Bitmap(const char *)
+0004fa20	_._13cData_MapItem	cData_MapItem::~cData_MapItem()
+00082860	Play__19cSoundServerChannelR3cAO	cSoundServerChannel::Play(cAO &)
+000573f0	GetDataAddr__13sFLC_FrameSS2	sFLC_FrameSS2::GetDataAddr()
+0007a2c0	Disconnect__17cIPCOStream2Block	cIPCOStream2Block::Disconnect()
+00077770	PutBitmap_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00098470	Write__8cProcessPCvUl	cProcess::Write(const void *, unsigned long)
+000531d0	__tf16cEvent_Forwarder	cEvent_Forwarder type_info function
+000943c0	IsModemAvailable__16cIPCSystem_Linux	cIPCSystem_Linux::IsModemAvailable()
+00078870	PutBitmapAdd_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c6ecc	__tit5tNode1Z7cEnvVar	tNode<cEnvVar> type_info node
+000922c0	__3HEXUl	HEX::HEX(unsigned long)
+0007b8c0	GetAddress__C10cMemBlock_	cMemBlock_::GetAddress() const
+00052490	SetStatus__10cVOEditRow10eER_Status	cVOEditRow::SetStatus(eER_Status)
+000c72a8	__tit5tNode1Z7cSprite	tNode<cSprite> type_info node
+00077690	CalcAddr__9cGD_SFB16RCt6tPoint1Zl	cGD_SFB16::CalcAddr(const tPoint<long> &)
+000a7160	__vt_8cPalette	cPalette virtual table
+000aca40	__vt_11cIPCO_TCPIP	cIPCO_TCPIP virtual table
+000aca18	__vt_17cIPCSession_TCPIP	cIPCSession_TCPIP virtual table
+000a80c0	__vt_16cSoundCard_Dummy	cSoundCard_Dummy virtual table
+0007b5c0	Construct__9cMemBlockUl	cMemBlock::Construct(unsigned long)
+00057470	Paint__15sFLC_FrameBlackR3cGDRC10cRectangle	sFLC_FrameBlack::Paint(cGD &, const cRectangle &)
+00090280	__10sVOMessageP8cVObjectUl	sVOMessage::sVOMessage(cVObject *, unsigned long)
+00065bc0	CalcModulo__9cGD_LFB15Ul	cGD_LFB15::CalcModulo(unsigned long)
+0005fad0	VM_GetLocaleDataBase__Fv	VM_GetLocaleDataBase()
+00071590	PutBitmapSub_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0007fbf0	__8cPaletteUl	cPalette::cPalette(unsigned long)
+00052420	GetFontOffset__10cVOEditRow	cVOEditRow::GetFontOffset()
+0008afd0	Clip__FR10cRectangleRt6tPoint1ZlRC10cRectangle	Clip(cRectangle &, tPoint<long> &, const cRectangle &)
+000925c0	_DeactivateTimer__18cTimerSystem_LinuxR7cVTimer	cTimerSystem_Linux::_DeactivateTimer(cVTimer &)
+000514f0	ShowCursor__10cVOEditRowR3cGDRCt6tPoint1ZlRC10cRectangle	cVOEditRow::ShowCursor(cGD &, const tPoint<long> &, const cRectangle &)
+0008ef50	GetMasterVO__10cIntuition	cIntuition::GetMasterVO()
+0007ec20	_GLOBAL_.I.__8cPaletteRC8cPalette	cPalette::_GLOBAL_.I.(const cPalette &)
+000980f0	Paint__10cVODragBoxR3cGDRCt6tPoint1ZlRC10cRectangle	cVODragBox::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+0005ea10	LFB8_PutBitmapC1_AMask	LFB8_PutBitmapC1_AMask
+00085ce0	OpenDisplay__4cVVCRC13cVModeRequest	cVVC::OpenDisplay(const cVModeRequest &)
+000af01c	__vt_7cBitmap	cBitmap virtual table
+000a7200	__vt_4cVCD	cVCD virtual table
+000c6ddc	__ti7cVTimer	cVTimer type_info node
+00053f10	HandleCancel__8cVOFiler	cVOFiler::HandleCancel()
+000848d0	__10cOldStringPCcUl	cOldString::cOldString(const char *, unsigned long)
+0005b6d0	_._19cHeap_Compatibility	cHeap_Compatibility::~cHeap_Compatibility()
+0004d9d0	MakeAnimBitmap__15LastChance_SPR0R11cAnimBitmapUl	LastChance_SPR0::MakeAnimBitmap(cAnimBitmap &, unsigned long)
+0008c8a0	_._9cSprClick	cSprClick::~cSprClick()
+00045910	__10cVOAButtonRC10cRectangleRC6cColorR5cFontPCc23eVOAButtonTextAlignmentbN26UsP8cVObject	cVOAButton::cVOAButton(const cRectangle &, const cColor &, cFont &, const char *, eVOAButtonTextAlignment, bool, bool, bool, unsigned short, cVObject *)
+000988b0	__tf10cRectangle	cRectangle type_info function
+000863d0	TileAlfa__3cGDRC10cRectangleR7cBitmapT1	cGD::TileAlfa(const cRectangle &, cBitmap &, const cRectangle &)
+00093e10	__tf17cIPCSession_TCPIP	cIPCSession_TCPIP type_info function
+0007b070	Sequence__C12cKeySequence	cKeySequence::Sequence() const
+0005fb30	GetText__12cLocaleEntry	cLocaleEntry::GetText()
+0006bb80	__tf9cGD_LFB16	cGD_LFB16 type_info function
+000a0550	__vt_11cLibPointer	cLibPointer virtual table
+00048200	__10cVOListReqRC10cRectangleUlR7cBitmapR5cFontPPCc	cVOListReq::cVOListReq(const cRectangle &, unsigned long, cBitmap &, cFont &, const char **)
+000c6f8c	__ti5cFont	cFont type_info node
+00057310	GetFirst__10sFLC_Frame	sFLC_Frame::GetFirst()
+000924f0	_._18cTimerSystem_Linux	cTimerSystem_Linux::~cTimerSystem_Linux()
+0008b1d0	SaveBg__7cSpriteR3cGDRQ27cSprite3cBg	cSprite::SaveBg(cGD &, cSprite::cBg &)
+0004c200	Cmp__7cDirentR7cDirent	cDirent::Cmp(cDirent &)
+000c6f24	__ti8cFFilter	cFFilter type_info node
+000516f0	__as__10cVOEditRowPCc	cVOEditRow::operator=(const char *)
+000c6f18	__ti24cCompatibilityFileSystem	cCompatibilityFileSystem type_info node
+00071e10	PutBitmapAMask_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0008fff0	RefreshDone__8cVObject	cVObject::RefreshDone()
+000c7140	__ti9cKeyboard	cKeyboard type_info node
+000987e0	Process__7cSprite	cSprite::Process()
+0007ff30	ChangeIntensity__6cColorf	cColor::ChangeIntensity(float)
+00092960	IsRootDir__11cDirentnamePCc	cDirentname::IsRootDir(const char *)
+0004b7a0	SetFrame__11cAnimBitmapUlUlRC10cRectangle	cAnimBitmap::SetFrame(unsigned long, unsigned long, const cRectangle &)
+000c7328	__ti3Log	Log type_info node
+00090e80	Floor__6DOUBLE	DOUBLE::Floor()
+00095c50	Lock__10cSemaphore	cSemaphore::Lock()
+00082620	SetMasterVolume__16cSoundCard_DummyRC7cVolume	cSoundCard_Dummy::SetMasterVolume(const cVolume &)
+0005d0c0	LFB16_PutBitmap32	LFB16_PutBitmap32
+00096d20	__tft5tNode1Z9cEnvClass	tNode<cEnvClass> type_info function
+00099884	__vt_10cVOConsole	cVOConsole virtual table
+00096cf0	__t5tList1Z7cEnvVar	tList<cEnvVar>::tList()
+00074c50	CalcAddr__9cGD_LFB32RCt6tPoint1Zl	cGD_LFB32::CalcAddr(const tPoint<long> &)
+000824e0	GetBufferItemLength__6cMixer	cMixer::GetBufferItemLength()
+0008f3d0	AddVObject__7cScreenP8cVObjectb	cScreen::AddVObject(cVObject *, bool)
+00077610	PutBitmapAdd_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0004bde0	ReOpen__10cDirectoryR7cDirent	cDirectory::ReOpen(cDirent &)
+000987d0	Init__7cSprite	cSprite::Init()
+0008a9a0	PutBitmapLMask__3cGDR7cBitmapT1RCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmapLMask(cBitmap &, cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+000a0846	LDBRET_Broken	LDBRET_Broken
+0005d450	LFB24_Fill	LFB24_Fill
+0007fdd0	GetIntensity__C6cColorf	cColor::GetIntensity(float) const
+00076910	PutAnimBitmap_I__9cGD_SFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00074960	PutPixel__9cGD_LFB32RCt6tPoint1ZlG6cColor	cGD_LFB32::PutPixel(const tPoint<long> &, cColor)
+00094350	IsSerialAvailable__16cIPCSystem_Linux	cIPCSystem_Linux::IsSerialAvailable()
+0005f3a0	GetFirst__C5cList	cList::GetFirst() const
+00095bd0	__10cSemaphoreUlb	cSemaphore::cSemaphore(unsigned long, bool)
+000877c0	SetPalette__4cVVCPC6cColorUsUs	cVVC::SetPalette(const cColor *, unsigned short, unsigned short)
+00053c70	Select__8cVOFilerR7cDirent	cVOFiler::Select(cDirent &)
+0008ea10	_GLOBAL_.I.Intuition	_GLOBAL_.I.Intuition
+00087c30	VLine__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::VLine(const tPoint<long> &, unsigned long, cColor)
+00042e30	Process__8cConsolePCc	cConsole::Process(const char *)
+00047ab0	RedbookRequired__12cApplication	cApplication::RedbookRequired()
+00090010	NeedRefresh__8cVObject	cVObject::NeedRefresh()
+00043320	EchoIsOn__C6cShell	cShell::EchoIsOn() const
+0004fc20	__tf16cData_AnimBitmap	cData_AnimBitmap type_info function
+000659b0	HLineSub__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::HLineSub(const tPoint<long> &, unsigned long, cColor)
+000788b0	Line__8cGD_SFB8RCt6tPoint1ZlT1G6cColor	cGD_SFB8::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+000af220	__vt_10cSoundPlay	cSoundPlay virtual table
+00078a20	Broadcast__10cIPCServerG3PTRUlbT3	cIPCServer::Broadcast(PTR, unsigned long, bool, bool)
+00088560	PutAnimBitmapSub__3cGDR11cAnimBitmapUlRCt6tPoint1ZlP12cPaletteFull	cGD::PutAnimBitmapSub(cAnimBitmap &, unsigned long, const tPoint<long> &, cPaletteFull *)
+000af10c	__vt_11cIPCSession	cIPCSession virtual table
+0005c800	LFB16_HLineSub	LFB16_HLineSub
+0005c4e0	LFB16_PutBitmap	LFB16_PutBitmap
+0005b600	IsSeemsGood__10cHeapBlockUl	cHeapBlock::IsSeemsGood(unsigned long)
+00077550	HLineAlfa__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00095190	Fatal__FPc	Fatal(char *)
+00083bf0	__13cSoundConvert	cSoundConvert::cSoundConvert()
+00080410	EVENT_Buttons__8cPointerUc	cPointer::EVENT_Buttons(unsigned char)
+0007b500	Lock__9cMemBlock	cMemBlock::Lock()
+0004e240	__16cData_AnimBitmapPCcb	cData_AnimBitmap::cData_AnimBitmap(const char *, bool)
+0009d594	__vt_16cEvent_Forwarder	cEvent_Forwarder virtual table
+0007a2e0	SetBlockMode__17cIPCOStream2Blockb	cIPCOStream2Block::SetBlockMode(bool)
+0006b970	VLineSub__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::VLineSub(const tPoint<long> &, unsigned long, cColor)
+00095db0	Close__5cPipe	cPipe::Close()
+00087cf0	Fill_I__11cGD_MinimalG6cColorRC10cRectangle	cGD_Minimal::Fill_I(cColor, const cRectangle &)
+0007bdc0	PullObject__11cMemoryPipePvUl	cMemoryPipe::PullObject(void *, unsigned long)
+00048020	__10cVOListReqRCt6tPoint1ZlR7cBitmapR5cFontPPCc	cVOListReq::cVOListReq(const tPoint<long> &, cBitmap &, cFont &, const char **)
+00093d80	__tf17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP type_info function
+000c5f40	CC_LOWER	CC_LOWER
+00043c90	ShiftRight__11cLineEditor	cLineEditor::ShiftRight()
+0004b800	__tf11cAnimBitmap	cAnimBitmap type_info function
+0006e1e0	PutAnimBitmapLMask_I__9cGD_LFB24R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000532d0	Close__24cCompatibilityFileSystem	cCompatibilityFileSystem::Close()
+00075d20	FillAdd__8cGD_LFB8G6cColorRC10cRectangle	cGD_LFB8::FillAdd(cColor, const cRectangle &)
+00082a80	Notify__19cSoundServerChannel18eSoundChannelEvent	cSoundServerChannel::Notify(eSoundChannelEvent)
+0007f2a0	GetPalette__12cPaletteFull	cPaletteFull::GetPalette()
+0005faf0	GetFileName__12cLocaleEntry	cLocaleEntry::GetFileName()
+00091bf0	SVGALIB_Init__Fv	SVGALIB_Init()
+000c72cc	__ti8cVObject	cVObject type_info node
+0007bd00	Pull__11cMemoryPipePvUl	cMemoryPipe::Pull(void *, unsigned long)
+00083610	InterpolateRight__25cSoundChannel_SoftwareMixss	cSoundChannel_SoftwareMix::InterpolateRight(short, short)
+000a5c40	__vt_5cIPCO	cIPCO virtual table
+000657a0	PutPixel__9cGD_LFB15RCt6tPoint1ZlG6cColor	cGD_LFB15::PutPixel(const tPoint<long> &, cColor)
+00052860	InputChFilter__8cEditRowc	cEditRow::InputChFilter(char)
+00050500	__tf18cSharedData_Bitmap	cSharedData_Bitmap type_info function
+00057300	GetNext__10sFLC_Frame	sFLC_Frame::GetNext()
+00079e50	Refresh__15cIPCBrowser_IPX	cIPCBrowser_IPX::Refresh()
+000789b0	_._8cGD_SFB8	cGD_SFB8::~cGD_SFB8()
+000789d0	__11cIPCSessionPCc	cIPCSession::cIPCSession(const char *)
+000988f0	__tft6tPoint1Zl	tPoint<long> type_info function
+00084bc0	_._10cOldString	cOldString::~cOldString()
+000807d0	Rnd__7cRandom	cRandom::Rnd()
+00087c10	HLineAdd__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+00082f00	GetPriority__3cAO	cAO::GetPriority()
+000a7238	_7cRandom.A	_7cRandom.A
+00097450	Grab__6cMouse	cMouse::Grab()
+00096950	Filter__5sSPR1	sSPR1::Filter()
+000856b0	GetTypeIndex__11cMsgRecNode	cMsgRecNode::GetTypeIndex()
+00098c40	__tf8cThread_	cThread_ type_info function
+0008fba0	Remove__8cVObject	cVObject::Remove()
+00078c90	__10cIPCSystem	cIPCSystem::cIPCSystem()
+0008bf60	Paint__14cSprABitmapAddR3cGDGt6tPoint1Zl	cSprABitmapAdd::Paint(cGD &, tPoint<long>)
+000628d0	PutAnimBitmap_I__9cGD_LFB15R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00078770	PutAnimBitmapAlfa_I__8cGD_SFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000a5e20	__vt_14cIPCServer_IPX	cIPCServer_IPX virtual table
+000c536c	_DYNAMIC	_DYNAMIC
+000a8b20	__vt_11cMsgRecNode	cMsgRecNode virtual table
+0004c120	Validate__7cDirent	cDirent::Validate()
+00060c30	PutBitmapAlfa_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00053270	Open__24cCompatibilityFileSystemPCc16eFileOpeningModeb	cCompatibilityFileSystem::Open(const char *, eFileOpeningMode, bool)
+000788e0	Refresh__8cGD_SFB8RC10cRectangle	cGD_SFB8::Refresh(const cRectangle &)
+0007bcf0	EndPush__11cMemoryPipe	cMemoryPipe::EndPush()
+0008afa0	__opPUc__8cStdConv	cStdConv::operator unsigned char *()
+00093550	Disconnect__11cIPCO_TCPIP	cIPCO_TCPIP::Disconnect()
+0007e600	ClearEntryString__12cVOMultiLineUc	cVOMultiLine::ClearEntryString(unsigned char)
+0006b740	HLine__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::HLine(const tPoint<long> &, unsigned long, cColor)
+0008a120	PutBitmapAdd__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmapAdd(cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+000884c0	Frame__3cGDRC10cRectangleG6cColor	cGD::Frame(const cRectangle &, cColor)
+00079280	Read__9cIPCO_IPXPvUl	cIPCO_IPX::Read(void *, unsigned long)
+0008b490	RestoreBg__7cSpriteR3cGDRQ27cSprite3cBg	cSprite::RestoreBg(cGD &, cSprite::cBg &)
+00095420	SetBySys__8cDayTime	cDayTime::SetBySys()
+000af22c	__vt_12cTimerSystem	cTimerSystem virtual table
+00091d20	Stop__9cCD_Linux	cCD_Linux::Stop()
+0008f110	SetPointerPos__V10cIntuitionRCt6tPoint1Zl	cIntuition::SetPointerPos(const tPoint<long> &) volatile
+000c6f64	__ti5cFile	cFile type_info node
+000786d0	FillAlfa__8cGD_SFB8G6cColorRC10cRectangle	cGD_SFB8::FillAlfa(cColor, const cRectangle &)
+00053200	__tf11cEventMulti	cEventMulti type_info function
+00086940	FrameAlpha__3cGDRC10cRectangleUlG6cColorbT1	cGD::FrameAlpha(const cRectangle &, unsigned long, cColor, bool, const cRectangle &)
+00052f30	__10cEnvSystem	cEnvSystem::cEnvSystem()
+000989b0	_._12cTimerSystem	cTimerSystem::~cTimerSystem()
+00087c90	FillAlfa__11cGD_MinimalG6cColorRC10cRectangle	cGD_Minimal::FillAlfa(cColor, const cRectangle &)
+00090a60	ACos__6DOUBLE	DOUBLE::ACos()
+0005f0b0	AddNext__6cHNodeP6cHNode	cHNode::AddNext(cHNode *)
+00065560	Fill_I__9cGD_LFB15G6cColorRC10cRectangle	cGD_LFB15::Fill_I(cColor, const cRectangle &)
+00084c10	StrCopy__FPCcPcUl	StrCopy(const char *, char *, unsigned long)
+00042b30	_._8cConsole	cConsole::~cConsole()
+0007f790	GetAddr__10cPalette15	cPalette15::GetAddr()
+000a0848	LDBRET_FileNotFound	LDBRET_FileNotFound
+0004c270	GetBasename__7cDirent	cDirent::GetBasename()
+000439d0	InsertChar__11cLineEditorc	cLineEditor::InsertChar(char)
+0006f810	CalcAddr__9cGD_LFB24RCt6tPoint1Zl	cGD_LFB24::CalcAddr(const tPoint<long> &)
+00078900	CalcAddr__8cGD_SFB8RCt6tPoint1Zl	cGD_SFB8::CalcAddr(const tPoint<long> &)
+0004faf0	Const__16cData_AnimBitmapPc	cData_AnimBitmap::Const(char *)
+00084f30	Unsubscribe__12cMsgReceiverPc	cMsgReceiver::Unsubscribe(char *)
+00083860	SetMixSpeed__25cSoundChannel_SoftwareMixUs	cSoundChannel_SoftwareMix::SetMixSpeed(unsigned short)
+00087760	GetWorkBuffer__C4cVVC	cVVC::GetWorkBuffer() const
+0004c9d0	SaveAsBMP_15__FR7cBitmapPCc	SaveAsBMP_15(cBitmap &, const char *)
+00082e60	GetVolume__3cAO	cAO::GetVolume()
+00084bb0	GetLength__10cOldString	cOldString::GetLength()
+0005aac0	GetWordLength__10cVOTextBoxPc	cVOTextBox::GetWordLength(char *)
+000af140	__vt_9cKeyboard	cKeyboard virtual table
+0006ef90	PutAnimBitmapSub_I__9cGD_LFB24R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000970f0	__thunk_12__Validate__10cData_Font	[thunk 12] cData_Font::_Validate()
+00057640	Load__10cData_Font	cData_Font::Load()
+000ac780	__vt_16cSoundCard_Linux	cSoundCard_Linux virtual table
+00089f70	PutBitmapSub__3cGDR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmapSub(cBitmap &, const tPoint<long> &, cPaletteFull *)
+0008dec0	RefreshFocus__10cIntuition	cIntuition::RefreshFocus()
+00080750	_GLOBAL_.I._7cRandom.A	_GLOBAL_.I._7cRandom.A
+00083550	GetDataUBMR__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataUBMR()
+000819a0	MixUBM__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::MixUBM(unsigned long, cSoundChannel_SoftwareMix &)
+00071c10	SaveBitmap_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_LFB32::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+0004c320	SaveAsMVP__FR7cBitmapPCc	SaveAsMVP(cBitmap &, const char *)
+000956c0	__ml__8cDayTimed	cDayTime::operator*(double)
+000816e0	Fill__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::Fill(unsigned long, cSoundChannel_SoftwareMix &)
+00055110	CountLines__9cTextFilePi	cTextFile::CountLines(int *)
+00044f80	__tf10cVOConsole	cVOConsole type_info function
+0008fbc0	Resize__8cVObjectRC10cDimension	cVObject::Resize(const cDimension &)
+00084cc0	GetLength__FPCc	GetLength(const char *)
+00082840	SetVolume__3cAORC7cVolume	cAO::SetVolume(const cVolume &)
+000749f0	VLine__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::VLine(const tPoint<long> &, unsigned long, cColor)
+0005d9c0	LFB24_PutBitmap8Add	LFB24_PutBitmap8Add
+000c6a00	safefilelog	safefilelog
+00084c40	StrCmp__FPCcT0	StrCmp(const char *, const char *)
+00095cf0	GetVal__10cSemaphore	cSemaphore::GetVal()
+000c7024	__ti9cLibMouse	cLibMouse type_info node
+00095b60	CreateEventManager__11cSyncSystem	cSyncSystem::CreateEventManager()
+000968b0	__thunk_12__Validate__13cData_Palette	[thunk 12] cData_Palette::_Validate()
+000532f0	GetPosition__24cCompatibilityFileSystem	cCompatibilityFileSystem::GetPosition()
+00098c96	_etext	_etext
+0009aa40	__vt_10cVOListReq	cVOListReq virtual table
+000465d0	PaintText__10cVOAButtonR3cGDRCt6tPoint1ZlRC10cRectangle	cVOAButton::PaintText(cGD &, const tPoint<long> &, const cRectangle &)
+00092ef0	SetSoundFormat__16cSoundCard_LinuxUc	cSoundCard_Linux::SetSoundFormat(unsigned char)
+00094040	_._16cIPXSocket_Linux	cIPXSocket_Linux::~cIPXSocket_Linux()
+00093150	__tf16cSoundCard_Linux	cSoundCard_Linux type_info function
+000964c0	_._t5tNode1Z9cMemBlock	tNode<cMemBlock>::~tNode()
+00080d80	__tf7cSample	cSample type_info function
+000c71f8	__ti25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix type_info node
+00074ef0	PutBitmapLMask_I__8cGD_LFB8R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0006f560	PutPixel__9cGD_LFB24RCt6tPoint1ZlG6cColor	cGD_LFB24::PutPixel(const tPoint<long> &, cColor)
+0004b930	Process_Text__15cAnimTextReaderPcUl	cAnimTextReader::Process_Text(char *, unsigned long)
+00094530	__tf16cIPCSystem_Linux	cIPCSystem_Linux type_info function
+000968f0	Filter3__5sSPR1	sSPR1::Filter3()
+0004bf30	__7cDirentRC11cDirentname	cDirent::cDirent(const cDirentname &)
+000c6e34	__ti16cData_AnimBitmap	cData_AnimBitmap type_info node
+000968a0	__thunk_12__Validate__12cData_Bitmap	[thunk 12] cData_Bitmap::_Validate()
+000985f0	__t9tMemBlock1ZcRCt9tMemBlock1Zc	tMemBlock<char>::tMemBlock(const tMemBlock<char> &)
+000c6640	StdConv	StdConv
+000967a0	__tf7cVTimer	cVTimer type_info function
+0007f960	__8cConvertRC8cPaletteT1Ul	cConvert::cConvert(const cPalette &, const cPalette &, unsigned long)
+0007e710	InsEndItem__12cVOMultiLinePCc	cVOMultiLine::InsEndItem(const char *)
+00054e20	GetPosition__9cTextFile	cTextFile::GetPosition()
+00091c00	SVGAMOUSE_Init__Fv	SVGAMOUSE_Init()
+000462e0	CreateDPal__10cVOAButton	cVOAButton::CreateDPal()
+0005f5a0	__5cNode	cNode::cNode()
+000966e0	__thunk_24__._13cAnimSkeleton	[thunk 24] cAnimSkeleton::~cAnimSkeleton()
+000612d0	PutBitmapAdd_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0004b8f0	__15cAnimTextReaderPcUl	cAnimTextReader::cAnimTextReader(char *, unsigned long)
+00046710	Paint__10cVOAButtonR3cGDRCt6tPoint1ZlRC10cRectangle	cVOAButton::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+0008fbb0	IsGottaRemove__8cVObject	cVObject::IsGottaRemove()
+00094180	Broadcast__16cIPXSocket_LinuxPCvUlUl	cIPXSocket_Linux::Broadcast(const void *, unsigned long, unsigned long)
+00083510	GetDataSLEWM__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataSLEWM()
+000a3100	__vt_9cGD_LFB24	cGD_LFB24 virtual table
+00050110	__22cSharedData_AnimBitmapPCcb	cSharedData_AnimBitmap::cSharedData_AnimBitmap(const char *, bool)
+000c73b4	__ti10cIPXSocket	cIPXSocket type_info node
+0005eeb0	AddFirst__6cHListP6cHNode	cHList::AddFirst(cHNode *)
+00096fd0	_._9cFFHidden	cFFHidden::~cFFHidden()
+00085790	Receive__12cMsgReceiverUlG3PTR	cMsgReceiver::Receive(unsigned long, PTR)
+0008d590	SetQualifierState__10cIntuition	cIntuition::SetQualifierState()
+0007fd00	__8cPalette	cPalette::cPalette()
+000c6d40	__tit9tMemBlock1ZUc	tMemBlock<unsigned char> type_info node
+00048d90	_._10cVOListReq	cVOListReq::~cVOListReq()
+00043310	SetConsole__6cShellP8cConsole	cShell::SetConsole(cConsole *)
+000929c0	Main__20cSoundRecorderThread	cSoundRecorderThread::Main()
+00079480	IsBlockMode__9cIPCO_IPX	cIPCO_IPX::IsBlockMode()
+00076eb0	PutAnimBitmapLMask_I__9cGD_SFB16R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00096eb0	_._8cFFilter	cFFilter::~cFFilter()
+0007b3b0	Use__13cSystemMemoryR9cMemBlock	cSystemMemory::Use(cMemBlock &)
+0005f2e0	UnLinkList__5cList	cList::UnLinkList()
+0005c4d0	LFB15_FillAlfa	LFB15_FillAlfa
+00061970	PutBitmapSub_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00084930	__as__10cOldStringPCc	cOldString::operator=(const char *)
+000c5a20	Palette16	Palette16
+0004eac0	LoadMP__16cData_AnimBitmapPUcUl	cData_AnimBitmap::LoadMP(unsigned char *, unsigned long)
+0004b840	GetText__15cAnimTextReader	cAnimTextReader::GetText()
+00052d80	FindClass__10cEnvSystemPCc	cEnvSystem::FindClass(const char *)
+000c6d50	__tit6tHNode1Z8cVObject	tHNode<cVObject> type_info node
+00043360	__tf6cShell	cShell type_info function
+00089c50	PutBitmapAMask__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmapAMask(cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+00090470	__7cVolumes	cVolume::cVolume(short)
+0004c600	__Q210sBMPHeader14sBMPInfoHeaderRC10cDimension	sBMPHeader::sBMPInfoHeader::sBMPInfoHeader(const cDimension &)
+00096840	GetPixelSize__F7eBMType	GetPixelSize(eBMType)
+000a5e04	__vt_15cIPCSession_IPX.11cIPCSession	cIPCSession_IPX virtual table (base cIPCSession)
+000aeea0	IPCSystem	IPCSystem
+00050010	Delete__22cSharedData_AnimBitmapP22cSharedData_AnimBitmap	cSharedData_AnimBitmap::Delete(cSharedData_AnimBitmap *)
+00076040	CalcAddr__8cGD_LFB8RCt6tPoint1Zl	cGD_LFB8::CalcAddr(const tPoint<long> &)
+000ac7c0	__vt_20cSoundRecorderThread	cSoundRecorderThread virtual table
+00093510	InternalDisconnect__11cIPCO_TCPIP	cIPCO_TCPIP::InternalDisconnect()
+00043810	Hide__10cVOConsole	cVOConsole::Hide()
+0008c870	__tf9cSprClick	cSprClick type_info function
+00094430	CreateTCPIPClient__16cIPCSystem_LinuxbPCcUl	cIPCSystem_Linux::CreateTCPIPClient(bool, const char *, unsigned long)
+00084e70	_._12cMsgReceiver	cMsgReceiver::~cMsgReceiver()
+00069190	PutAnimBitmapLMask_I__9cGD_LFB16R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0006bbb0	_._9cGD_LFB16	cGD_LFB16::~cGD_LFB16()
+0007d370	Process__12cVOMultiLineR6sInput	cVOMultiLine::Process(sInput &)
+000c6efc	__ti16cEvent_Forwarder	cEvent_Forwarder type_info node
+0008b180	GetWidth__10sVModeInfo	sVModeInfo::GetWidth()
+00079e10	GetSession__15cIPCBrowser_IPXUl	cIPCBrowser_IPX::GetSession(unsigned long)
+00083950	__tf25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix type_info function
+0008f290	Activate__7cScreen	cScreen::Activate()
+0009d540	__vt_9cEnvClass	cEnvClass virtual table
+0005eff0	GetNofChildren__C6cHNode	cHNode::GetNofChildren() const
+00047b10	__tf12cApplication	cApplication type_info function
+00083490	GetDataSLEWMR__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataSLEWMR()
+000a5c20	__vt_10cIPCServer	cIPCServer virtual table
+000a0060	__vt_10cVOTextBox	cVOTextBox virtual table
+0009bd6c	__vt_12cData_Bitmap	cData_Bitmap virtual table
+000807c0	GetCount__7cRandom	cRandom::GetCount()
+00053e60	HandleOk__8cVOFiler	cVOFiler::HandleOk()
+00083c90	SetSource__13cSoundConvertG12cSoundFormatbUlPvUl	cSoundConvert::SetSource(cSoundFormat, bool, unsigned long, void *, unsigned long)
+000530a0	__op10cOldString__7cEnvVar	cEnvVar::operator cOldString()
+000954e0	__ami__8cDayTimeT0	cDayTime::operator-=(cDayTime)
+00081560	Do__6cMixerPvUlRt5tList1Z25cSoundChannel_SoftwareMixUs	cMixer::Do(void *, unsigned long, tList<cSoundChannel_SoftwareMix> &, unsigned short)
+0008d110	_._7cScreen	cScreen::~cScreen()
+00098880	__tft5tNode1Z7cSprite	tNode<cSprite> type_info function
+0005d100	LFB16_FillAdd	LFB16_FillAdd
+000506d0	Load__12cData_Sample	cData_Sample::Load()
+0006f670	VLineAdd__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+00095f10	CreatePipe__5cPipePCc	cPipe::CreatePipe(const char *)
+0007ea90	Blue__8cPaletteUl	cPalette::Blue(unsigned long)
+000974d0	__t6cArray1ZPci	cArray<char *>::cArray(int)
+0007ecf0	GetPalette32__12cPaletteFull	cPaletteFull::GetPalette32()
+0004c230	IsValid__7cDirent	cDirent::IsValid()
+0007b5f0	_._9cMemBlock	cMemBlock::~cMemBlock()
+0006b5d0	FillSub__9cGD_LFB16G6cColorRC10cRectangle	cGD_LFB16::FillSub(cColor, const cRectangle &)
+000549a0	Close__5cFile	cFile::Close()
+000904b0	Filter__5sRiff	sRiff::Filter()
+0005e0b0	LFB32_VLine	LFB32_VLine
+000a657c	__vt_9cMemBlock	cMemBlock virtual table
+00047a00	IsTimerRequired__12cApplication	cApplication::IsTimerRequired()
+000af058	__vt_t9tMemBlock1Z6cColor.10cMemBlock_	tMemBlock<cColor> virtual table (base cMemBlock_)
+00095940	Kill__7cThread	cThread::Kill()
+000a7368	__vt_7cSample.10cMemBlock_	cSample virtual table (base cMemBlock_)
+00083fb0	Write_Unsupported__13cSoundConvert	cSoundConvert::Write_Unsupported()
+00083b90	__tf13cSoundChannel	cSoundChannel type_info function
+00076020	Refresh__8cGD_LFB8RC10cRectangle	cGD_LFB8::Refresh(const cRectangle &)
+000582d0	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, cPaletteFull *)
+000c6f08	__ti11cEventMulti	cEventMulti type_info node
+00059e00	_._9cVOWindow	cVOWindow::~cVOWindow()
+0008c430	__tf14cSprABitmapAdd	cSprABitmapAdd type_info function
+000973d0	__tf9cKeyboard	cKeyboard type_info function
+0005a6b0	__tf9cVOMsgBox	cVOMsgBox type_info function
+00092280	__opPCc__3DEC	DEC::operator const char *()
+0007be30	BeginPull__11cMemoryPipeUl	cMemoryPipe::BeginPull(unsigned long)
+00093070	StartRecord__16cSoundCard_LinuxR20cSoundRecorderBufferUcUl	cSoundCard_Linux::StartRecord(cSoundRecorderBuffer &, unsigned char, unsigned long)
+00096d80	IncrementTo__t6cArray1ZPci	cArray<char *>::IncrementTo(int)
+00043b10	MoveToNextWord__11cLineEditor	cLineEditor::MoveToNextWord()
+00072de0	PutAnimBitmapLMask_I__9cGD_LFB32R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00044f20	GetPos__11cLineEditor	cLineEditor::GetPos()
+0004fbe0	_Validate__16cData_AnimBitmap	cData_AnimBitmap::_Validate()
+00094390	CreateSerialServer__16cIPCSystem_LinuxbUl	cIPCSystem_Linux::CreateSerialServer(bool, unsigned long)
+0007ae10	__12cKeySequence	cKeySequence::cKeySequence()
+00052890	_._8cEditRow	cEditRow::~cEditRow()
+00083920	IsStereo__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::IsStereo()
+0005f690	__15cLocaleDataBase	cLocaleDataBase::cLocaleDataBase()
+00047af0	VideoRequired__12cApplication	cApplication::VideoRequired()
+00080aa0	Construct__7cSampleG12cSoundFormatbUlUl	cSample::Construct(cSoundFormat, bool, unsigned long, unsigned long)
+0005bc80	LFB15_VLineAdd	LFB15_VLineAdd
+000574b0	GetNext__11sFLC_Prefix	sFLC_Prefix::GetNext()
+000c54a8	EnvSystem	EnvSystem
+00098ab0	__thunk_4__._16cSoundCard_Linux	[thunk 4] cSoundCard_Linux::~cSoundCard_Linux()
+0007a430	IsCollected__17cIPCOStream2Block	cIPCOStream2Block::IsCollected()
+00098500	__thunk_12_IsStereo__25cSoundChannel_SoftwareMix	[thunk 12] cSoundChannel_SoftwareMix::IsStereo()
+00078de0	__tf5cIPCO	cIPCO type_info function
+0005edf0	DeleteList__6cHList	cHList::DeleteList()
+000c7048	__ti5cNode	cNode type_info node
+000c70f4	__tit5tNode1Z15cIPCSession_IPX	tNode<cIPCSession_IPX> type_info node
+00083e10	Copy__13cSoundConvert	cSoundConvert::Copy()
+0007b830	__12cMemBlockPTRP10cMemBlock_Ul	cMemBlockPTR::cMemBlockPTR(cMemBlock_ *, unsigned long)
+00049030	__11cVOPulldownRC10cRectangleR7cBitmapR5cFontPCce	cVOPulldown::cVOPulldown(const cRectangle &, cBitmap &, cFont &, const char *, ...)
+00053380	Read__24cCompatibilityFileSystemG3PTRUl	cCompatibilityFileSystem::Read(PTR, unsigned long)
+000574d0	IsValid__11sFLC_Prefix	sFLC_Prefix::IsValid()
+00075b70	Fill_I__8cGD_LFB8G6cColorRC10cRectangle	cGD_LFB8::Fill_I(cColor, const cRectangle &)
+00042e70	IncraseLine__8cConsoleii	cConsole::IncraseLine(int, int)
+00077470	FillAlfa__9cGD_SFB16G6cColorRC10cRectangle	cGD_SFB16::FillAlfa(cColor, const cRectangle &)
+000464e0	SetSoundSrv__10cVOAButtonR12cSoundServer	cVOAButton::SetSoundSrv(cSoundServer &)
+0009b260	__vt_13cAnimSkeleton	cAnimSkeleton virtual table
+0007ade0	ConvertRawkey__9cKeyboardl	cKeyboard::ConvertRawkey(long)
+0007b6e0	__9cMemBlock	cMemBlock::cMemBlock()
+0007ae30	__12cKeySequencePCc	cKeySequence::cKeySequence(const char *)
+000747e0	FillAdd__9cGD_LFB32G6cColorRC10cRectangle	cGD_LFB32::FillAdd(cColor, const cRectangle &)
+000984e0	__thunk_12_Play___25cSoundChannel_SoftwareMixR7cSampleUlUl	[thunk 12] cSoundChannel_SoftwareMix::Play_(cSample &, unsigned long, unsigned long)
+0005ebc0	__9cLibMousePCc	cLibMouse::cLibMouse(const char *)
+00055490	__tf5cFile	cFile type_info function
+00047800	IsDisabled__10cVOAButton	cVOAButton::IsDisabled()
+00092610	__tf18cTimerSystem_Linux	cTimerSystem_Linux type_info function
+00090c10	Power__6DOUBLET0	DOUBLE::Power(DOUBLE)
+000907a0	GetSampleLength__5sWave	sWave::GetSampleLength()
+0004ba00	Process_Text_ObjectBuilder__15cAnimTextReaderPcUl	cAnimTextReader::Process_Text_ObjectBuilder(char *, unsigned long)
+00081440	Step__20cSoundRecorderBuffer	cSoundRecorderBuffer::Step()
+0005c590	LFB16_PutBitmapAdd	LFB16_PutBitmapAdd
+0004b7f0	GetRectAddress__C11cAnimBitmap	cAnimBitmap::GetRectAddress() const
+0004d070	Load__12cData_Bitmap	cData_Bitmap::Load()
+0006b900	HLineSub__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::HLineSub(const tPoint<long> &, unsigned long, cColor)
+000a6fc0	__vt_12cVOMultiLine	cVOMultiLine virtual table
+00062210	PutBitmapAMask_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00097160	__tf5cHeap	cHeap type_info function
+00051190	Key__10cVOEditRow8eKeyCodeb	cVOEditRow::Key(eKeyCode, bool)
+0004fd70	_Validate__12cData_Bitmap	cData_Bitmap::_Validate()
+0006f790	VLineAlfa__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00094010	__16cIPXSocket_LinuxiUl	cIPXSocket_Linux::cIPXSocket_Linux(int, unsigned long)
+000500d0	GetAnimBitmap__22cSharedData_AnimBitmap	cSharedData_AnimBitmap::GetAnimBitmap()
+0008ffc0	Initialize__8cVObject	cVObject::Initialize()
+0009d388	__vt_8cEditRow	cEditRow virtual table
+0005d340	LFB24_PutBitmapSub	LFB24_PutBitmapSub
+0008b720	Refresh__7cSprite	cSprite::Refresh()
+00091de0	GetActualTrack__9cCD_Linux	cCD_Linux::GetActualTrack()
+0005c940	LFB16_VLineAlfa	LFB16_VLineAlfa
+00053410	Rename__24cCompatibilityFileSystemPCcT1	cCompatibilityFileSystem::Rename(const char *, const char *)
+00082e80	IsActive__3cAO	cAO::IsActive()
+0009bd60	__vt_12cData_Bitmap.10cMemBlock_	cData_Bitmap virtual table (base cMemBlock_)
+00078890	PutBitmapAlfa_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00098520	__thunk_12_SetVolume__25cSoundChannel_SoftwareMixRC7cVolume	[thunk 12] cSoundChannel_SoftwareMix::SetVolume(const cVolume &)
+00078600	Fill_I__8cGD_SFB8G6cColorRC10cRectangle	cGD_SFB8::Fill_I(cColor, const cRectangle &)
+0008b090	GetBufferTech__C13cVModeRequest	cVModeRequest::GetBufferTech() const
+00092990	__20cSoundRecorderThreadiR20cSoundRecorderBuffer	cSoundRecorderThread::cSoundRecorderThread(int, cSoundRecorderBuffer &)
+00078d90	_._5cIPCO	cIPCO::~cIPCO()
+000c6e44	__ti13cData_MapItem	cData_MapItem type_info node
+00057550	GetNext__13sFLC_SubChunk	sFLC_SubChunk::GetNext()
+00043330	EchoOff__6cShell	cShell::EchoOff()
+00093d50	Refresh__17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP::Refresh()
+000879d0	GetSetPageFunction__4cVVC	cVVC::GetSetPageFunction()
+0004a190	Process__11cVOPulldownR6sInput	cVOPulldown::Process(sInput &)
+00074bd0	VLineAlfa__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0008f260	GetPalette__7cScreen	cScreen::GetPalette()
+00065b80	Line__9cGD_LFB15RCt6tPoint1ZlT1G6cColor	cGD_LFB15::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+00082c40	_._12cSoundServer	cSoundServer::~cSoundServer()
+00059e70	Notify__9cVOMsgBoxRC10sVOMessage	cVOMsgBox::Notify(const sVOMessage &)
+0008ba70	Process__9cSprClick	cSprClick::Process()
+0004c6c0	SaveAsBMP_16__FR7cBitmapPCc	SaveAsBMP_16(cBitmap &, const char *)
+00090030	GetMirrorGD__8cVObject	cVObject::GetMirrorGD()
+0008bb20	Init__9cSprClick	cSprClick::Init()
+0006baf0	CalcAddr__9cGD_LFB16RCt6tPoint1Zl	cGD_LFB16::CalcAddr(const tPoint<long> &)
+000c6d94	__ti10cVOAButton	cVOAButton type_info node
+00091b70	WaitVBlank	WaitVBlank
+00048f80	Disable__10cVOListReqUl	cVOListReq::Disable(unsigned long)
+00075de0	VLineSub__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::VLineSub(const tPoint<long> &, unsigned long, cColor)
+0005ea20	LFB8_HLine	LFB8_HLine
+00057520	GetSize__13sFLC_SubChunk	sFLC_SubChunk::GetSize()
+00097560	SetEmpty__t6cArray1ZPc	cArray<char *>::SetEmpty()
+0007bcd0	BeginPush__11cMemoryPipeUl	cMemoryPipe::BeginPush(unsigned long)
+0005cb70	LFB16_PutBitmap8_AMask	LFB16_PutBitmap8_AMask
+0008ff60	SendMsg__8cVObjectUl	cVObject::SendMsg(unsigned long)
+00080070	GetColor32__C6cColor	cColor::GetColor32() const
+000531b0	__16cEvent_ForwarderP11cEventMulti	cEvent_Forwarder::cEvent_Forwarder(cEventMulti *)
+00054ba0	Append__5cFileG3PTRUl	cFile::Append(PTR, unsigned long)
+00082e00	__19cSoundServerChannel	cSoundServerChannel::cSoundServerChannel()
+0005b360	__9cVOBitmapRCt6tPoint1ZlR7cBitmapbUsP8cVObject	cVOBitmap::cVOBitmap(const tPoint<long> &, cBitmap &, bool, unsigned short, cVObject *)
+00087720	DoubleBuffering__C4cVVC	cVVC::DoubleBuffering() const
+00079410	IsUsed__9cIPCO_IPX	cIPCO_IPX::IsUsed()
+0008f250	GetPointer__7cScreen	cScreen::GetPointer()
+0004bbd0	Refresh__10cDirectory	cDirectory::Refresh()
+00093dd0	Open__17cIPCSession_TCPIP	cIPCSession_TCPIP::Open()
+00098820	_._7cSprite	cSprite::~cSprite()
+0005b500	__tf9cVOBitmap	cVOBitmap type_info function
+00090d00	Sinh__6DOUBLE	DOUBLE::Sinh()
+000902a0	__10sVOMessage	sVOMessage::sVOMessage()
+000793f0	IsConnected__9cIPCO_IPX	cIPCO_IPX::IsConnected()
+0004d810	Load__13cData_Palette	cData_Palette::Load()
+00050900	Action__8cEditRow10eER_Actionc	cEditRow::Action(eER_Action, char)
+00097eb0	Initialize__10cVODragBox	cVODragBox::Initialize()
+00069c40	PutAnimBitmapAlfa_I__9cGD_LFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c7384	__ti17cIPCSession_TCPIP	cIPCSession_TCPIP type_info node
+000921c0	__8Log_FilePCc	Log_File::Log_File(const char *)
+00084bf0	__10cOldString	cOldString::cOldString()
+0008f810	Process__9cMasterVOR6sInput	cMasterVO::Process(sInput &)
+000856d0	GetRecipient__11cMsgRecNode	cMsgRecNode::GetRecipient()
+000c72dc	__ti10cIntuition	cIntuition type_info node
+00095800	__5cTaskPCc	cTask::cTask(const char *)
+0008c460	_._14cSprABitmapAdd	cSprABitmapAdd::~cSprABitmapAdd()
+0008f0b0	GetScroll__10cIntuition	cIntuition::GetScroll()
+0007afa0	__as__12cKeySequenceRC12cKeySequence	cKeySequence::operator=(const cKeySequence &)
+00090450	Set__7cVolumess	cVolume::Set(short, short)
+0007b910	SetPriority__10cMemBlock_Us	cMemBlock_::SetPriority(unsigned short)
+00082460	SetMasterVolume__22cSoundCard_SoftwareMixRC7cVolume	cSoundCard_SoftwareMix::SetMasterVolume(const cVolume &)
+0004adf0	Construct__7cBitmapRC10cDimension7eBMType	cBitmap::Construct(const cDimension &, eBMType)
+00057360	GetDataAddr__18sFLC_FrameColor256	sFLC_FrameColor256::GetDataAddr()
+0008fb40	SetReq__8cVObjectb	cVObject::SetReq(bool)
+000477b0	SetRepeatValues__10cVOAButtonUlUlUlUl	cVOAButton::SetRepeatValues(unsigned long, unsigned long, unsigned long, unsigned long)
+000524e0	__opPc__10cVOEditRow	cVOEditRow::operator char *()
+00053990	Request__8cVOFilerR7cScreen	cVOFiler::Request(cScreen &)
+0004a7b0	__tf13cAnimSkeleton	cAnimSkeleton type_info function
+00090930	IsStereo__Q25sWave7sFormat	sWave::sFormat::IsStereo()
+0004b380	GetBoundingBox__11cAnimBitmap	cAnimBitmap::GetBoundingBox()
+000902d0	__6sInput6eIType6eMButt	sInput::sInput(eIType, eMButt)
+000806d0	Random__7cRandomUs	cRandom::Random(unsigned short)
+00080880	Init__7cRandomUs	cRandom::Init(unsigned short)
+00055bc0	TimerProc__14cFLCAnimPlayer	cFLCAnimPlayer::TimerProc()
+0006af20	PutAnimBitmapSub_I__9cGD_LFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005d270	LFB24_PutBitmapAdd	LFB24_PutBitmapAdd
+00097020	__tf10cDirectory	cDirectory type_info function
+0005d5a0	LFB24_VLineAdd	LFB24_VLineAdd
+0004fdf0	_Validate__13cData_Palette	cData_Palette::_Validate()
+000c7310	__ti10cSoundPlay	cSoundPlay type_info node
+0004b790	SetType__11cAnimBitmap7eBMType	cAnimBitmap::SetType(eBMType)
+00047cc0	__10cVOListReqRCt6tPoint1ZlR7cBitmapR5cFontPCce	cVOListReq::cVOListReq(const tPoint<long> &, cBitmap &, cFont &, const char *, ...)
+000c6eb4	__ti8cEditRow	cEditRow type_info node
+000c6d5c	__ti10cDimension	cDimension type_info node
+000c7368	__ti16cSoundCard_Linux	cSoundCard_Linux type_info node
+0005ca60	LFB16_PutBitmap8Add	LFB16_PutBitmap8Add
+00078980	__tf8cGD_SFB8	cGD_SFB8 type_info function
+000472f0	Process__10cVOAButtonR6sInput	cVOAButton::Process(sInput &)
+0005d1b0	LFB24_PutBitmapAlfa	LFB24_PutBitmapAlfa
+000c71b0	__ti4cVCD	cVCD type_info node
+00098ac0	__22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix::cSoundCard_SoftwareMix()
+0007d6b0	InsertItem__12cVOMultiLineUsPCc	cVOMultiLine::InsertItem(unsigned short, const char *)
+000af200	__vt_7cSprite	cSprite virtual table
+0005cc80	LFB16_PutBitmap8AlfaC1_AMask	LFB16_PutBitmap8AlfaC1_AMask
+0004df90	MakePalette__5sSPR1R8cPaletteUl	sSPR1::MakePalette(cPalette &, unsigned long)
+0008cc00	InitTree__8cVObject	cVObject::InitTree()
+00095d20	__tf10cSemaphore	cSemaphore type_info function
+000826b0	IsStereo__16cSoundCard_Dummy	cSoundCard_Dummy::IsStereo()
+000574c0	GetFirst__11sFLC_Prefix	sFLC_Prefix::GetFirst()
+000534c0	Fill__8cVOFiler	cVOFiler::Fill()
+000786f0	FillSub__8cGD_SFB8G6cColorRC10cRectangle	cGD_SFB8::FillSub(cColor, const cRectangle &)
+000857f0	VM_GetFrameCounter__Fv	VM_GetFrameCounter()
+0006f8f0	PutBitmap_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000a5dec	__vt_15cIPCBrowser_IPX	cIPCBrowser_IPX virtual table
+00057380	GetDataSize__15sFLC_FrameColor	sFLC_FrameColor::GetDataSize()
+0008f8a0	Paint__9cMasterVOR3cGDRCt6tPoint1ZlRC10cRectangle	cMasterVO::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+0005ecf0	MapAllSymbol__7cLibVVC	cLibVVC::MapAllSymbol()
+00043ac0	RemoveToAll__11cLineEditor	cLineEditor::RemoveToAll()
+000acd20	__vt_16cIPXSocket_Linux	cIPXSocket_Linux virtual table
+00093ed0	__11cIPCO_TCPIP	cIPCO_TCPIP::cIPCO_TCPIP()
+00083900	GetFormat__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetFormat()
+0004a290	__tf10cVOListReq	cVOListReq type_info function
+0007f420	__10cPalette32R8cPalette	cPalette32::cPalette32(cPalette &)
+000a84a8	__vt_12cSoundNotify	cSoundNotify virtual table
+0005f4f0	GetNext__C5cNode	cNode::GetNext() const
+00055070	ReadLine__9cTextFilePci	cTextFile::ReadLine(char *, int)
+000c6a08	filelog	filelog
+00052880	__opPc__8cEditRow	cEditRow::operator char *()
+00087e50	__tf11cGD_Minimal	cGD_Minimal type_info function
+00087710	GetBMType__C4cVVC	cVVC::GetBMType() const
+000752b0	PutBitmapAMask_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0007dd10	SetEmpty__12cVOMultiLine	cVOMultiLine::SetEmpty()
+00043ae0	RemoveFromAll__11cLineEditor	cLineEditor::RemoveFromAll()
+00084630	__le__7cStringPCc	cString::operator<=(const char *)
+00082ff0	Play___25cSoundChannel_SoftwareMixR7cSampleUlUl	cSoundChannel_SoftwareMix::Play_(cSample &, unsigned long, unsigned long)
+000932f0	IsDataAvailable__11cIPCO_TCPIPPC8cTime_US	cIPCO_TCPIP::IsDataAvailable(const cTime_US *)
+00098420	__thunk_4__._22cSoundCard_SoftwareMix	[thunk 4] cSoundCard_SoftwareMix::~cSoundCard_SoftwareMix()
+0007ac40	ReleaseAll__9cKeyboard	cKeyboard::ReleaseAll()
+00093b10	Listen__16cIPCServer_TCPIP	cIPCServer_TCPIP::Listen()
+00078db0	__5cIPCObT1	cIPCO::cIPCO(bool, bool)
+000969b0	Filter__15sMVOSANIMHeader	sMVOSANIMHeader::Filter()
+00098540	__thunk_12_ExitLoop__25cSoundChannel_SoftwareMix	[thunk 12] cSoundChannel_SoftwareMix::ExitLoop()
+0006f850	__9cGD_LFB24G3PTRRC10cDimensionUl	cGD_LFB24::cGD_LFB24(PTR, const cDimension &, unsigned long)
+00096860	__tft5tNode1Z7cDirent	tNode<cDirent> type_info function
+000c7354	__ti12cTimerSystem	cTimerSystem type_info node
+00052e80	_GLOBAL_.D.__7cEnvVarPCcT1	cEnvVar::_GLOBAL_.D.(const char *, const char *)
+0008c380	Unlock__14cSprABitmapAdd	cSprABitmapAdd::Unlock()
+00082db0	GetActualAO__19cSoundServerChannel	cSoundServerChannel::GetActualAO()
+000c6fac	__ti9cVOWindow	cVOWindow type_info node
+00055330	IsOpen__C5cFile	cFile::IsOpen() const
+000533c0	IsEnd__24cCompatibilityFileSystem	cCompatibilityFileSystem::IsEnd()
+000aeff0	Intuition_Mode	Intuition_Mode
+00052dd0	ProcIniFile__10cEnvSystemPCcUl	cEnvSystem::ProcIniFile(const char *, unsigned long)
+000987b0	Unlock__7cSprite	cSprite::Unlock()
+0005c470	LFB15_PutBitmap32	LFB15_PutBitmap32
+00057530	GetType__13sFLC_SubChunk	sFLC_SubChunk::GetType()
+0008cd80	GetVOinFocusTree__8cVObject	cVObject::GetVOinFocusTree()
+0009f798	__vt_5cFont	cFont virtual table
+000971c0	__t5tList1Z12cLocaleEntry	tList<cLocaleEntry>::tList()
+00085210	__10cMsgSenderPc	cMsgSender::cMsgSender(char *)
+000813f0	GetBuffer__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetBuffer()
+0004c260	GetSize__7cDirent	cDirent::GetSize()
+0005cf80	LFB16_PutBitmap8C1_LAMask	LFB16_PutBitmap8C1_LAMask
+0007b990	Validate__10cMemBlock_	cMemBlock_::Validate()
+00089200	PutAnimBitmapLMask__3cGDR11cAnimBitmapUlR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutAnimBitmapLMask(cAnimBitmap &, unsigned long, cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+000a73c0	SF_Void	SF_Void
+00053430	__tf24cCompatibilityFileSystem	cCompatibilityFileSystem type_info function
+00047a30	IsPointerRequired__12cApplication	cApplication::IsPointerRequired()
+00092400	DisableTimer__11cLinuxTimer	cLinuxTimer::DisableTimer()
+00056fe0	GetDimension__11sFLC_Header	sFLC_Header::GetDimension()
+00082c00	StopAll__12cSoundServer	cSoundServer::StopAll()
+00052ec0	_GLOBAL_.I.__7cEnvVarPCcT1	cEnvVar::_GLOBAL_.I.(const char *, const char *)
+000802f0	__8cPointer	cPointer::cPointer()
+0007e680	SetPoiFontOffset__12cVOMultiLineGt6tPoint1Zl	cVOMultiLine::SetPoiFontOffset(tPoint<long>)
+000aefe8	VBlankInProgress	VBlankInProgress
+000aee70	_12cApplication.Sound	_12cApplication.Sound
+00097500	_._t6cArray1ZPc	cArray<char *>::~cArray()
+00077680	Refresh__9cGD_SFB16RC10cRectangle	cGD_SFB16::Refresh(const cRectangle &)
+00082500	GetNofChannels__6cMixer	cMixer::GetNofChannels()
+000ac9e0	__vt_16cIPCServer_TCPIP	cIPCServer_TCPIP virtual table
+00082a20	Stop__19cSoundServerChannel	cSoundServerChannel::Stop()
+00080260	Brightness__6cColorUl	cColor::Brightness(unsigned long)
+0007a480	keytable__F8eKeyCodeb	keytable(eKeyCode, bool)
+0008d2a0	BeginRefresh__7cScreen	cScreen::BeginRefresh()
+0008f790	Notify__9cMasterVORC10sVOMessage	cMasterVO::Notify(const sVOMessage &)
+0006cfd0	PutBitmapSub_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00082580	GetMasterVolume__6cMixer	cMixer::GetMasterVolume()
+0007aed0	__apl__12cKeySequence8eKeyCode	cKeySequence::operator+=(eKeyCode)
+000c7134	__ti17cIPCOStream2Block	cIPCOStream2Block type_info node
+00078ad0	CreateIPXServer__10cIPCSystembUlPCc	cIPCSystem::CreateIPXServer(bool, unsigned long, const char *)
+000c6de8	__ti13cAnimSkeleton	cAnimSkeleton type_info node
+0008ffd0	Notify__8cVObjectRC10sVOMessage	cVObject::Notify(const sVOMessage &)
+0008caf0	PaintTree__8cVObjectR3cGD	cVObject::PaintTree(cGD &)
+00043350	GetName__C6cShell	cShell::GetName() const
+0004b0e0	_._11cAnimBitmap	cAnimBitmap::~cAnimBitmap()
+0005b5b0	HBRET2Text__FUc	HBRET2Text(unsigned char)
+00042c40	Print__8cConsolePCce	cConsole::Print(const char *, ...)
+000965b0	_._t6tHNode1Z8cVObject	tHNode<cVObject>::~tHNode()
+000c735c	__ti18cTimerSystem_Linux	cTimerSystem_Linux type_info node
+000c6f30	__ti9cFFHidden	cFFHidden type_info node
+00059dc0	__tf9cVOWindow	cVOWindow type_info function
+00095f00	IsBlockMode__5cPipe	cPipe::IsBlockMode()
+000a0634	__vt_5cNode	cNode virtual table
+00094510	CreateTCPIPServer__16cIPCSystem_LinuxbUlUl	cIPCSystem_Linux::CreateTCPIPServer(bool, unsigned long, unsigned long)
+000855d0	__10cMsgCenter	cMsgCenter::cMsgCenter()
+000903c0	GetRight__C7cVolume	cVolume::GetRight() const
+00080b10	_._7cSample	cSample::~cSample()
+00095970	Entry__7cThreadP7cThread	cThread::Entry(cThread *)
+000557f0	ChangePalette__15sFLC_FrameColorR8cPalette	sFLC_FrameColor::ChangePalette(cPalette &)
+00084db0	__10CHARFILTERPCc	CHARFILTER::CHARFILTER(const char *)
+00083f00	Write_SW_Mono__13cSoundConvert	cSoundConvert::Write_SW_Mono()
+00074d10	_._9cGD_LFB32	cGD_LFB32::~cGD_LFB32()
+000a1f00	__vt_9cGD_LFB15	cGD_LFB15 virtual table
+0005fd30	SFB8_PutBitmapC1_AMask	SFB8_PutBitmapC1_AMask
+0007b090	__13cSystemMemory	cSystemMemory::cSystemMemory()
+00076110	PutBitmap_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00042fa0	GetLastLine__8cConsole	cConsole::GetLastLine()
+000c7330	__ti12Log_SafeFile	Log_SafeFile type_info node
+0007a330	GetIPCO__17cIPCOStream2Block	cIPCOStream2Block::GetIPCO()
+0005c790	LFB16_VLineAdd	LFB16_VLineAdd
+00054cb0	SeekE__5cFilel	cFile::SeekE(long)
+000c6f3c	__ti8cVOFiler	cVOFiler type_info node
+000509d0	__as__8cEditRowPCc	cEditRow::operator=(const char *)
+0004bc20	ReOpen__10cDirectoryPCc	cDirectory::ReOpen(const char *)
+000c6f7c	__ti14cFLCAnimPlayer	cFLCAnimPlayer type_info node
+00091bb0	CmpMem	CmpMem
+000a3a60	__vt_9cGD_LFB32	cGD_LFB32 virtual table
+000817a0	Mix__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::Mix(unsigned long, cSoundChannel_SoftwareMix &)
+00080a30	GetFormat__7cSample	cSample::GetFormat()
+00047ae0	MouseRequired__12cApplication	cApplication::MouseRequired()
+000c7074	__ti9cGD_LFB15	cGD_LFB15 type_info node
+0005de60	LFB32_PutBitmap24Add	LFB32_PutBitmap24Add
+000c7244	__ti11cMsgRecNode	cMsgRecNode type_info node
+00089780	SaveBitmap__3cGDR7cBitmapRCt6tPoint1Zl	cGD::SaveBitmap(cBitmap &, const tPoint<long> &)
+0004b6b0	GetAddress__11cAnimBitmapUl	cAnimBitmap::GetAddress(unsigned long)
+00080e50	__12cSoundFormatUc	cSoundFormat::cSoundFormat(unsigned char)
+00089400	PutAnimBitmap__3cGDR11cAnimBitmapUlRCt6tPoint1ZlP12cPaletteFull	cGD::PutAnimBitmap(cAnimBitmap &, unsigned long, const tPoint<long> &, cPaletteFull *)
+000841c0	GetLength__7cString	cString::GetLength()
+00075f70	Line__8cGD_LFB8RCt6tPoint1ZlT1G6cColor	cGD_LFB8::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+000867a0	BoxAlfa__3cGDRC10cRectangleR7cBitmapUlG6cColorbT1	cGD::BoxAlfa(const cRectangle &, cBitmap &, unsigned long, cColor, bool, const cRectangle &)
+00079a50	__15cIPCSession_IPXPCcRC11cIPXAddress	cIPCSession_IPX::cIPCSession_IPX(const char *, const cIPXAddress &)
+00053260	GetFileMode__24cCompatibilityFileSystem	cCompatibilityFileSystem::GetFileMode()
+000856e0	__11cMsgRecNodeP12cMsgReceiverUsUs	cMsgRecNode::cMsgRecNode(cMsgReceiver *, unsigned short, unsigned short)
+00075f90	PutAnimBitmapSub_I__8cGD_LFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00043190	Parser__6cShellPCc	cShell::Parser(const char *)
+0005ee90	AddLast__6cHListP6cHNode	cHList::AddLast(cHNode *)
+00084210	__as__7cStringPCc	cString::operator=(const char *)
+00052440	SetOptions__10cVOEditRowUs	cVOEditRow::SetOptions(unsigned short)
+000c6ea4	__ti12cData_Sample	cData_Sample type_info node
+0005fbb0	SetFlags__12cLocaleEntryUc	cLocaleEntry::SetFlags(unsigned char)
+0004fc70	_._12cData_Bitmap	cData_Bitmap::~cData_Bitmap()
+0004f970	__13cData_MapItemPCc	cData_MapItem::cData_MapItem(const char *)
+0007d050	Paint__12cVOMultiLineb	cVOMultiLine::Paint(bool)
+00097ce0	Bound__10cVODragBox	cVODragBox::Bound()
+00096140	SetWorkingDirectory__FPCc	SetWorkingDirectory(const char *)
+00088520	Fill__3cGDRC10cRectangleG6cColor	cGD::Fill(const cRectangle &, cColor)
+00048e30	SetSoundSrv__10cVOListReqR12cSoundServer	cVOListReq::SetSoundSrv(cSoundServer &)
+00097140	_._9cVOButton	cVOButton::~cVOButton()
+00043160	_._6cShell	cShell::~cShell()
+00079030	ProcPacket__9cIPCO_IPXPC8cTime_US	cIPCO_IPX::ProcPacket(const cTime_US *)
+000775d0	HLineAdd__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+00065b90	Refresh__9cGD_LFB15RC10cRectangle	cGD_LFB15::Refresh(const cRectangle &)
+000908a0	GetLength__Q25sWave5sData	sWave::sData::GetLength()
+0007a310	IsBlockMode__17cIPCOStream2Block	cIPCOStream2Block::IsBlockMode()
+0005e690	LFB32_PutBitmap8Sub	LFB32_PutBitmap8Sub
+0007b3d0	Free__9cMemBlock	cMemBlock::Free()
+000a73c5	SF_UnsignedWord_BE	SF_UnsignedWord_BE
+00056970	Play__11sFLC_HeaderR3cGDRCt6tPoint1Zl	sFLC_Header::Play(cGD &, const tPoint<long> &)
+00087aa0	_._4cVVC	cVVC::~cVVC()
+00082ba0	PlayLoop__12cSoundServerR3cAO	cSoundServer::PlayLoop(cAO &)
+0007b7f0	__12cMemBlockPTRRC12cMemBlockPTR	cMemBlockPTR::cMemBlockPTR(const cMemBlockPTR &)
+00092300	Setup__11cLinuxTimer	cLinuxTimer::Setup()
+000af180	__vt_10cVOSliderV	cVOSliderV virtual table
+000a723c	_7cRandom.C	_7cRandom.C
+00043b50	MoveToPrevWord__11cLineEditor	cLineEditor::MoveToPrevWord()
+000941e0	Receive__16cIPXSocket_LinuxPvUlR11cIPXAddress	cIPXSocket_Linux::Receive(void *, unsigned long, cIPXAddress &)
+0008b170	GetHeight__10sVModeInfo	sVModeInfo::GetHeight()
+0009e274	_9cTextFile.ID	_9cTextFile.ID
+000a82e4	__vt_19cSoundServerChannel	cSoundServerChannel virtual table
+00097050	_._10cDirectory	cDirectory::~cDirectory()
+000566d0	__14cFLCAnimPlayerPCcUl	cFLCAnimPlayer::cFLCAnimPlayer(const char *, unsigned long)
+00044eb0	SetExitKey__10cConsoleVO8eKeyCodeUc	cConsoleVO::SetExitKey(eKeyCode, unsigned char)
+000c7224	__ti7cString	cString type_info node
+0005d8a0	LFB24_PutBitmap8	LFB24_PutBitmap8
+0005a1b0	__9cVOMsgBoxRCt6tPoint1ZlPcR5cFontR7cBitmapN24	cVOMsgBox::cVOMsgBox(const tPoint<long> &, char *, cFont &, cBitmap &, cBitmap &, cBitmap &)
+000aef8c	SystemMemory	SystemMemory
+0008cdd0	RemoveTree__8cVObject	cVObject::RemoveTree()
+000954a0	__pl__8cDayTimeT0	cDayTime::operator+(cDayTime)
+000c7010	__ti12cLibKeyboard	cLibKeyboard type_info node
+0008fab0	_._9cMasterVO	cMasterVO::~cMasterVO()
+0009d360	__vt_10cVOEditRow	cVOEditRow virtual table
+00082820	Stop__3cAO	cAO::Stop()
+000c73dc	__ti5cTask	cTask type_info node
+0004b6f0	GetBaseAddress__11cAnimBitmap	cAnimBitmap::GetBaseAddress()
+00079000	Connect__9cIPCO_IPXP10cIPXSocketRC11cIPXAddress	cIPCO_IPX::Connect(cIPXSocket *, const cIPXAddress &)
+00075da0	HLineAlfa__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0005e760	LFB32_PutBitmap8_AMask	LFB32_PutBitmap8_AMask
+0005ae10	__10cVOTextBoxRC10cRectanglePcP5cFontUsP8cVObject	cVOTextBox::cVOTextBox(const cRectangle &, char *, cFont *, unsigned short, cVObject *)
+00082390	AllocateChannel__22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix::AllocateChannel()
+000970c0	__thunk_56__._14cFLCAnimPlayer	[thunk 56] cFLCAnimPlayer::~cFLCAnimPlayer()
+000a0458	__vt_12cLibKeyboard	cLibKeyboard virtual table
+000822c0	Silence8__6cMixerG3PTRUl	cMixer::Silence8(PTR, unsigned long)
+00080e10	__opUc__C12cSoundFormat	cSoundFormat::__opUc() const
+00097e30	GetYY__10cVODragBox	cVODragBox::GetYY()
+0005e350	LFB32_HLineAlfa	LFB32_HLineAlfa
+00079470	SetBlockMode__9cIPCO_IPXb	cIPCO_IPX::SetBlockMode(bool)
+00093ce0	GetMaxConnections__16cIPCServer_TCPIP	cIPCServer_TCPIP::GetMaxConnections()
+00086060	Tile__3cGDRC10cRectangleR7cBitmapT1	cGD::Tile(const cRectangle &, cBitmap &, const cRectangle &)
+000a8b2c	__vt_12cMsgReceiver	cMsgReceiver virtual table
+000c70a4	__ti8cGD_LFB8	cGD_LFB8 type_info node
+0004e140	MakeAnimBitmap__5sTER1R11cAnimBitmapUl	sTER1::MakeAnimBitmap(cAnimBitmap &, unsigned long)
+00079a40	GetMaxConnections__14cIPCServer_IPX	cIPCServer_IPX::GetMaxConnections()
+00054c30	SeekB__5cFilel	cFile::SeekB(long)
+00080630	VM_GetVCD__Fv	VM_GetVCD()
+0007f5c0	GetAddr__10cPalette16	cPalette16::GetAddr()
+00079f60	Compare__15cIPCSession_IPXRC11cIPXAddress	cIPCSession_IPX::Compare(const cIPXAddress &)
+00043520	Show__10cVOConsole	cVOConsole::Show()
+00043a00	RemovePrevChar__11cLineEditor	cLineEditor::RemovePrevChar()
+000905a0	MakeSample__5sWaveR7cSample	sWave::MakeSample(cSample &)
+000943f0	CreateModemServer__16cIPCSystem_LinuxbUl	cIPCSystem_Linux::CreateModemServer(bool, unsigned long)
+00083ac0	Play__13cSoundChannelR7cSample	cSoundChannel::Play(cSample &)
+00079360	Write__9cIPCO_IPXPCvUlbT3	cIPCO_IPX::Write(const void *, unsigned long, bool, bool)
+00092430	__18cTimerSystem_Linux	cTimerSystem_Linux::cTimerSystem_Linux()
+00050390	Delete__18cSharedData_BitmapP18cSharedData_Bitmap	cSharedData_Bitmap::Delete(cSharedData_Bitmap *)
+000a0020	__vt_9cVOWindow	cVOWindow virtual table
+000c6e8c	__ti18cSharedData_Bitmap	cSharedData_Bitmap type_info node
+000421e0	_init	_init
+000c6900	inputfile	inputfile
+0005df10	LFB32_PutBitmap24Sub	LFB32_PutBitmap24Sub
+0009d33c	__vt_10cVOEditRow.8cEditRow	cVOEditRow virtual table (base cEditRow)
+000512a0	Process__10cVOEditRowR6sInput	cVOEditRow::Process(sInput &)
+00052790	__tf10cVOEditRow	cVOEditRow type_info function
+000aefe4	Intuition	Intuition
+000838a0	IsActive__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::IsActive()
+00056f60	GetWidth__11sFLC_Header	sFLC_Header::GetWidth()
+0004a150	Enable__11cVOPulldownUl	cVOPulldown::Enable(unsigned long)
+0008afb0	__8cStdConv	cStdConv::cStdConv()
+00097430	IsGrabed__6cMouse	cMouse::IsGrabed()
+0005e4e0	LFB32_PutBitmap8Alfa	LFB32_PutBitmap8Alfa
+00081250	__20cSoundRecorderBufferG12cSoundFormatUcUsUlUc	cSoundRecorderBuffer::cSoundRecorderBuffer(cSoundFormat, unsigned char, unsigned short, unsigned long, unsigned char)
+000855b0	GetFirstType__10cMsgCenter	cMsgCenter::GetFirstType()
+00083650	InterpolateLeft__25cSoundChannel_SoftwareMixss	cSoundChannel_SoftwareMix::InterpolateLeft(short, short)
+00098b70	_._10cIPXSocket	cIPXSocket::~cIPXSocket()
+00088730	PutAnimBitmapSub__3cGDR11cAnimBitmapUlRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutAnimBitmapSub(cAnimBitmap &, unsigned long, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+00082600	StopRecord__16cSoundCard_Dummy	cSoundCard_Dummy::StopRecord()
+00095450	__mi__8cDayTimeT0	cDayTime::operator-(cDayTime)
+000855f0	AddFirstRecipient__12cMsgTypeNodeP11cMsgRecNode	cMsgTypeNode::AddFirstRecipient(cMsgRecNode *)
+000868a0	VLine___3cGDRCt6tPoint1ZllG6cColorRC10cRectangle	cGD::VLine_(const tPoint<long> &, long, cColor, const cRectangle &)
+00057450	GetDataAddr__22sFLC_FrameUncompressed	sFLC_FrameUncompressed::GetDataAddr()
+000902f0	__6sInput6eITypeRCt6tPoint1Zl	sInput::sInput(eIType, const tPoint<long> &)
+000987c0	Lock__7cSprite	cSprite::Lock()
+00078850	PutBitmapSub_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00043980	Reset__11cLineEditor	cLineEditor::Reset()
+000c703c	__ti7cLibVVC	cLibVVC type_info node
+000aefbc	NULLSample8	NULLSample8
+000808c0	__7cRandomUs	cRandom::cRandom(unsigned short)
+00093e40	_._17cIPCSession_TCPIP	cIPCSession_TCPIP::~cIPCSession_TCPIP()
+0008ef20	GetFocus__10cIntuition	cIntuition::GetFocus()
+0004f060	SaveMP__16cData_AnimBitmapPCc	cData_AnimBitmap::SaveMP(const char *)
+0005f050	AddChildFirst__6cHNodeP6cHNode	cHNode::AddChildFirst(cHNode *)
+00043a30	RemoveThisChar__11cLineEditor	cLineEditor::RemoveThisChar()
+00090510	Filter__Q25sWave5sData	sWave::sData::Filter()
+0008d9b0	CloseAllInputFiles__Fv	CloseAllInputFiles()
+000809d0	IsStereo__7cSample	cSample::IsStereo()
+00077450	Fill_I__9cGD_SFB16G6cColorRC10cRectangle	cGD_SFB16::Fill_I(cColor, const cRectangle &)
+00074c30	Line__9cGD_LFB32RCt6tPoint1ZlT1G6cColor	cGD_LFB32::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+00092290	__3DECl	DEC::DEC(long)
+0005eed0	GetLast__C6cHList	cHList::GetLast() const
+0004dd90	MakeAnimBitmap2__5sSPR1R11cAnimBitmapUl	sSPR1::MakeAnimBitmap2(cAnimBitmap &, unsigned long)
+0004ae50	__11cAnimBitmap	cAnimBitmap::cAnimBitmap()
+0008e9a0	_GLOBAL_.D.Intuition	_GLOBAL_.D.Intuition
+00047ea0	__10cVOListReqRC10cRectangleR7cBitmapR5cFontPPCc	cVOListReq::cVOListReq(const cRectangle &, cBitmap &, cFont &, const char **)
+0007b5a0	Flush__9cMemBlock	cMemBlock::Flush()
+000c7288	__ti4cVVC	cVVC type_info node
+0009e27c	_9cTextFile.Encode1	_9cTextFile.Encode1
+0004f9a0	__13cData_MapItem	cData_MapItem::cData_MapItem()
+0006cad0	PutBitmapAdd_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005dd00	LFB24_FillAdd	LFB24_FillAdd
+0006f5e0	VLine__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::VLine(const tPoint<long> &, unsigned long, cColor)
+00090790	GetSampleAddr__5sWave	sWave::GetSampleAddr()
+000854a0	DelReceiver__10cMsgCenterP12cMsgReceiver	cMsgCenter::DelReceiver(cMsgReceiver *)
+0007b0c0	FlushAll__13cSystemMemory	cSystemMemory::FlushAll()
+000c7178	__ti10cVODragBox	cVODragBox type_info node
+00082650	AllocateChannel__16cSoundCard_Dummy	cSoundCard_Dummy::AllocateChannel()
+00097340	__tf11cIPCBrowser	cIPCBrowser type_info function
+00063cf0	PutAnimBitmapAlfa_I__9cGD_LFB15R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00042fe0	GetPreviousInput__8cConsole	cConsole::GetPreviousInput()
+0007b8e0	GetAddress__10cMemBlock_	cMemBlock_::GetAddress()
+000a8040	__vt_22cSoundCard_SoftwareMix.7cThread	cSoundCard_SoftwareMix virtual table (base cThread)
+00059ee0	Paint__9cVOMsgBoxR3cGDRCt6tPoint1ZlRC10cRectangle	cVOMsgBox::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00054900	OpenW__5cFile	cFile::OpenW()
+000c7390	__ti17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP type_info node
+00084870	__10cOldStringPCc	cOldString::cOldString(const char *)
+00075e20	HLineSub__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::HLineSub(const tPoint<long> &, unsigned long, cColor)
+000c6f10	__ti6cEvent	cEvent type_info node
+00096800	GetEventDescriptor__7cStream	cStream::GetEventDescriptor()
+0006b540	FillAdd__9cGD_LFB16G6cColorRC10cRectangle	cGD_LFB16::FillAdd(cColor, const cRectangle &)
+00078eb0	__9cIPCO_IPX	cIPCO_IPX::cIPCO_IPX()
+0006bbd0	PutBitmap_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005bdd0	LFB15_HLineAlfa	LFB15_HLineAlfa
+000a03c8	__vt_19cHeap_Compatibility	cHeap_Compatibility virtual table
+0007af10	Equal__12cKeySequencePCc	cKeySequence::Equal(const char *)
+000aca00	__vt_17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP virtual table
+00098430	IsBlockMode__8cProcess	cProcess::IsBlockMode()
+0006bae0	Refresh__9cGD_LFB16RC10cRectangle	cGD_LFB16::Refresh(const cRectangle &)
+000c7250	__ti12cMsgTypeNode	cMsgTypeNode type_info node
+0005e230	LFB32_HLineSub	LFB32_HLineSub
+00098720	__t5tList1Z11cMsgRecNode	tList<cMsgRecNode>::tList()
+00050480	IncUsage__18cSharedData_Bitmap	cSharedData_Bitmap::IncUsage()
+00085400	DelReceiver__10cMsgCenterP12cMsgReceiverPc	cMsgCenter::DelReceiver(cMsgReceiver *, char *)
+00077720	__tf9cGD_SFB16	cGD_SFB16 type_info function
+00087d50	PutAnimBitmapAlfa_I__11cGD_MinimalR11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005d760	LFB24_HLineAlfa	LFB24_HLineAlfa
+0008f0e0	GetPointerPos__10cIntuition	cIntuition::GetPointerPos()
+0009d5a0	__vt_11cEventMulti	cEventMulti virtual table
+00090780	GetSampleRate__5sWave	sWave::GetSampleRate()
+00093470	Write__11cIPCO_TCPIPPCvUlbT3	cIPCO_TCPIP::Write(const void *, unsigned long, bool, bool)
+0004a600	ReadAhead__13cAnimSkeleton	cAnimSkeleton::ReadAhead()
+00091f40	_._9cCD_Linux	cCD_Linux::~cCD_Linux()
+00095ef0	SetBlockMode__5cPipeb	cPipe::SetBlockMode(bool)
+00086800	HLine___3cGDRCt6tPoint1ZllG6cColorRC10cRectangle	cGD::HLine_(const tPoint<long> &, long, cColor, const cRectangle &)
+00082800	GetFormat__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetFormat()
+00052400	SetFontOffset__10cVOEditRows	cVOEditRow::SetFontOffset(short)
+0005f3c0	_._5cList	cList::~cList()
+00051750	Paint__10cVOEditRowR3cGDRCt6tPoint1ZlRC10cRectangle	cVOEditRow::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00089de0	PutBitmapSub__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmapSub(cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+000839d0	Notify__13cSoundChannel18eSoundChannelEvent	cSoundChannel::Notify(eSoundChannelEvent)
+0004d770	__13cData_PalettePCc	cData_Palette::cData_Palette(const char *)
+00055720	Paint__12sFLC_FrameLCR3cGDRC10cRectangle	sFLC_FrameLC::Paint(cGD &, const cRectangle &)
+000a73c2	SF_SignedByte	SF_SignedByte
+0007be60	__6cMouse	cMouse::cMouse()
+000957a0	Stop__5cTask	cTask::Stop()
+0008fb50	SetHelpText__8cVObjectPCc	cVObject::SetHelpText(const char *)
+0007f3f0	__vc__10cPalette32Ul	cPalette32::operator[](unsigned long)
+00087df0	__11cGD_MinimalRC10cDimensionUl	cGD_Minimal::cGD_Minimal(const cDimension &, unsigned long)
+00043c20	DecrasePos__11cLineEditor	cLineEditor::DecrasePos()
+00095520	__apl__8cDayTimeT0	cDayTime::operator+=(cDayTime)
+00075c50	VLine__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::VLine(const tPoint<long> &, unsigned long, cColor)
+00090af0	ATan2__6DOUBLET0	DOUBLE::ATan2(DOUBLE)
+00087b20	__tf4cVVC	cVVC type_info function
+00083f90	Read_Unsupported__13cSoundConvert	cSoundConvert::Read_Unsupported()
+00075ce0	FillSub__8cGD_LFB8G6cColorRC10cRectangle	cGD_LFB8::FillSub(cColor, const cRectangle &)
+000ac740	__vt_16cSoundCard_Linux.7cThread	cSoundCard_Linux virtual table (base cThread)
+00047920	SetTextOffset__10cVOAButtonRCt6tPoint1Zl	cVOAButton::SetTextOffset(const tPoint<long> &)
+000c7208	__ti13cSoundChannel	cSoundChannel type_info node
+0007f2b0	SetPalette__12cPaletteFullP8cPalette	cPaletteFull::SetPalette(cPalette *)
+00065be0	__9cGD_LFB15G3PTRRC10cDimensionUl	cGD_LFB15::cGD_LFB15(PTR, const cDimension &, unsigned long)
+00080e70	__12cSoundFormat	cSoundFormat::cSoundFormat()
+0006f700	VLineSub__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::VLineSub(const tPoint<long> &, unsigned long, cColor)
+00065c80	PutBitmap_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005f170	__6cHNode	cHNode::cHNode()
+00044f60	IsVisible__10cVOConsole	cVOConsole::IsVisible()
+00080dc0	CalcSampleLength__FG12cSoundFormatbUl	CalcSampleLength(cSoundFormat, bool, unsigned long)
+00097400	__t5tList1Z9cMemBlock	tList<cMemBlock>::tList()
+000749a0	HLine__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::HLine(const tPoint<long> &, unsigned long, cColor)
+0009d700	__vt_24cCompatibilityFileSystem	cCompatibilityFileSystem virtual table
+000824a0	__tf22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix type_info function
+000c6ed8	__ti7cEnvVar	cEnvVar type_info node
+0004a2d0	__13cAnimSkeletonPCcUl	cAnimSkeleton::cAnimSkeleton(const char *, unsigned long)
+00075c90	IsAsyncRefreshCapable__8cGD_LFB8	cGD_LFB8::IsAsyncRefreshCapable()
+000a42a0	__vt_8cGD_LFB8	cGD_LFB8 virtual table
+00085280	Send__10cMsgSenderG3PTR	cMsgSender::Send(PTR)
+0008fb60	GetHelpText__8cVObject	cVObject::GetHelpText()
+0007e730	__tf12cVOMultiLine	cVOMultiLine type_info function
+0008c3b0	Lock__14cSprABitmapAdd	cSprABitmapAdd::Lock()
+0007d620	Key__12cVOMultiLine8eKeyCode	cVOMultiLine::Key(eKeyCode)
+0008b690	AfterSwapBuffer__7cSprite	cSprite::AfterSwapBuffer()
+00075800	PutAnimBitmapLMask_I__8cGD_LFB8R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00084e30	__tf7cString	cString type_info function
+000984f0	__thunk_12_Stop__25cSoundChannel_SoftwareMix	[thunk 12] cSoundChannel_SoftwareMix::Stop()
+0004bab0	Open__10cDirectory	cDirectory::Open()
+00087e80	_._11cGD_Minimal	cGD_Minimal::~cGD_Minimal()
+000439b0	SetChar__11cLineEditorc	cLineEditor::SetChar(char)
+0005dd30	LFB32_PutBitmap32	LFB32_PutBitmap32
+000700c0	PutBitmapLMask_I__9cGD_LFB32R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000aef9c	SystemPointer	SystemPointer
+000c7290	__ti3cGD	cGD type_info node
+00042ee0	GetLines__8cConsoleii	cConsole::GetLines(int, int)
+0006b6f0	PutPixel__9cGD_LFB16RCt6tPoint1ZlG6cColor	cGD_LFB16::PutPixel(const tPoint<long> &, cColor)
+00090f10	External_PlayAnim__FPCcT0RC10cRectangle	External_PlayAnim(const char *, const char *, const cRectangle &)
+000c5e40	CC_UPPER	CC_UPPER
+00074b30	VLineSub__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::VLineSub(const tPoint<long> &, unsigned long, cColor)
+0005fd50	PutBitmap_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c70c8	__ti10cIPCServer	cIPCServer type_info node
+0008d620	ClearKeyMatrix__10cIntuition	cIntuition::ClearKeyMatrix()
+000ac2b4	__vt_10Log_Stdout	Log_Stdout virtual table
+000acce0	__vt_16cIPCSystem_Linux	cIPCSystem_Linux virtual table
+00093e60	GetConnectionID__11cIPCO_TCPIP	cIPCO_TCPIP::GetConnectionID()
+0007b9f0	_Validate__10cMemBlock_	cMemBlock_::_Validate()
+00043bd0	MoveLeft__11cLineEditor	cLineEditor::MoveLeft()
+000c7418	__ti13cEventManager	cEventManager type_info node
+00082610	StartRecord__16cSoundCard_DummyR20cSoundRecorderBufferUcUl	cSoundCard_Dummy::StartRecord(cSoundRecorderBuffer &, unsigned char, unsigned long)
+0005d6d0	LFB24_VLineSub	LFB24_VLineSub
+00096a30	__tft5tNode1Z22cSharedData_AnimBitmap	tNode<cSharedData_AnimBitmap> type_info function
+00044be0	Process__10cConsoleVOR6sInput	cConsoleVO::Process(sInput &)
+000c6ffc	__ti19cHeap_Compatibility	cHeap_Compatibility type_info node
+000af1e0	__vt_t9tMemBlock1Zc.10cMemBlock_	tMemBlock<char> virtual table (base cMemBlock_)
+000959b0	__tf7cThread	cThread type_info function
+0006f360	Fill_I__9cGD_LFB24G6cColorRC10cRectangle	cGD_LFB24::Fill_I(cColor, const cRectangle &)
+0005fb20	IsFileName__12cLocaleEntry	cLocaleEntry::IsFileName()
+0007f940	__vc__8cConvertUl	cConvert::operator[](unsigned long)
+000c725c	__ti12cMsgReceiver	cMsgReceiver type_info node
+0008aee0	GetAddr__3cGD	cGD::GetAddr()
+000c705c	__tit5tNode1Z12cLocaleEntry	tNode<cLocaleEntry> type_info node
+000530c0	HaveMoreElement__7cEnvVar	cEnvVar::HaveMoreElement()
+0006f630	HLineAdd__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+0006ebc0	PutAnimBitmapAdd_I__9cGD_LFB24R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c701c	__ti8cLibrary	cLibrary type_info node
+000549e0	GetLength__5cFile	cFile::GetLength()
+00079790	GetFreeClient__14cIPCServer_IPX	cIPCServer_IPX::GetFreeClient()
+00078d20	WriteFatal__5cIPCOG3PTRUlbT3	cIPCO::WriteFatal(PTR, unsigned long, bool, bool)
+00074c90	__9cGD_LFB32G3PTRRC10cDimensionUl	cGD_LFB32::cGD_LFB32(PTR, const cDimension &, unsigned long)
+00087900	SetPalette__4cVVCR8cPalette	cVVC::SetPalette(cPalette &)
+0005f6c0	_._15cLocaleDataBase	cLocaleDataBase::~cLocaleDataBase()
+00074ce0	__tf9cGD_LFB32	cGD_LFB32 type_info function
+0008b650	BeforeSwapBuffer__7cSprite	cSprite::BeforeSwapBuffer()
+00095a00	Clear__19cEventManager_Linux	cEventManager_Linux::Clear()
+000430d0	HaveShell__8cConsole	cConsole::HaveShell()
+000a5fc0	__vt_17cIPCOStream2Block	cIPCOStream2Block virtual table
+00096520	__tf10cDimension	cDimension type_info function
+0004fc60	GetFilename__12cData_Bitmap	cData_Bitmap::GetFilename()
+00082290	Silence16__6cMixerG3PTRUl	cMixer::Silence16(PTR, unsigned long)
+00080140	GetG__C6cColor	cColor::GetG() const
+00053f30	Notify__8cVOFilerRC10sVOMessage	cVOFiler::Notify(const sVOMessage &)
+0008cab0	RefreshTree__8cVObject	cVObject::RefreshTree()
+000795c0	_._14cIPCServer_IPX	cIPCServer_IPX::~cIPCServer_IPX()
+00058b40	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlRC10cRectangle14eTextAlignmentP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, const cRectangle &, eTextAlignment, cPaletteFull *)
+00048f20	Notify__10cVOListReqRC10sVOMessage	cVOListReq::Notify(const sVOMessage &)
+00078290	PutAnimBitmapLMask_I__8cGD_SFB8R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0007ce60	_._12cVOMultiLine	cVOMultiLine::~cVOMultiLine()
+0005c330	LFB15_PutBitmap8C1_LAMask	LFB15_PutBitmap8C1_LAMask
+0008e690	PushKeyInput__Fv	PushKeyInput()
+00084e20	__vc__10CHARFILTERUc	CHARFILTER::operator[](unsigned char)
+00098d18	__vt_6cShell	cShell virtual table
+0005f110	GetFirstChild__C6cHNode	cHNode::GetFirstChild() const
+00080810	Rnd__7cRandomll	cRandom::Rnd(long, long)
+000909f0	GetData__5sRiff	sRiff::GetData()
+0007e9f0	Red__8cPaletteUl	cPalette::Red(unsigned long)
+0005c6e0	LFB16_HLine	LFB16_HLine
+0007baf0	GetLargestFree__11cMemoryPipe	cMemoryPipe::GetLargestFree()
+00054950	OpenRW__5cFile	cFile::OpenRW()
+00087bf0	VLineAdd__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+0008f160	GetNotify__7cScreen	cScreen::GetNotify()
+0007bac0	GetFree__11cMemoryPipe	cMemoryPipe::GetFree()
+00082b40	Play__12cSoundServerR3cAO	cSoundServer::Play(cAO &)
+0004b260	SetCP__11cAnimBitmapUlRCt6tPoint1Zl	cAnimBitmap::SetCP(unsigned long, const tPoint<long> &)
+000962f0	_._7cBitmap	cBitmap::~cBitmap()
+00098b90	__tf10cIPXSocket	cIPXSocket type_info function
+000c72e8	__ti10cRectangle	cRectangle type_info node
+0008f270	Deactivate__7cScreen	cScreen::Deactivate()
+00047720	Initialize__10cVOAButton	cVOAButton::Initialize()
+0007fd90	__tf8cPalette	cPalette type_info function
+0004a0f0	Disable__11cVOPulldownUl	cVOPulldown::Disable(unsigned long)
+00057010	GetFirstChunk__11sFLC_Header	sFLC_Header::GetFirstChunk()
+000c6d20	__ti8cConsole	cConsole type_info node
+0006f6c0	HLineSub__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::HLineSub(const tPoint<long> &, unsigned long, cColor)
+0006b9e0	HLineAlfa__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+000af070	__vt_7cVTimer	cVTimer virtual table
+00098980	__tf10cSoundPlay	cSoundPlay type_info function
+0008d240	SetPointer__7cScreenP7cSprite	cScreen::SetPointer(cSprite *)
+0007f190	GetConvert__12cPaletteFull	cPaletteFull::GetConvert()
+0006c5d0	PutBitmapAlfa_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c6ee4	__ti9cEnvClass	cEnvClass type_info node
+00098b40	__t5tList1Z25cSoundChannel_SoftwareMix	tList<cSoundChannel_SoftwareMix>::tList()
+000841e0	__opPc__7cString	cString::operator char *()
+000a0100	FreeHeapBlock	FreeHeapBlock
+000c739c	__ti11cIPCO_TCPIP	cIPCO_TCPIP type_info node
+000c6040	CT_FILENAME	CT_FILENAME
+0006bb10	CalcModulo__9cGD_LFB16Ul	cGD_LFB16::CalcModulo(unsigned long)
+0007d320	Paint__12cVOMultiLineR3cGDRCt6tPoint1ZlRC10cRectangle	cVOMultiLine::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00043be0	MoveToBegin__11cLineEditor	cLineEditor::MoveToBegin()
+00096f90	Check__9cFFHiddenR11cDirentname	cFFHidden::Check(cDirentname &)
+0004b280	Construct__11cAnimBitmapUlUl7eBMType	cAnimBitmap::Construct(unsigned long, unsigned long, eBMType)
+00048fe0	Enable__10cVOListReqUl	cVOListReq::Enable(unsigned long)
+00056210	PlayFLCFile__FPcR3cGDRCt6tPoint1Zli	PlayFLCFile(char *, cGD &, const tPoint<long> &, int)
+0005d8f0	LFB24_PutBitmap8Alfa	LFB24_PutBitmap8Alfa
+00084de0	__10CHARFILTERR10CHARFILTERPCc	CHARFILTER::CHARFILTER(CHARFILTER &, const char *)
+0005eaf0	__12cLibKeyboardPCc	cLibKeyboard::cLibKeyboard(const char *)
+00098a40	__tf12cTimerSystem	cTimerSystem type_info function
+00091cd0	Resume__9cCD_Linux	cCD_Linux::Resume()
+00087740	GetWorkGD__C4cVVC	cVVC::GetWorkGD() const
+00052500	__10cVOEditRowRC10cRectangleR10cData_FontP12cData_BitmapUsUlUsP8cVObject	cVOEditRow::cVOEditRow(const cRectangle &, cData_Font &, cData_Bitmap *, unsigned short, unsigned long, unsigned short, cVObject *)
+0005c9b0	LFB16_PutBitmap8	LFB16_PutBitmap8
+0004b4f0	GetPalette__11cAnimBitmapUl	cAnimBitmap::GetPalette(unsigned long)
+00098750	__tft5tNode1Z12cMsgTypeNode	tNode<cMsgTypeNode> type_info function
+00078710	FillAdd__8cGD_SFB8G6cColorRC10cRectangle	cGD_SFB8::FillAdd(cColor, const cRectangle &)
+000497c0	__11cVOPulldownRCt6tPoint1ZlR7cBitmapN32T1R5cFontPCce	cVOPulldown::cVOPulldown(const tPoint<long> &, cBitmap &, cBitmap &, cBitmap &, cBitmap &, const tPoint<long> &, cFont &, const char *, ...)
+00074c20	IsAsyncRefreshCapable__9cGD_LFB32	cGD_LFB32::IsAsyncRefreshCapable()
+00090000	Refresh__8cVObject	cVObject::Refresh()
+0007f710	__10cPalette16	cPalette16::cPalette16()
+00090970	Info__Q25sWave7sFormat	sWave::sFormat::Info()
+0007b4b0	Validate__9cMemBlock	cMemBlock::Validate()
+00082910	PlayLoop__19cSoundServerChannelR3cAO	cSoundServerChannel::PlayLoop(cAO &)
+0008a460	PutBitmapAlfa__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmapAlfa(cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+0004c2a0	GetFilename__7cDirent	cDirent::GetFilename()
+00084eb0	Subscribe__12cMsgReceiverPcUsb	cMsgReceiver::Subscribe(char *, unsigned short, bool)
+00084360	__pl__7cStringPCc	cString::operator+(const char *)
+000826a0	SetProperties__16cSoundCard_DummyUlUcb	cSoundCard_Dummy::SetProperties(unsigned long, unsigned char, bool)
+00043c00	IncrasePos__11cLineEditor	cLineEditor::IncrasePos()
+000aefc8	MSG2	MSG2
+00085060	_._12cMsgTypeNode	cMsgTypeNode::~cMsgTypeNode()
+00045310	__10cVOAButtonRC10cRectangleR7cBitmapR5cFontPCc23eVOAButtonTextAlignmentbN26UsP8cVObject	cVOAButton::cVOAButton(const cRectangle &, cBitmap &, cFont &, const char *, eVOAButtonTextAlignment, bool, bool, bool, unsigned short, cVObject *)
+0008d7b0	RefreshPointerPos2__10cIntuitionGt6tPoint1Zl	cIntuition::RefreshPointerPos2(tPoint<long>)
+0008ced0	IsInFocus__8cVObject	cVObject::IsInFocus()
+00080660	_._4cVCD	cVCD::~cVCD()
+00081510	StepWriteBuffer__20cSoundRecorderBuffer	cSoundRecorderBuffer::StepWriteBuffer()
+000935a0	CreateTCPIPServer__FUlUlb	CreateTCPIPServer(unsigned long, unsigned long, bool)
+0006b890	VLineAdd__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+00091c80	Pause__9cCD_Linux	cCD_Linux::Pause()
+0007e640	SetEntryString__12cVOMultiLineUcPc	cVOMultiLine::SetEntryString(unsigned char, char *)
+00049300	__11cVOPulldownRCt6tPoint1ZlR7cBitmapN32R5cFontPCce	cVOPulldown::cVOPulldown(const tPoint<long> &, cBitmap &, cBitmap &, cBitmap &, cBitmap &, cFont &, const char *, ...)
+000827e0	GetChannels__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetChannels()
+0007d3c0	Notify__12cVOMultiLineRC10sVOMessage	cVOMultiLine::Notify(const sVOMessage &)
+000533a0	Write__24cCompatibilityFileSystemG3PTRUl	cCompatibilityFileSystem::Write(PTR, unsigned long)
+0006c0d0	PutBitmapLMask_I__9cGD_LFB24R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00094160	Write__16cIPXSocket_LinuxPCvUl	cIPXSocket_Linux::Write(const void *, unsigned long)
+0005c690	LFB16_PutBitmap_AMask	LFB16_PutBitmap_AMask
+00084150	_._7cString	cString::~cString()
+0009a140	__vt_10cVOAButton	cVOAButton virtual table
+000972f0	__tft5tNode1Z15cIPCSession_IPX	tNode<cIPCSession_IPX> type_info function
+000c73d4	__ti11cFileSystem	cFileSystem type_info node
+00090d80	Tan__6DOUBLE	DOUBLE::Tan()
+000835d0	GetDataUBM__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataUBM()
+00082ee0	SetPriority__3cAOUs	cAO::SetPriority(unsigned short)
+0006f460	FillSub__9cGD_LFB24G6cColorRC10cRectangle	cGD_LFB24::FillSub(cColor, const cRectangle &)
+0004c030	__7cDirentPCc	cDirent::cDirent(const char *)
+0005f410	__5cList	cList::cList()
+00090700	IsStereo__5sWave	sWave::IsStereo()
+00097c20	_._10cVOSliderV	cVOSliderV::~cVOSliderV()
+00096cc0	__t5tList1Z9cEnvClass	tList<cEnvClass>::tList()
+0007b2b0	Alloc__13cSystemMemoryR9cMemBlock	cSystemMemory::Alloc(cMemBlock &)
+00054d30	Write__5cFilePCvUl	cFile::Write(const void *, unsigned long)
+0008f2b0	AddRequester__7cScreenP8cVObjectb	cScreen::AddRequester(cVObject *, bool)
+0006bad0	Line__9cGD_LFB16RCt6tPoint1ZlT1G6cColor	cGD_LFB16::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+000af280	__vt_6cTask_	cTask_ virtual table
+00090430	Set__7cVolumes	cVolume::Set(short)
+000c6140	CT_ALPHANUM	CT_ALPHANUM
+00098530	__thunk_12_SetSpeed__25cSoundChannel_SoftwareMixUs	[thunk 12] cSoundChannel_SoftwareMix::SetSpeed(unsigned short)
+00090040	HasMirror__8cVObject	cVObject::HasMirror()
+00084b90	__vc__10cOldStringUl	cOldString::operator[](unsigned long)
+00092110	Print_Text__FPCc	Print_Text(const char *)
+0009b458	__vt_11cAnimBitmap	cAnimBitmap virtual table
+00047a10	IsRedbookRequired__12cApplication	cApplication::IsRedbookRequired()
+0005d4d0	LFB24_VLine	LFB24_VLine
+00087e30	NoSupported__11cGD_Minimal	cGD_Minimal::NoSupported()
+000a93e0	__vt_3cGD	cGD virtual table
+0004b5e0	GetRectangle__11cAnimBitmapUl	cAnimBitmap::GetRectangle(unsigned long)
+0009eda8	__vt_14cFLCAnimPlayer.10cMemBlock_	cFLCAnimPlayer virtual table (base cMemBlock_)
+000c7434	__ti5cPipe	cPipe type_info node
+00087780	GetDisplayBuffer__C4cVVC	cVVC::GetDisplayBuffer() const
+000958c0	Launch__7cThread	cThread::Launch()
+0007f770	__vc__10cPalette15Ul	cPalette15::operator[](unsigned long)
+0007e490	DisappearSlider__12cVOMultiLine	cVOMultiLine::DisappearSlider()
+00089920	SaveBitmap__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangle	cGD::SaveBitmap(cBitmap &, const tPoint<long> &, const cRectangle &)
+00080b90	__7cSample	cSample::cSample()
+000854f0	FindType__10cMsgCenterPc	cMsgCenter::FindType(char *)
+00080350	EVENT_Move__8cPointerRCt6tPoint1Zl	cPointer::EVENT_Move(const tPoint<long> &)
+000846f0	__ge__7cStringPCc	cString::operator>=(const char *)
+000a8978	__vt_7cString	cString virtual table
+0007ba30	__tf10cMemBlock_	cMemBlock_ type_info function
+00095c80	TryLock__10cSemaphore	cSemaphore::TryLock()
+000479a0	__tf10cVOAButton	cVOAButton type_info function
+00043390	__10cVOConsolei	cVOConsole::cVOConsole(int)
+0005a130	_._9cVOMsgBox	cVOMsgBox::~cVOMsgBox()
+00098550	_._t5tNode1Z25cSoundChannel_SoftwareMix	tNode<cSoundChannel_SoftwareMix>::~tNode()
+000974a0	__tf6cMouse	cMouse type_info function
+0005b630	CreateHeap_Compatibility__FUl	CreateHeap_Compatibility(unsigned long)
+000c73e8	__ti6cTask_	cTask_ type_info node
+00087b70	VLineAlfa__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+000834d0	GetDataSLEWML__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataSLEWML()
+00043bc0	MoveRight__11cLineEditor	cLineEditor::MoveRight()
+000a73c1	SF_UnsignedByte	SF_UnsignedByte
+000c6da4	__tit9tMemBlock1Z6cColor	tMemBlock<cColor> type_info node
+00085760	_._11cMsgRecNode	cMsgRecNode::~cMsgRecNode()
+000c733c	__ti10Log_Stdout	Log_Stdout type_info node
+00052460	GetOptions__10cVOEditRow	cVOEditRow::GetOptions()
+000a6588	__vt_10cMemBlock_	cMemBlock_ virtual table
+00091c10	Play_Real__9cCD_LinuxUlUl	cCD_Linux::Play_Real(unsigned long, unsigned long)
+00083990	_._25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::~cSoundChannel_SoftwareMix()
+0007e6c0	__opPc__12cVOMultiLine	cVOMultiLine::operator char *()
+00057ec0	SaveMFT__5cFontPc	cFont::SaveMFT(char *)
+000904e0	Filter__Q25sWave7sFormat	sWave::sFormat::Filter()
+00054f70	OpenR__9cTextFileb	cTextFile::OpenR(bool)
+0004fae0	GetFilename__16cData_AnimBitmap	cData_AnimBitmap::GetFilename()
+0008a2b0	PutBitmapAdd__3cGDR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmapAdd(cBitmap &, const tPoint<long> &, cPaletteFull *)
+00090e40	Ceil__6DOUBLE	DOUBLE::Ceil()
+00088fe0	PutAnimBitmapLMask__3cGDR11cAnimBitmapUlR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutAnimBitmapLMask(cAnimBitmap &, unsigned long, cBitmap &, const tPoint<long> &, cPaletteFull *)
+00095c10	_._10cSemaphore	cSemaphore::~cSemaphore()
+00059050	__tf10cData_Font	cData_Font type_info function
+000aee74	_12cApplication.Keyboard	_12cApplication.Keyboard
+0005cbb0	LFB16_PutBitmap8C1_AMask	LFB16_PutBitmap8C1_AMask
+00078ca0	__tf10cIPCSystem	cIPCSystem type_info function
+00067f50	SaveBitmap_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_LFB16::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+00096810	__tf7cStream	cStream type_info function
+0007b790	__as__12cMemBlockPTRRC12cMemBlockPTR	cMemBlockPTR::operator=(const cMemBlockPTR &)
+0004c2e0	_._7cDirent	cDirent::~cDirent()
+00095a80	IsSignaled__19cEventManager_LinuxPv	cEventManager_Linux::IsSignaled(void *)
+000af010	__vt_7cBitmap.10cMemBlock_	cBitmap virtual table (base cMemBlock_)
+00095e70	Write__5cPipePCvUl	cPipe::Write(const void *, unsigned long)
+000741f0	PutAnimBitmapSub_I__9cGD_LFB32R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005fa50	ResolveKey__15cLocaleDataBasePCc	cLocaleDataBase::ResolveKey(const char *)
+0005cda0	LFB16_PutBitmap8C1_Add	LFB16_PutBitmap8C1_Add
+0005caf0	LFB16_PutBitmap8Sub	LFB16_PutBitmap8Sub
+00082730	__tf10cSoundCard	cSoundCard type_info function
+0006d6d0	PutBitmapAMask_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005d500	LFB24_HLineAdd	LFB24_HLineAdd
+000af0bc	__vt_10cDirectory	cDirectory virtual table
+00090400	SetRight__7cVolumes	cVolume::SetRight(short)
+00043020	GetNextInput__8cConsole	cConsole::GetNextInput()
+0007fa50	GetColor__C8cPaletteUl	cPalette::GetColor(unsigned long) const
+00097100	__tf9cVOButton	cVOButton type_info function
+00043d20	__10cConsoleVORC10cRectangleG6cColorR10cData_FontP10cVOConsoleb	cConsoleVO::cConsoleVO(const cRectangle &, cColor, cData_Font &, cVOConsole *, bool)
+000c6a10	stdlog	stdlog
+000a2820	__vt_9cGD_LFB16	cGD_LFB16 virtual table
+00075fc0	PutAnimBitmapAdd_I__8cGD_LFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000748e0	FillAlfa__9cGD_LFB32G6cColorRC10cRectangle	cGD_LFB32::FillAlfa(cColor, const cRectangle &)
+00065b00	VLineAlfa__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00087db0	PutBitmapAdd_I__11cGD_MinimalR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0008c4c0	Unlock__9cSprClick	cSprClick::Unlock()
+000adce8	__vt_10cSemaphore	cSemaphore virtual table
+000a04d4	__vt_9cLibMouse	cLibMouse virtual table
+00055540	Paint__17sFLC_FrameByteRunR3cGDRC10cRectangle	sFLC_FrameByteRun::Paint(cGD &, const cRectangle &)
+000af040	__vt_t5tNode1Z9cMemBlock	tNode<cMemBlock> virtual table
+00096440	_._t9tMemBlock1ZUc	tMemBlock<unsigned char>::~tMemBlock()
+00048780	Const2__10cVOListReqUlR7cBitmapR5cFontPPCc	cVOListReq::Const2(unsigned long, cBitmap &, cFont &, const char **)
+0005ea80	MapAllSymbol__12cLibKeyboard	cLibKeyboard::MapAllSymbol()
+000aef98	Objmem_Fill	Objmem_Fill
+00098aa0	__thunk_4_Main__16cSoundCard_Linux	[thunk 4] cSoundCard_Linux::Main()
+000c7210	__tit5tNode1Z25cSoundChannel_SoftwareMix	tNode<cSoundChannel_SoftwareMix> type_info node
+00075490	PutAnimBitmap_I__8cGD_LFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00078fb0	_._9cIPCO_IPX	cIPCO_IPX::~cIPCO_IPX()
+0005b850	Alloc__19cHeap_CompatibilityUlPCc	cHeap_Compatibility::Alloc(unsigned long, const char *)
+00084580	__ne__7cStringPCc	cString::operator!=(const char *)
+00074760	Fill_I__9cGD_LFB32G6cColorRC10cRectangle	cGD_LFB32::Fill_I(cColor, const cRectangle &)
+00088ab0	PutAnimBitmapAdd__3cGDR11cAnimBitmapUlRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutAnimBitmapAdd(cAnimBitmap &, unsigned long, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+0005c510	LFB16_PutBitmapAlfa	LFB16_PutBitmapAlfa
+000c6e98	__tit5tNode1Z18cSharedData_Bitmap	tNode<cSharedData_Bitmap> type_info node
+0005e0f0	LFB32_HLineAdd	LFB32_HLineAdd
+00047ac0	KeyboardRequired__12cApplication	cApplication::KeyboardRequired()
+0007bb40	IsEmpty__11cMemoryPipe	cMemoryPipe::IsEmpty()
+000ac3fc	__vt_18cTimerSystem_Linux	cTimerSystem_Linux virtual table
+0009edb4	__vt_14cFLCAnimPlayer.t9tMemBlock1ZUc	cFLCAnimPlayer virtual table (base tMemBlock<unsigned char>)
+00094620	GetLogDriveString__FUsPc	GetLogDriveString(unsigned short, char *)
+0004fdb0	__tf12cData_Bitmap	cData_Bitmap type_info function
+000845d0	__lt__7cStringPCc	cString::operator<(const char *)
+000573e0	GetDataSize__13sFLC_FrameSS2	sFLC_FrameSS2::GetDataSize()
+00077960	PutBitmapLMask_I__8cGD_SFB8R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000797e0	ProcPacket__14cIPCServer_IPXPC8cTime_US	cIPCServer_IPX::ProcPacket(const cTime_US *)
+00077660	VLine__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::VLine(const tPoint<long> &, unsigned long, cColor)
+00093f10	__tf11cIPCO_TCPIP	cIPCO_TCPIP type_info function
+00054d70	SetBlockMode__5cFileb	cFile::SetBlockMode(bool)
+0009a1c0	__vt_12cApplication	cApplication virtual table
+000920d0	Print_Hex__FUl	Print_Hex(unsigned long)
+00083a00	PlayLoop__13cSoundChannelR7cSample	cSoundChannel::PlayLoop(cSample &)
+00097290	_._t5tNode1Z15cIPCSession_IPX	tNode<cIPCSession_IPX>::~tNode()
+000553d0	__5cFilePCc	cFile::cFile(const char *)
+0008ef40	GetInputBuffer__10cIntuition	cIntuition::GetInputBuffer()
+0005afd0	Process__9cVOBitmapR6sInput	cVOBitmap::Process(sInput &)
+000559c0	Preprocess__14cFLCAnimPlayer	cFLCAnimPlayer::Preprocess()
+00080120	GetB__C6cColor	cColor::GetB() const
+000a5aa0	__vt_8cGD_SFB8	cGD_SFB8 virtual table
+00047790	SetRepeatMode__10cVOAButtonb	cVOAButton::SetRepeatMode(bool)
+0008d600	GetQualifierState__10cIntuition	cIntuition::GetQualifierState()
+000907f0	Info__5sWave	sWave::Info()
+000972c0	__t5tList1Z15cIPCSession_IPX	tList<cIPCSession_IPX>::tList()
+00098330	_._10cVODragBox	cVODragBox::~cVODragBox()
+0004a410	_._13cAnimSkeleton	cAnimSkeleton::~cAnimSkeleton()
+0004a1a0	GetAct__11cVOPulldown	cVOPulldown::GetAct()
+000847b0	Cat__10cOldStringPCc	cOldString::Cat(const char *)
+0005eef0	GetFirst__C6cHList	cHList::GetFirst() const
+000851d0	SendMsg__12cMsgTypeNodeG3PTR	cMsgTypeNode::SendMsg(PTR)
+00095860	__7cThread	cThread::cThread()
+0007fd80	_Validate__8cPalette	cPalette::_Validate()
+000943d0	CreateModemClient__16cIPCSystem_LinuxbPCcUl	cIPCSystem_Linux::CreateModemClient(bool, const char *, unsigned long)
+00053140	_._7cEnvVar	cEnvVar::~cEnvVar()
+0008fb90	SelfDest__8cVObject	cVObject::SelfDest()
+000500e0	DecUsage__22cSharedData_AnimBitmap	cSharedData_AnimBitmap::DecUsage()
+00092890	CheckExtension__11cDirentnamePCc	cDirentname::CheckExtension(const char *)
+00089aa0	PutBitmapAMask__3cGDR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmapAMask(cBitmap &, const tPoint<long> &, cPaletteFull *)
+0008f240	GetMasterVO__7cScreen	cScreen::GetMasterVO()
+00054d80	IsBlockMode__5cFile	cFile::IsBlockMode()
+00054e40	SeekB__9cTextFilel	cTextFile::SeekB(long)
+00092eb0	SetFrequency__16cSoundCard_LinuxUl	cSoundCard_Linux::SetFrequency(unsigned long)
+0007bb70	Clear__11cMemoryPipe	cMemoryPipe::Clear()
+00096400	__tft9tMemBlock1ZUc	tMemBlock<unsigned char> type_info function
+000833f0	GetDataSLEWSR__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataSLEWSR()
+000c7050	__ti6cHNode	cHNode type_info node
+000879e0	SetPage__4cVVCUs	cVVC::SetPage(unsigned short)
+00085620	GetFirstRecipient__12cMsgTypeNode	cMsgTypeNode::GetFirstRecipient()
+000af0ac	__vt_9cFFHidden	cFFHidden virtual table
+00082eb0	GetImportance__3cAO	cAO::GetImportance()
+000af1ec	__vt_t9tMemBlock1Zc	tMemBlock<char> virtual table
+000805f0	PlayAll__4cVCD	cVCD::PlayAll()
+000573b0	GetDataSize__12sFLC_FrameLC	sFLC_FrameLC::GetDataSize()
+00077460	PutPixel__9cGD_SFB16RCt6tPoint1ZlG6cColor	cGD_SFB16::PutPixel(const tPoint<long> &, cColor)
+00073c80	PutAnimBitmapAdd_I__9cGD_LFB32R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005e920	LFB8_PutBitmap	LFB8_PutBitmap
+00062010	SaveBitmap_I__9cGD_LFB15R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_LFB15::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+000c71e0	__ti16cSoundCard_Dummy	cSoundCard_Dummy type_info node
+00065c60	_._9cGD_LFB15	cGD_LFB15::~cGD_LFB15()
+0005d400	LFB24_PutBitmap_AMask	LFB24_PutBitmap_AMask
+000966d0	__thunk_36__Validate__13cAnimSkeleton	[thunk 36] cAnimSkeleton::_Validate()
+000430c0	IsModified__8cConsole	cConsole::IsModified()
+00050a50	Insert__8cEditRowc	cEditRow::Insert(char)
+00094410	IsIPXAvailable__16cIPCSystem_Linux	cIPCSystem_Linux::IsIPXAvailable()
+00056600	_._14cFLCAnimPlayer	cFLCAnimPlayer::~cFLCAnimPlayer()
+00090420	SetLeft__7cVolumes	cVolume::SetLeft(short)
+00080770	Random__Fll	Random(long, long)
+0009d54c	__vt_7cEnvVar	cEnvVar virtual table
+0004c660	GetBMType__Q210sBMPHeader14sBMPInfoHeader	sBMPHeader::sBMPInfoHeader::GetBMType()
+00092080	_GLOBAL_.I.__ls__C10Log_StdoutPCc	Log_Stdout::_GLOBAL_.I.__ls(const char *) const
+000558d0	ChangePalette__18sFLC_FrameColor256R8cPalette	sFLC_FrameColor256::ChangePalette(cPalette &)
+000c6e1c	__tit5tNode1Z7cDirent	tNode<cDirent> type_info node
+000825e0	__6cMixer	cMixer::cMixer()
+000af028	__vt_t9tMemBlock1ZUc.10cMemBlock_	tMemBlock<unsigned char> virtual table (base cMemBlock_)
+00080580	Play__4cVCDUlUl	cVCD::Play(unsigned long, unsigned long)
+00057580	IsPrefix__13sFLC_SubChunk	sFLC_SubChunk::IsPrefix()
+00088c60	PutAnimBitmapAlfa__3cGDR11cAnimBitmapUlRCt6tPoint1ZlP12cPaletteFull	cGD::PutAnimBitmapAlfa(cAnimBitmap &, unsigned long, const tPoint<long> &, cPaletteFull *)
+00065a90	HLineAlfa__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00098a70	__t5tList1Z7cVTimer	tList<cVTimer>::tList()
+00096f60	__t5tList1Z7cDirent	tList<cDirent>::tList()
+0004a990	__7cBitmapP7cBitmap	cBitmap::cBitmap(cBitmap *)
+000aefe9	NoTimerInterruptPaintFlag	NoTimerInterruptPaintFlag
+000c6c14	RunInBackground	RunInBackground
+000aee77	_12cApplication.Network	_12cApplication.Network
+000430f0	GetShell__8cConsole	cConsole::GetShell()
+0008d830	ActivateScreen__10cIntuitionP7cScreen	cIntuition::ActivateScreen(cScreen *)
+00090a00	__md__6DOUBLET0	DOUBLE::operator%(DOUBLE)
+0005f150	GetNext__C6cHNode	cHNode::GetNext() const
+00082f80	__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::cSoundChannel_SoftwareMix()
+00087a60	GetBuffer1GD__4cVVC	cVVC::GetBuffer1GD()
+000984d0	__thunk_12__._25cSoundChannel_SoftwareMix	[thunk 12] cSoundChannel_SoftwareMix::~cSoundChannel_SoftwareMix()
+00079f10	StillAlive__15cIPCSession_IPX	cIPCSession_IPX::StillAlive()
+00043c40	ShiftLeft__11cLineEditor	cLineEditor::ShiftLeft()
+00070890	PutBitmapAlfa_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c7188	__ti10cVOSliderV	cVOSliderV type_info node
+00097580	IsValid__t6cArray1ZPci	cArray<char *>::IsValid(int)
+00057440	GetDataSize__22sFLC_FrameUncompressed	sFLC_FrameUncompressed::GetDataSize()
+00053070	__tf9cEnvClass	cEnvClass type_info function
+0007f930	__opPUc__8cConvert	cConvert::operator unsigned char *()
+00079610	IsDataAvailable__14cIPCServer_IPXPC8cTime_US	cIPCServer_IPX::IsDataAvailable(const cTime_US *)
+00074c40	Refresh__9cGD_LFB32RC10cRectangle	cGD_LFB32::Refresh(const cRectangle &)
+00080240	Red__6cColorUl	cColor::Red(unsigned long)
+0008bbb0	__14cSprABitmapAddR11cAnimBitmapT1	cSprABitmapAdd::cSprABitmapAdd(cAnimBitmap &, cAnimBitmap &)
+0006bac0	IsAsyncRefreshCapable__9cGD_LFB16	cGD_LFB16::IsAsyncRefreshCapable()
+0005be30	LFB15_VLineAlfa	LFB15_VLineAlfa
+00050640	__12cData_SamplePCc	cData_Sample::cData_Sample(const char *)
+000522b0	ChkCh__10cVOEditRowc	cVOEditRow::ChkCh(char)
+00075f10	PutBitmapAdd_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00090340	__6sInput	sInput::sInput()
+000513b0	SetCursorPos__10cVOEditRowRCt6tPoint1Zl	cVOEditRow::SetCursorPos(const tPoint<long> &)
+00097280	__thunk_12_Open__15cIPCSession_IPX	[thunk 12] cIPCSession_IPX::Open()
+0008ad30	PutBitmap__3cGDR7cBitmapRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutBitmap(cBitmap &, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+00097380	Grab__9cKeyboard	cKeyboard::Grab()
+00043400	Setup__10cVOConsoleP10cIntuitionRC10cRectangleR10cData_Fontb	cVOConsole::Setup(cIntuition *, const cRectangle &, cData_Font &, bool)
+00092fe0	IsStereo__16cSoundCard_Linux	cSoundCard_Linux::IsStereo()
+0007fb20	SetSelfLock__8cPalette	cPalette::SetSelfLock()
+0004b580	GetNumberOfFrames__11cAnimBitmap	cAnimBitmap::GetNumberOfFrames()
+00079b00	_._15cIPCSession_IPX	cIPCSession_IPX::~cIPCSession_IPX()
+0005ba60	__tf19cHeap_Compatibility	cHeap_Compatibility type_info function
+00084c80	Copy__FPCcPcUl	Copy(const char *, char *, unsigned long)
+00079970	Listen__14cIPCServer_IPX	cIPCServer_IPX::Listen()
+0005f470	IsLinked__C5cNode	cNode::IsLinked() const
+0008a7a0	PutBitmapLMask__3cGDR7cBitmapT1RCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmapLMask(cBitmap &, cBitmap &, const tPoint<long> &, cPaletteFull *)
+000852c0	AddReceiver__10cMsgCenterP12cMsgReceiverUlPcUsb	cMsgCenter::AddReceiver(cMsgReceiver *, unsigned long, char *, unsigned short, bool)
+00090b10	Cos__6DOUBLE	DOUBLE::Cos()
+0008f6b0	GetNotify__9cMasterVO	cMasterVO::GetNotify()
+0009bd54	__vt_16cData_AnimBitmap	cData_AnimBitmap virtual table
+0004b730	GetType__11cAnimBitmap	cAnimBitmap::GetType()
+00080910	GetLength__7cSample	cSample::GetLength()
+0008d370	__10cIntuition	cIntuition::cIntuition()
+0007f5a0	__vc__10cPalette16Ul	cPalette16::operator[](unsigned long)
+000c7264	__tit5tNode1Z12cMsgTypeNode	tNode<cMsgTypeNode> type_info node
+00053460	SetEmpty__8cVOFiler	cVOFiler::SetEmpty()
+0005fc50	SFB16_PutBitmap_AMask	SFB16_PutBitmap_AMask
+0007a040	__tf9cIPCO_IPX	cIPCO_IPX type_info function
+0007ab50	PushKey__9cKeyboard8eKeyCodeb	cKeyboard::PushKey(eKeyCode, bool)
+00080200	Blue__6cColorUl	cColor::Blue(unsigned long)
+0005ea50	LFB8_VLine	LFB8_VLine
+000aee73	_12cApplication.Pointer	_12cApplication.Pointer
+00092fc0	GetSoundFormat__16cSoundCard_Linux	cSoundCard_Linux::GetSoundFormat()
+000964f0	__tft5tNode1Z9cMemBlock	tNode<cMemBlock> type_info function
+00093db0	_._17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP::~cIPCBrowser_TCPIP()
+00090b80	Exp__6DOUBLE	DOUBLE::Exp()
+000838c0	ExitLoop__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::ExitLoop()
+00055bb0	PlayFrame__14cFLCAnimPlayerR3cGDRC10cRectangle	cFLCAnimPlayer::PlayFrame(cGD &, const cRectangle &)
+0008b0c0	__13cVModeRequestG10cDimension7eBMType	cVModeRequest::cVModeRequest(cDimension, eBMType)
+0005dde0	LFB32_PutBitmap24Alfa	LFB32_PutBitmap24Alfa
+000c6e28	__ti7cDirent	cDirent type_info node
+00092380	SetTimer__11cLinuxTimerUl	cLinuxTimer::SetTimer(unsigned long)
+0005f4b0	AddNext__5cNodeP5cNode	cNode::AddNext(cNode *)
+0007a0d0	Read__17cIPCOStream2Block	cIPCOStream2Block::Read()
+0005fcf0	SFB8_PutBitmap_AMask	SFB8_PutBitmap_AMask
+000aefa4	VCD	VCD
+00087b90	HLineAlfa__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0007f5d0	__10cPalette16R8cPalette	cPalette16::cPalette16(cPalette &)
+00084b30	__eq__C10cOldStringPCc	cOldString::__eq(const char *) const
+00078c70	_._10cIPCSystem	cIPCSystem::~cIPCSystem()
+00090da0	Tanh__6DOUBLE	DOUBLE::Tanh()
+000c6e74	__ti22cSharedData_AnimBitmap	cSharedData_AnimBitmap type_info node
+00081370	_._20cSoundRecorderBuffer	cSoundRecorderBuffer::~cSoundRecorderBuffer()
+00083590	GetDataUBML__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetDataUBML()
+00087d30	PutAnimBitmapAdd_I__11cGD_MinimalR11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00084690	__gt__7cStringPCc	cString::operator>(const char *)
+00082f50	__3cAOP7cSampleG7cVolumes	cAO::cAO(cSample *, cVolume, short)
+00092640	__apl__11cDirentnamePCc	cDirentname::operator+=(const char *)
+00056f80	GetFrames__11sFLC_Header	sFLC_Header::GetFrames()
+000c70d0	__ti5cIPCO	cIPCO type_info node
+0005f540	__5cNodeRC5cNode	cNode::cNode(const cNode &)
+00077670	HLine__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::HLine(const tPoint<long> &, unsigned long, cColor)
+00078aa0	Write__5cIPCOPCvUl	cIPCO::Write(const void *, unsigned long)
+00057320	GetDataSize__15sFLC_FrameSound	sFLC_FrameSound::GetDataSize()
+00096a60	__t5tList1Z18cSharedData_Bitmap	tList<cSharedData_Bitmap>::tList()
+0004ab90	__7cBitmapRC7cBitmap	cBitmap::cBitmap(const cBitmap &)
+000806a0	__tf4cVCD	cVCD type_info function
+00082f20	_._3cAO	cAO::~cAO()
+000787f0	HLineSub__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::HLineSub(const tPoint<long> &, unsigned long, cColor)
+00095dd0	Read__5cPipePvUl	cPipe::Read(void *, unsigned long)
+000c7100	__ti15cIPCBrowser_IPX	cIPCBrowser_IPX type_info node
+000ac2a4	__vt_8Log_File	Log_File virtual table
+0007cfa0	ReBuild__12cVOMultiLine	cVOMultiLine::ReBuild()
+000c7148	__ti9cMemBlock	cMemBlock type_info node
+0007f330	_._12cPaletteFull	cPaletteFull::~cPaletteFull()
+00054d90	ReadChar__9cTextFileRc	cTextFile::ReadChar(char &)
+00052f50	GetName__9cEnvClass	cEnvClass::GetName()
+00047b40	__10cVOListReqRC10cRectangleR7cBitmapR5cFontPCce	cVOListReq::cVOListReq(const cRectangle &, cBitmap &, cFont &, const char *, ...)
+00043180	ProcessCommand__6cShelliPPc	cShell::ProcessCommand(int, char **)
+0007b550	Free__13cSystemMemoryR9cMemBlock	cSystemMemory::Free(cMemBlock &)
+000ac298	__vt_12Log_SafeFile	Log_SafeFile virtual table
+0008e820	SwapBuffers__Fv	SwapBuffers()
+0008fd50	SetOutput__8cVObjectP8cVObject	cVObject::SetOutput(cVObject *)
+00077590	HLineSub__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::HLineSub(const tPoint<long> &, unsigned long, cColor)
+0008b120	SetBMType__6cVMode7eBMType	cVMode::SetBMType(eBMType)
+0005dbd0	LFB24_PutBitmap8C1_AMask	LFB24_PutBitmap8C1_AMask
+00097320	_._11cIPCBrowser	cIPCBrowser::~cIPCBrowser()
+0004de90	MakeAnimBitmap3__5sSPR1R11cAnimBitmapUl	sSPR1::MakeAnimBitmap3(cAnimBitmap &, unsigned long)
+00097ca0	__tf10cVOSliderV	cVOSliderV type_info function
+000903a0	Get__C7cVolume	cVolume::Get() const
+00091f80	__9cCD_LinuxPCc	cCD_Linux::cCD_Linux(const char *)
+0005fcb0	SFB8_PutBitmap	SFB8_PutBitmap
+0005af60	_._10cVOTextBox	cVOTextBox::~cVOTextBox()
+0007f000	GetPalette15__12cPaletteFull	cPaletteFull::GetPalette15()
+00048eb0	Process__10cVOListReqR6sInput	cVOListReq::Process(sInput &)
+0007b960	Lock__10cMemBlock_	cMemBlock_::Lock()
+00087c70	PutPixel__11cGD_MinimalRCt6tPoint1ZlG6cColor	cGD_Minimal::PutPixel(const tPoint<long> &, cColor)
+0004dc90	MakeAnimBitmap__5sSPR1R11cAnimBitmapUl	sSPR1::MakeAnimBitmap(cAnimBitmap &, unsigned long)
+000c6d64	__ti12cPaletteFull	cPaletteFull type_info node
+0007b8b0	SetMBName__10cMemBlock_PCc	cMemBlock_::SetMBName(const char *)
+0007c020	GetNextEvent__6cMouse	cMouse::GetNextEvent()
+0007f550	__10cPalette32	cPalette32::cPalette32()
+00087bb0	VLineSub__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::VLineSub(const tPoint<long> &, unsigned long, cColor)
+00053310	Seek__24cCompatibilityFileSysteml15eFileSeekWhence	cCompatibilityFileSystem::Seek(long, eFileSeekWhence)
+00078750	PutAnimBitmapAdd_I__8cGD_SFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0008af70	__tf3cGD	cGD type_info function
+0008d6b0	RefreshPointerPos__10cIntuitionGt6tPoint1Zl	cIntuition::RefreshPointerPos(tPoint<long>)
+000c6f4c	__ti10cDirectory	cDirectory type_info node
+0005af20	__tf10cVOTextBox	cVOTextBox type_info function
+000c7378	__ti20cSoundRecorderThread	cSoundRecorderThread type_info node
+0007c7a0	__12cVOMultiLineRC10cRectangleR10cData_FontR12cData_BitmapUsP8cVObject	cVOMultiLine::cVOMultiLine(const cRectangle &, cData_Font &, cData_Bitmap &, unsigned short, cVObject *)
+000c6740	VModeInfo	VModeInfo
+000c6df8	__ti7cStream	cStream type_info node
+0009aa20	__vt_11cVOPulldown	cVOPulldown virtual table
+00097990	SetMinMax__10cVOSliderVll	cVOSliderV::SetMinMax(long, long)
+00049fa0	Notify__11cVOPulldownRC10sVOMessage	cVOPulldown::Notify(const sVOMessage &)
+000c731c	__ti9cCD_Linux	cCD_Linux type_info node
+0008f460	__7cScreenG10cDimension7eBMTypePFR7cScreen_vT3	cScreen::cScreen(cDimension, eBMType, void (*)(cScreen &) *, void (*)(cScreen &) *)
+00056fb0	IsValid__11sFLC_Header	sFLC_Header::IsValid()
+0008d2d0	EndRefresh__7cScreen	cScreen::EndRefresh()
+000a0040	__vt_9cVOMsgBox	cVOMsgBox virtual table
+000908c0	Info__Q25sWave5sData	sWave::sData::Info()
+0005f4d0	GetPrev__C5cNode	cNode::GetPrev() const
+0006f3e0	FillAdd__9cGD_LFB24G6cColorRC10cRectangle	cGD_LFB24::FillAdd(cColor, const cRectangle &)
+00096030	CreatePipe__5cPipeRA1_P5cPipe	cPipe::CreatePipe(cPipe * [1] &)
+0007a1b0	IsUsed__17cIPCOStream2Block	cIPCOStream2Block::IsUsed()
+0007b430	Alloc__9cMemBlockUl	cMemBlock::Alloc(unsigned long)
+00052c40	FindVariable__9cEnvClassPCc	cEnvClass::FindVariable(const char *)
+000501b0	_._22cSharedData_AnimBitmap	cSharedData_AnimBitmap::~cSharedData_AnimBitmap()
+0008d9f0	ProcessInputs__10cIntuition	cIntuition::ProcessInputs()
+0005e070	LFB32_HLine	LFB32_HLine
+000573c0	GetDataAddr__12sFLC_FrameLC	sFLC_FrameLC::GetDataAddr()
+00044f40	GetLength__11cLineEditor	cLineEditor::GetLength()
+000987f0	__tf7cSprite	cSprite type_info function
+00096620	__tft9tMemBlock1Z6cColor	tMemBlock<cColor> type_info function
+0006f800	Refresh__9cGD_LFB24RC10cRectangle	cGD_LFB24::Refresh(const cRectangle &)
+00091fa0	__tf9cCD_Linux	cCD_Linux type_info function
+00052ee0	_._10cEnvSystem	cEnvSystem::~cEnvSystem()
+0009c634	__vt_12cData_Sample	cData_Sample virtual table
+00082a60	SetVolume__19cSoundServerChannelRC7cVolume	cSoundServerChannel::SetVolume(const cVolume &)
+00088e30	PutAnimBitmapAlfa__3cGDR11cAnimBitmapUlRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutAnimBitmapAlfa(cAnimBitmap &, unsigned long, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+00054030	Process__8cVOFilerR6sInput	cVOFiler::Process(sInput &)
+0005c870	LFB16_VLineSub	LFB16_VLineSub
+0006b660	FillAlfa__9cGD_LFB16G6cColorRC10cRectangle	cGD_LFB16::FillAlfa(cColor, const cRectangle &)
+000c7030	__ti11cLibPointer	cLibPointer type_info node
+000552c0	Rename__5cFilePCc	cFile::Rename(const char *)
+000c6fbc	__ti10cVOTextBox	cVOTextBox type_info node
+000c542c	__bss_start	__bss_start
+0007b740	__tf9cMemBlock	cMemBlock type_info function
+000a73c6	SF_SignedWord_BE	SF_SignedWord_BE
+0008b140	__6cVModeG10cDimension7eBMType	cVMode::cVMode(cDimension, eBMType)
+000813c0	Reset__20cSoundRecorderBuffer	cSoundRecorderBuffer::Reset()
+0005e970	LFB8_PutBitmap_AMask	LFB8_PutBitmap_AMask
+000503f0	_GLOBAL_.D.Create__18cSharedData_BitmapPCc	cSharedData_Bitmap::_GLOBAL_.D.Create(const char *)
+000c5c20	Palette15	Palette15
+000826c0	GetSoundFormat__16cSoundCard_Dummy	cSoundCard_Dummy::GetSoundFormat()
+00085c90	SetBuffers__4cVVC	cVVC::SetBuffers()
+0007f9f0	GetAmount__8cPalette	cPalette::GetAmount()
+0008c4e0	Lock__9cSprClick	cSprClick::Lock()
+000a7374	__vt_7cSample	cSample virtual table
+000c740c	__ti8cThread_	cThread_ type_info node
+00094340	GetEventDescriptor__16cIPXSocket_Linux	cIPXSocket_Linux::GetEventDescriptor()
+0008ba50	MoveTo__7cSpriteRCt6tPoint1Zl	cSprite::MoveTo(const tPoint<long> &)
+0004a170	SetHelpText__11cVOPulldownPCc	cVOPulldown::SetHelpText(const char *)
+00098be0	__tf6cTask_	cTask_ type_info function
+0005fae0	GetDBName__15cLocaleDataBase	cLocaleDataBase::GetDBName()
+000aee78	_12cApplication.Intuition	_12cApplication.Intuition
+0005abf0	Paint__10cVOTextBoxR3cGDRCt6tPoint1ZlRC10cRectangle	cVOTextBox::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+000ace80	__vt_11cFileSystem	cFileSystem virtual table
+00078e10	Print__16cIPXPacketHeader	cIPXPacketHeader::Print()
+0008b130	GetBMType__C6cVMode	cVMode::GetBMType() const
+00098c10	__tf8cProcess	cProcess type_info function
+000951e0	main	main
+0005fc10	SFB16_PutBitmap	SFB16_PutBitmap
+000953c0	Set__8cDayTimell	cDayTime::Set(long, long)
+00045f70	_._10cVOAButton	cVOAButton::~cVOAButton()
+00060570	PutBitmapLMask_I__9cGD_LFB15R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0007b170	FlushAllUnlocked__13cSystemMemory	cSystemMemory::FlushAllUnlocked()
+0007bf70	EVENT_Buttons__6cMouseUc	cMouse::EVENT_Buttons(unsigned char)
+00055350	InitFileSystem__5cFile	cFile::InitFileSystem()
+0007da20	RemoveItem__12cVOMultiLineUs	cVOMultiLine::RemoveItem(unsigned short)
+000523e0	GetPoiFontOffset__10cVOEditRow	cVOEditRow::GetPoiFontOffset()
+0009bd84	__vt_13cData_Palette	cData_Palette virtual table
+00099860	__vt_10cConsoleVO	cConsoleVO virtual table
+0008fc70	MoveTo__8cVObjectGt6tPoint1Zlb	cVObject::MoveTo(tPoint<long>, bool)
+00095cc0	Unlock__10cSemaphore	cSemaphore::Unlock()
+000c70bc	__ti8cGD_SFB8	cGD_SFB8 type_info node
+0008ef60	AddRequester__10cIntuitionP8cVObjectb	cIntuition::AddRequester(cVObject *, bool)
+000963c0	__tf7cBitmap	cBitmap type_info function
+00081c80	MixSWS_LE__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::MixSWS_LE(unsigned long, cSoundChannel_SoftwareMix &)
+00083b40	_._13cSoundChannel	cSoundChannel::~cSoundChannel()
+0008df10	PushMouseInput__Fv	PushMouseInput()
+000877b0	DBSupport__C4cVVCG10cDimension7eBMType	cVVC::DBSupport(cDimension, eBMType) const
+0009d5ac	__vt_6cEvent	cEvent virtual table
+000967d0	__tft5tNode1Z7cVTimer	tNode<cVTimer> type_info function
+000833e0	GetPos__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::GetPos()
+00075ee0	PutBitmapSub_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00047980	SetBitmapIsAMask__10cVOAButtonb	cVOAButton::SetBitmapIsAMask(bool)
+00047940	SetFrameSize__10cVOAButtonUl	cVOAButton::SetFrameSize(unsigned long)
+000599f0	Paint__9cVOWindowR3cGDRCt6tPoint1ZlRC10cRectangle	cVOWindow::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00088110	VLineAdd__3cGDGt6tPoint1ZlUlG6cColorRC10cRectangle	cGD::VLineAdd(tPoint<long>, unsigned long, cColor, const cRectangle &)
+0008ff20	ForwardMsg__8cVObjectRC10sVOMessage	cVObject::ForwardMsg(const sVOMessage &)
+00096af0	AddVariable__12cProcIniFile	cProcIniFile::AddVariable()
+000541d0	__8cVOFiler10eFilerTypePCcRC10cVOFGraphsPt6taList1Z8cFFilterUsP8cVObject	cVOFiler::cVOFiler(eFilerType, const char *, const cVOFGraphs &, taList<cFFilter> *, unsigned short, cVObject *)
+0009b238	__vt_13cAnimSkeleton.7cVTimer	cAnimSkeleton virtual table (base cVTimer)
+000827b0	GetFrameSize__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetFrameSize()
+000575a0	__10cData_FontPCcb	cData_Font::cData_Font(const char *, bool)
+000597d0	Process__9cVOWindowR6sInput	cVOWindow::Process(sInput &)
+00087700	GetSize__C4cVVC	cVVC::GetSize() const
+00042a60	__8cConsolei	cConsole::cConsole(int)
+000788c0	VLine__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::VLine(const tPoint<long> &, unsigned long, cColor)
+000aee71	_12cApplication.Video	_12cApplication.Video
+0004b690	GetSize__11cAnimBitmap	cAnimBitmap::GetSize()
+000c68c0	BlankScreen	BlankScreen
+0005f2b0	GetLength__C5cList	cList::GetLength() const
+00047a50	IsVideoRequired__12cApplication	cApplication::IsVideoRequired()
+00096ac0	__thunk_12__Validate__12cData_Sample	[thunk 12] cData_Sample::_Validate()
+000c5e20	RandomServer	RandomServer
+00087fd0	VLineSub__3cGDGt6tPoint1ZlUlG6cColorRC10cRectangle	cGD::VLineSub(tPoint<long>, unsigned long, cColor, const cRectangle &)
+00078b30	CreateIPXClient__10cIPCSystembRC11cIPXAddress	cIPCSystem::CreateIPXClient(bool, const cIPXAddress &)
+000982f0	__tf10cVODragBox	cVODragBox type_info function
+00096c10	ReadGroupName__12cProcIniFile	cProcIniFile::ReadGroupName()
+00059130	MsgBox__FPcR5cFontR7cBitmapN22	MsgBox(char *, cFont &, cBitmap &, cFont &, cFont &)
+000836d0	GetData__25cSoundChannel_SoftwareMixUc	cSoundChannel_SoftwareMix::GetData(unsigned char)
+000a73c7	SF_SIZEOF	SF_SIZEOF
+0008af60	GetDimension__3cGD	cGD::GetDimension()
+00090bd0	Log__6DOUBLE	DOUBLE::Log()
+00098cf8	__vt_8cConsole	cConsole virtual table
+00093590	IsUsed__11cIPCO_TCPIP	cIPCO_TCPIP::IsUsed()
+0007ba90	_._11cMemoryPipe	cMemoryPipe::~cMemoryPipe()
+0008cc40	CalcAbsCoordTree__8cVObjectGt6tPoint1ZlG10cRectangle	cVObject::CalcAbsCoordTree(tPoint<long>, cRectangle)
+0007e770	__8cPaletteRC8cPalette	cPalette::cPalette(const cPalette &)
+000857c0	__tf12cMsgReceiver	cMsgReceiver type_info function
+00093cf0	GetIPCO__16cIPCServer_TCPIPUl	cIPCServer_TCPIP::GetIPCO(unsigned long)
+00057350	GetDataSize__18sFLC_FrameColor256	sFLC_FrameColor256::GetDataSize()
+00076030	Color2Index__8cGD_LFB8G6cColor	cGD_LFB8::Color2Index(cColor)
+00092120	__12Log_SafeFilePCc	Log_SafeFile::Log_SafeFile(const char *)
+000877a0	DBSupport__C4cVVC	cVVC::DBSupport() const
+000aefb4	NULLSample16	NULLSample16
+000671f0	PutBitmapAdd_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00047860	IsPressed__10cVOAButton	cVOAButton::IsPressed()
+00087a00	Clear__4cVVC	cVVC::Clear()
+0008fa70	__tf9cMasterVO	cMasterVO type_info function
+0005c720	LFB16_HLineAdd	LFB16_HLineAdd
+00096290	__t6tHNode1Z8cVObject	tHNode<cVObject>::tHNode()
+0006dbd0	PutAnimBitmap_I__9cGD_LFB24R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00054a40	GetFileSystemID__FPCc	GetFileSystemID(const char *)
+000a73c3	SF_UnsignedWord_LE	SF_UnsignedWord_LE
+000af160	__vt_6cMouse	cMouse virtual table
+000952e0	VM_GetCDRomName__Fv	VM_GetCDRomName()
+0007a120	Read__17cIPCOStream2BlockPvUl	cIPCOStream2Block::Read(void *, unsigned long)
+0007e6f0	GetCount__12cVOMultiLine	cVOMultiLine::GetCount()
+0005f5c0	__tf5cNode	cNode type_info function
+000850e0	AddRecipient__12cMsgTypeNodeP11cMsgRecNode	cMsgTypeNode::AddRecipient(cMsgRecNode *)
+00075c10	HLine__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::HLine(const tPoint<long> &, unsigned long, cColor)
+000724b0	PutAnimBitmap_I__9cGD_LFB32R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000510e0	MouseEvent__10cVOEditRowGt6tPoint1Zl	cVOEditRow::MouseEvent(tPoint<long>)
+00054880	OpenR__5cFileb	cFile::OpenR(bool)
+000500b0	_GLOBAL_.I.Create__22cSharedData_AnimBitmapPCcb	cSharedData_AnimBitmap::_GLOBAL_.I.Create(const char *, bool)
+00098780	__tft5tNode1Z11cMsgRecNode	tNode<cMsgRecNode> type_info function
+0005f020	AddChildLast__6cHNodeP6cHNode	cHNode::AddChildLast(cHNode *)
+000552f0	Delete__5cFile	cFile::Delete()
+0009bd78	__vt_13cData_Palette.10cMemBlock_	cData_Palette virtual table (base cMemBlock_)
+00094270	Send__16cIPXSocket_LinuxPCvUlRC11cIPXAddress	cIPXSocket_Linux::Send(const void *, unsigned long, const cIPXAddress &)
+000c7348	__ti8Log_File	Log_File type_info node
+00050100	IncUsage__22cSharedData_AnimBitmap	cSharedData_AnimBitmap::IncUsage()
+00087cd0	FillAdd__11cGD_MinimalG6cColorRC10cRectangle	cGD_Minimal::FillAdd(cColor, const cRectangle &)
+00080640	GetNumberOfTracks__4cVCD	cVCD::GetNumberOfTracks()
+00054c00	GetPosition__5cFile	cFile::GetPosition()
+000933d0	Read__11cIPCO_TCPIPPvUl	cIPCO_TCPIP::Read(void *, unsigned long)
+0006f5a0	HLine__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::HLine(const tPoint<long> &, unsigned long, cColor)
+000c72b4	__ti9cSprClick	cSprClick type_info node
+000831b0	SetVolume__25cSoundChannel_SoftwareMixRC7cVolume	cSoundChannel_SoftwareMix::SetVolume(const cVolume &)
+000801c0	ShiftRGB__6cColorUlUlUl	cColor::ShiftRGB(unsigned long, unsigned long, unsigned long)
+00078920	CalcModulo__8cGD_SFB8Ul	cGD_SFB8::CalcModulo(unsigned long)
+00044ed0	__tf10cConsoleVO	cConsoleVO type_info function
+00087ad0	__4cVVC	cVVC::cVVC()
+0005bea0	LFB15_PutBitmap8Alfa	LFB15_PutBitmap8Alfa
+00096a90	__tft5tNode1Z18cSharedData_Bitmap	tNode<cSharedData_Bitmap> type_info function
+000983f0	__tf8cPointer	cPointer type_info function
+00085550	Dump__10cMsgCenter	cMsgCenter::Dump()
+00057510	GetNext__10sFLC_Chunk	sFLC_Chunk::GetNext()
+00085640	IsUnique__12cMsgTypeNode	cMsgTypeNode::IsUnique()
+000c7158	__ti10cMemBlock_	cMemBlock_ type_info node
+0005bcf0	LFB15_HLineSub	LFB15_HLineSub
+00091fd0	__ls__C10Log_StdoutPCc	Log_Stdout::__ls(const char *) const
+00096890	__thunk_12__Validate__16cData_AnimBitmap	[thunk 12] cData_AnimBitmap::_Validate()
+000931e0	__11cIPCO_TCPIPPCcUl	cIPCO_TCPIP::cIPCO_TCPIP(const char *, unsigned long)
+00093190	__tf20cSoundRecorderThread	cSoundRecorderThread type_info function
+000c7080	__ti9cGD_LFB16	cGD_LFB16 type_info node
+000c72c0	__ti14cSprABitmapAdd	cSprABitmapAdd type_info node
+000c6e80	__tit5tNode1Z22cSharedData_AnimBitmap	tNode<cSharedData_AnimBitmap> type_info node
+000c6f58	__tit5tNode1Z8cFFilter	tNode<cFFilter> type_info node
+000530d0	Reset__7cEnvVar	cEnvVar::Reset()
+000881b0	HLineAdd__3cGDGt6tPoint1ZlUlG6cColorRC10cRectangle	cGD::HLineAdd(tPoint<long>, unsigned long, cColor, const cRectangle &)
+00052940	__7cEnvVarPCcT1	cEnvVar::cEnvVar(const char *, const char *)
+00092e60	SetStereo__16cSoundCard_Linuxb	cSoundCard_Linux::SetStereo(bool)
+000a73c4	SF_SignedWord_LE	SF_SignedWord_LE
+0009bd3c	__vt_13cData_MapItem	cData_MapItem virtual table
+00083300	Step__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::Step()
+00098450	SetBlockMode__8cProcessb	cProcess::SetBlockMode(bool)
+000527d0	_._10cVOEditRow	cVOEditRow::~cVOEditRow()
+00097190	__tf8cLibrary	cLibrary type_info function
+00078680	PutPixel__8cGD_SFB8RCt6tPoint1ZlG6cColor	cGD_SFB8::PutPixel(const tPoint<long> &, cColor)
+00059030	_Validate__10cData_Font	cData_Font::_Validate()
+0009b248	__vt_13cAnimSkeleton.10cMemBlock_	cAnimSkeleton virtual table (base cMemBlock_)
+00084d80	Add__10CHARFILTERPCc	CHARFILTER::Add(const char *)
+000c721c	__ti12cSoundNotify	cSoundNotify type_info node
+0007b950	Unlock__10cMemBlock_	cMemBlock_::Unlock()
+00047a70	IntuitionRequired__12cApplication	cApplication::IntuitionRequired()
+00096d50	__tft5tNode1Z7cEnvVar	tNode<cEnvVar> type_info function
+00050450	GetBitmap__18cSharedData_Bitmap	cSharedData_Bitmap::GetBitmap()
+000478f0	GetText__10cVOAButton	cVOAButton::GetText()
+0005f340	AddLast__5cListP5cNode	cList::AddLast(cNode *)
+000c6d6c	__tit5tNode1Z9cMemBlock	tNode<cMemBlock> type_info node
+00094140	Read__16cIPXSocket_LinuxPvUl	cIPXSocket_Linux::Read(void *, unsigned long)
+00043340	EchoOn__6cShell	cShell::EchoOn()
+00058180	GetTextLength__FR5cFontPCc	GetTextLength(cFont &, const char *)
+000c710c	__ti9cIPCO_IPX	cIPCO_IPX type_info node
+0005b070	Paint__9cVOBitmapR3cGDRCt6tPoint1ZlRC10cRectangle	cVOBitmap::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00059ec0	Process__9cVOMsgBoxR6sInput	cVOMsgBox::Process(sInput &)
+000aefa0	MessagePort	MessagePort
+0007a1d0	IsDataAvailable__17cIPCOStream2BlockPC8cTime_US	cIPCOStream2Block::IsDataAvailable(const cTime_US *)
+000774d0	PutAnimBitmapSub_I__9cGD_SFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00043bf0	MoveToEnd__11cLineEditor	cLineEditor::MoveToEnd()
+000590c0	__tf5cFont	cFont type_info function
+000a7154	__vt_8cPalette.10cMemBlock_	cPalette virtual table (base cMemBlock_)
+0005d120	LFB16_FillSub	LFB16_FillSub
+000c5620	Palette24	Palette24
+00068820	PutAnimBitmap_I__9cGD_LFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000c6e00	__tit5tNode1Z7cVTimer	tNode<cVTimer> type_info node
+00044fb0	__10cVOAButtonRCt6tPoint1ZlR7cBitmapT2bN24UsP8cVObject	cVOAButton::cVOAButton(const tPoint<long> &, cBitmap &, cBitmap &, bool, bool, bool, unsigned short, cVObject *)
+0008d4e0	_._10cIntuition	cIntuition::~cIntuition()
+00074c70	CalcModulo__9cGD_LFB32Ul	cGD_LFB32::CalcModulo(unsigned long)
+0008a5f0	PutBitmapAlfa__3cGDR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmapAlfa(cBitmap &, const tPoint<long> &, cPaletteFull *)
+00042d70	Input__8cConsolePCce	cConsole::Input(const char *, ...)
+0007bce0	CancelPush__11cMemoryPipe	cMemoryPipe::CancelPush()
+000aefd0	Frame_Counter	Frame_Counter
+00043070	DisableLineWrap__8cConsolei	cConsole::DisableLineWrap(int)
+00050870	_._12cData_Sample	cData_Sample::~cData_Sample()
+000957c0	Kill__5cTask	cTask::Kill()
+000c7098	__ti9cGD_LFB32	cGD_LFB32 type_info node
+00079490	__Q214cIPCServer_IPX11cClientInfo	cIPCServer_IPX::cClientInfo::cClientInfo()
+0004b9b0	Process_Text_Preprocess__15cAnimTextReaderPcUl	cAnimTextReader::Process_Text_Preprocess(char *, unsigned long)
+000a0844	LF_FileName	LF_FileName
+0008cb80	ProcessTree__8cVObjectR6sInput	cVObject::ProcessTree(sInput &)
+00098ca0	_fini	_fini
+00095d80	_._5cPipe	cPipe::~cPipe()
+0008ab80	PutBitmap__3cGDR7cBitmapRCt6tPoint1ZlP12cPaletteFull	cGD::PutBitmap(cBitmap &, const tPoint<long> &, cPaletteFull *)
+000c6a20	LinuxTimer	LinuxTimer
+00096ad0	__thunk_112_Empty__10cVOEditRow	[thunk 112] cVOEditRow::Empty()
+00083b70	__13cSoundChannel	cSoundChannel::cSoundChannel()
+0007a070	_._17cIPCOStream2Block	cIPCOStream2Block::~cIPCOStream2Block()
+000c6ebc	__ti10cVOEditRow	cVOEditRow type_info node
+000814d0	GetWriteBuffer__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetWriteBuffer()
+00042ec0	Clear__8cConsole	cConsole::Clear()
+00095890	_._7cThread	cThread::~cThread()
+000a8080	__vt_22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix virtual table
+000533f0	Delete__24cCompatibilityFileSystemPCc	cCompatibilityFileSystem::Delete(const char *)
+00056f40	GetHeight__11sFLC_Header	sFLC_Header::GetHeight()
+000760c0	__tf8cGD_LFB8	cGD_LFB8 type_info function
+000925f0	Proc__18cTimerSystem_Linux	cTimerSystem_Linux::Proc()
+0008f8b0	__9cMasterVORC10cRectangle	cMasterVO::cMasterVO(const cRectangle &)
+000c73a8	__ti16cIPCServer_TCPIP	cIPCServer_TCPIP type_info node
+000af09c	__vt_8cFFilter	cFFilter virtual table
+000c73bc	__ti16cIPCSystem_Linux	cIPCSystem_Linux type_info node
+00044550	Paint__10cConsoleVOR3cGDRCt6tPoint1ZlRC10cRectangle	cConsoleVO::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+000430b0	GetBufferSize__8cConsole	cConsole::GetBufferSize()
+0008b940	Clear__7cSprite	cSprite::Clear()
+00043850	__11cLineEditori	cLineEditor::cLineEditor(int)
+0007aa20	__9cKeyboardPCl	cKeyboard::cKeyboard(const long *)
+0005a790	PutWord__10cVOTextBoxR3cGDPcGt6tPoint1Zl	cVOTextBox::PutWord(cGD &, char *, tPoint<long>)
+000655f0	FillAdd__9cGD_LFB15G6cColorRC10cRectangle	cGD_LFB15::FillAdd(cColor, const cRectangle &)
+00055000	Goto__9cTextFilei	cTextFile::Goto(int)
+0007f8e0	__10cPalette15	cPalette15::cPalette15()
+00054c70	SeekC__5cFilel	cFile::SeekC(long)
+0005db70	LFB24_PutBitmap8_AMask	LFB24_PutBitmap8_AMask
+00093500	IsBlockMode__11cIPCO_TCPIP	cIPCO_TCPIP::IsBlockMode()
+000438c0	Set__11cLineEditorPCc	cLineEditor::Set(const char *)
+00043130	__6cShellPCc	cShell::cShell(const char *)
+0005f8b0	Read__15cLocaleDataBaseG3PTR	cLocaleDataBase::Read(PTR)
+0007a030	GetPort__9cIPCO_IPX	cIPCO_IPX::GetPort()
+0007f7a0	__10cPalette15R8cPalette	cPalette15::cPalette15(cPalette &)
+00065c30	__tf9cGD_LFB15	cGD_LFB15 type_info function
+0005e9c0	LFB8_Fill	LFB8_Fill
+0007fb70	_._8cPalette	cPalette::~cPalette()
+000c6e54	__ti13cData_Palette	cData_Palette type_info node
+0008aed0	GetBMType__3cGD	cGD::GetBMType()
+000c6fcc	__ti9cVOButton	cVOButton type_info node
+00053100	GetName__7cEnvVar	cEnvVar::GetName()
+000922b0	__opPCc__3HEX	HEX::operator const char *()
+0005d640	LFB24_HLineSub	LFB24_HLineSub
+000a5e14	__vt_15cIPCSession_IPX	cIPCSession_IPX virtual table
+000509b0	Empty__8cEditRow	cEditRow::Empty()
+00092250	__tf3Log	Log type_info function
+0009f78c	__vt_5cFont.10cMemBlock_	cFont virtual table (base cMemBlock_)
+00077750	_._9cGD_SFB16	cGD_SFB16::~cGD_SFB16()
+00086740	Box__3cGDRC10cRectangleR7cBitmapUlG6cColorbT1	cGD::Box(const cRectangle &, cBitmap &, unsigned long, cColor, bool, const cRectangle &)
+000aef88	VKeyboard	VKeyboard
+00047960	SetDisableColor__10cVOAButtonRC6cColor	cVOAButton::SetDisableColor(const cColor &)
+00092fb0	GetFrequency__16cSoundCard_Linux	cSoundCard_Linux::GetFrequency()
+0004af20	__11cAnimBitmapUlUl7eBMType	cAnimBitmap::cAnimBitmap(unsigned long, unsigned long, eBMType)
+00083d40	SetTarget__13cSoundConvertG12cSoundFormatbUlPvUl	cSoundConvert::SetTarget(cSoundFormat, bool, unsigned long, void *, unsigned long)
+000888e0	PutAnimBitmapAdd__3cGDR11cAnimBitmapUlRCt6tPoint1ZlP12cPaletteFull	cGD::PutAnimBitmapAdd(cAnimBitmap &, unsigned long, const tPoint<long> &, cPaletteFull *)
+00090380	__9cVolumeHPs	cVolumeHP::cVolumeHP(short)
+0005f0e0	GetParent__C6cHNode	cHNode::GetParent() const
+00090bf0	Log10__6DOUBLE	DOUBLE::Log10()
+000969e0	GetNofColors__C13sRawPicHeader	sRawPicHeader::GetNofColors() const
+0005e910	LFB32_FillAlfa	LFB32_FillAlfa
+0005e2c0	LFB32_VLineSub	LFB32_VLineSub
+0007b080	GetLength__C12cKeySequence	cKeySequence::GetLength() const
+00080220	Green__6cColorUl	cColor::Green(unsigned long)
+0008fb30	IsReq__8cVObject	cVObject::IsReq()
+000882f0	HLineClip__3cGDRt6tPoint1ZlRUlRC10cRectangle	cGD::HLineClip(tPoint<long> &, unsigned long &, const cRectangle &)
+0004a1f0	_._11cVOPulldown	cVOPulldown::~cVOPulldown()
+0005f490	AddPrev__5cNodeP5cNode	cNode::AddPrev(cNode *)
+00054830	__10cVOFGraphsG10cRectangleR12cData_BitmapR9cVOButtonT3R12cVOMultiLineR10cVOEditRowT6	cVOFGraphs::cVOFGraphs(cRectangle, cData_Bitmap &, cVOButton &, cVOButton &, cVOMultiLine &, cVOEditRow &, cVOEditRow &)
+00075ff0	PutAnimBitmapAlfa_I__8cGD_LFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0006a5b0	PutAnimBitmapAdd_I__9cGD_LFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000af1c0	__vt_8cPointer	cPointer virtual table
+00047a60	IsSoundRequired__12cApplication	cApplication::IsSoundRequired()
+00045610	__10cVOAButtonRC10cRectangleR5cFontPCc23eVOAButtonTextAlignmentbN25UsP8cVObject	cVOAButton::cVOAButton(const cRectangle &, cFont &, const char *, eVOAButtonTextAlignment, bool, bool, bool, unsigned short, cVObject *)
+000c6dbc	__ti10cVOListReq	cVOListReq type_info node
+000c73f4	__ti8cProcess	cProcess type_info node
+000822f0	_._22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix::~cSoundCard_SoftwareMix()
+000a8440	__vt_25cSoundChannel_SoftwareMix.13cSoundChannel	cSoundChannel_SoftwareMix virtual table (base cSoundChannel)
+00092ba0	__16cSoundCard_LinuxPCc	cSoundCard_Linux::cSoundCard_Linux(const char *)
+00078d80	IsInBlockMode__5cIPCO	cIPCO::IsInBlockMode()
+00077630	PutBitmapAlfa_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000a01e0	AllocatedHeapBlock	AllocatedHeapBlock
+000c6f70	__ti9cTextFile	cTextFile type_info node
+000c7270	__tit5tNode1Z11cMsgRecNode	tNode<cMsgRecNode> type_info node
+000776b0	CalcModulo__9cGD_SFB16Ul	cGD_SFB16::CalcModulo(unsigned long)
+00050460	DecUsage__18cSharedData_Bitmap	cSharedData_Bitmap::DecUsage()
+00055290	__tf9cTextFile	cTextFile type_info function
+0005e5b0	LFB32_PutBitmap8Add	LFB32_PutBitmap8Add
+0005dfb0	LFB32_PutBitmap24_AMask	LFB32_PutBitmap24_AMask
+000931c0	_._20cSoundRecorderThread	cSoundRecorderThread::~cSoundRecorderThread()
+000524b0	Empty__10cVOEditRow	cVOEditRow::Empty()
+000c6f9c	__ti10cData_Font	cData_Font type_info node
+00079b50	Open__15cIPCSession_IPX	cIPCSession_IPX::Open()
+00093d70	GetNumberOfSessions__17cIPCBrowser_TCPIP	cIPCBrowser_TCPIP::GetNumberOfSessions()
+00087750	GetDisplayGD__C4cVVC	cVVC::GetDisplayGD() const
+00044f30	GetStop__11cLineEditor	cLineEditor::GetStop()
+00075be0	PutPixel__8cGD_LFB8RCt6tPoint1ZlG6cColor	cGD_LFB8::PutPixel(const tPoint<long> &, cColor)
+0007b940	IsValid__10cMemBlock_	cMemBlock_::IsValid()
+000a0080	__vt_9cVOBitmap	cVOBitmap virtual table
+00076070	__8cGD_LFB8G3PTRRC10cDimensionUl	cGD_LFB8::cGD_LFB8(PTR, const cDimension &, unsigned long)
+00052ca0	CreateClass__10cEnvSystemPCc	cEnvSystem::CreateClass(const char *)
+000434d0	SetExitKey__10cVOConsole8eKeyCodeUc	cVOConsole::SetExitKey(eKeyCode, unsigned char)
+00055420	__5cFileRC5cFile	cFile::cFile(const cFile &)
+0006b820	HLineAdd__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+000aa460	__vt_14cSprABitmapAdd	cSprABitmapAdd virtual table
+00048a80	Const3__10cVOListReqUlR7cBitmapT2R5cFontPPCc	cVOListReq::Const3(unsigned long, cBitmap &, cBitmap &, cFont &, const char **)
+0007ea40	Green__8cPaletteUl	cPalette::Green(unsigned long)
+000c73c8	__ti16cIPXSocket_Linux	cIPXSocket_Linux type_info node
+0007c0f0	__12cVOMultiLineRC10cRectangleR10cData_FontR13cData_PaletteR12cData_BitmapUsP8cVObject	cVOMultiLine::cVOMultiLine(const cRectangle &, cData_Font &, cData_Palette &, cData_Bitmap &, unsigned short, cVObject *)
+00094060	IsDataAvailable__16cIPXSocket_LinuxPC8cTime_US	cIPXSocket_Linux::IsDataAvailable(const cTime_US *)
+0007be40	CancelPull__11cMemoryPipe	cMemoryPipe::CancelPull()
+0008c900	DisplayMirror__8cVObjectR3cGDRCt6tPoint1Zl	cVObject::DisplayMirror(cGD &, const tPoint<long> &)
+0004fe70	_._13cData_Palette	cData_Palette::~cData_Palette()
+0008f090	KeyMatrix__10cIntuition8eKeyCode	cIntuition::KeyMatrix(eKeyCode)
+00097e70	GetXX__10cVODragBox	cVODragBox::GetXX()
+00083690	Interpolate__25cSoundChannel_SoftwareMixss	cSoundChannel_SoftwareMix::Interpolate(short, short)
+00043890	_._11cLineEditor	cLineEditor::~cLineEditor()
+00043950	SetStop__11cLineEditori	cLineEditor::SetStop(int)
+000966f0	Deactivate__7cVTimer	cVTimer::Deactivate()
+00054040	Paint__8cVOFilerR3cGDRCt6tPoint1ZlRC10cRectangle	cVOFiler::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+00077510	PutAnimBitmapAlfa_I__9cGD_SFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00075ea0	HLineAdd__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+0005fbd0	GetKey__12cLocaleEntry	cLocaleEntry::GetKey()
+000902b0	__6sInput6eIType8eKeyCode	sInput::sInput(eIType, eKeyCode)
+0004a1b0	__tf11cVOPulldown	cVOPulldown type_info function
+000c7198	__ti8cPalette	cPalette type_info node
+00090960	GetSampleRate__Q25sWave7sFormat	sWave::sFormat::GetSampleRate()
+0008f080	GetActiveScreen__10cIntuition	cIntuition::GetActiveScreen()
+00082ac0	GetFreeChannel__12cSoundServerl	cSoundServer::GetFreeChannel(long)
+0005e3f0	LFB32_VLineAlfa	LFB32_VLineAlfa
+00077d40	PutBitmapAMask_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00065860	VLine__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::VLine(const tPoint<long> &, unsigned long, cColor)
+00083b30	SetNotifyObject__13cSoundChannelP12cSoundNotify	cSoundChannel::SetNotifyObject(cSoundNotify *)
+000930f0	StopRecord__16cSoundCard_Linux	cSoundCard_Linux::StopRecord()
+000c71b8	__ti7cSample	cSample type_info node
+00084ce0	__vc__11CHARCONVERTUc	CHARCONVERT::operator[](unsigned char)
+00097440	Ungrab__6cMouse	cMouse::Ungrab()
+00050b40	Raw2Char__10cVOEditRow8eKeyCodeb	cVOEditRow::Raw2Char(eKeyCode, bool)
+000774b0	FillAdd__9cGD_SFB16G6cColorRC10cRectangle	cGD_SFB16::FillAdd(cColor, const cRectangle &)
+0008b0f0	__eq__6cVModeRC6cVMode	cVMode::operator==(const cVMode &)
+0004a7f0	__7cBitmapRC10cDimension7eBMType	cBitmap::cBitmap(const cDimension &, eBMType)
+00081f40	MixSWM_LE__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::MixSWM_LE(unsigned long, cSoundChannel_SoftwareMix &)
+000c7068	__ti12cLocaleEntry	cLocaleEntry type_info node
+000aee72	_12cApplication.Mouse	_12cApplication.Mouse
+00043100	__tf8cConsole	cConsole type_info function
+000af034	__vt_t9tMemBlock1ZUc	tMemBlock<unsigned char> virtual table
+00083f50	Write_UB_Mono__13cSoundConvert	cSoundConvert::Write_UB_Mono()
+000760f0	_._8cGD_LFB8	cGD_LFB8::~cGD_LFB8()
+0008ef30	GetIPointerPos__10cIntuition	cIntuition::GetIPointerPos()
+00065680	FillSub__9cGD_LFB15G6cColorRC10cRectangle	cGD_LFB15::FillSub(cColor, const cRectangle &)
+0009e3c0	__vt_5cFile	cFile virtual table
+000c70b0	__ti9cGD_SFB16	cGD_SFB16 type_info node
+0007b870	__12cMemBlockPTRP10cMemBlock_	cMemBlockPTR::cMemBlockPTR(cMemBlock_ *)
+00098690	_._t9tMemBlock1Zc	tMemBlock<char>::~tMemBlock()
+0007b780	GetAddress__12cMemBlockPTR	cMemBlockPTR::GetAddress()
+00084b70	__apl__10cOldStringPCc	cOldString::operator+=(const char *)
+000c5488	_18cSharedData_Bitmap.List	_18cSharedData_Bitmap.List
+00052480	GetStatus__10cVOEditRow	cVOEditRow::GetStatus()
+0007f3c0	__12cPaletteFull	cPaletteFull::cPaletteFull()
+0007faa0	__vc__8cPaletteUl	cPalette::operator[](unsigned long)
+0005c8e0	LFB16_HLineAlfa	LFB16_HLineAlfa
+0009b44c	__vt_11cAnimBitmap.10cMemBlock_	cAnimBitmap virtual table (base cMemBlock_)
+000551a0	_GLOBAL_.I.OpenR__5cFileb	cFile::_GLOBAL_.I.OpenR(bool)
+00050180	__tf22cSharedData_AnimBitmap	cSharedData_AnimBitmap type_info function
+0006e7f0	PutAnimBitmapAlfa_I__9cGD_LFB24R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB24::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00083ed0	Read_SW_Mono__13cSoundConvert	cSoundConvert::Read_SW_Mono()
+0005b8f0	Free__19cHeap_CompatibilityPvPCc	cHeap_Compatibility::Free(void *, const char *)
+0007b7d0	_._12cMemBlockPTR	cMemBlockPTR::~cMemBlockPTR()
+0008cf40	MoveToCenter__8cVObjectP8cVObject	cVObject::MoveToCenter(cVObject *)
+00092de0	_._16cSoundCard_Linux	cSoundCard_Linux::~cSoundCard_Linux()
+0005bf20	LFB15_PutBitmap8Add	LFB15_PutBitmap8Add
+00056fa0	GetSize__11sFLC_Header	sFLC_Header::GetSize()
+00043a60	RemoveThisWord__11cLineEditor	cLineEditor::RemoveThisWord()
+0006f830	CalcModulo__9cGD_LFB24Ul	cGD_LFB24::CalcModulo(unsigned long)
+0005f0f0	GetLastChild__C6cHNode	cHNode::GetLastChild() const
+000addcc	__vt_5cPipe	cPipe virtual table
+000805b0	Play__4cVCDUl	cVCD::Play(unsigned long)
+0008aec0	GetPitch__3cGD	cGD::GetPitch()
+00096e20	__vc__t6cArray1ZPci	cArray<char *>::operator[](int)
+00095560	__adv__8cDayTimed	cDayTime::operator/=(double)
+000460e0	CreateBPal__10cVOAButton	cVOAButton::CreateBPal()
+00081ae0	FillSWS_LE__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::FillSWS_LE(unsigned long, cSoundChannel_SoftwareMix &)
+00065940	VLineAdd__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+0005ed60	__7cLibVVCPCc	cLibVVC::cLibVVC(const char *)
+000808a0	__7cRandom	cRandom::cRandom()
+000465b0	Release__10cVOAButton	cVOAButton::Release()
+00074b80	HLineAlfa__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+000984a0	Read__8cProcessPvUl	cProcess::Read(void *, unsigned long)
+000955d0	__aml__8cDayTimed	cDayTime::__aml(double)
+00084cf0	__11CHARCONVERTPCcT1	CHARCONVERT::CHARCONVERT(const char *, const char *)
+0006d4d0	SaveBitmap_I__9cGD_LFB24R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_LFB24::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+00052b30	GetValue__7cEnvVari	cEnvVar::GetValue(int)
+00093570	IsConnected__11cIPCO_TCPIP	cIPCO_TCPIP::IsConnected()
+00097240	__tf11cIPCSession	cIPCSession type_info function
+00096ca0	Step__12cProcIniFile	cProcIniFile::Step()
+00096190	__builtin_vec_delete	__builtin_vec_delete
+0008e7c0	MouseRefresh__Fv	MouseRefresh()
+000a9324	__vt_4cVVC	cVVC virtual table
+00043cf0	GetChar__11cLineEditor	cLineEditor::GetChar()
+00091ff0	__ls__C8Log_FilePCc	Log_File::__ls(const char *) const
+0005f360	AddFirst__5cListP5cNode	cList::AddFirst(cNode *)
+0007acf0	RawkeyToAscii__9cKeyboard8eKeyCodeUc	cKeyboard::RawkeyToAscii(eKeyCode, unsigned char)
+0005ef40	DeleteChildren__6cHNode	cHNode::DeleteChildren()
+0005c150	LFB15_PutBitmap8C1_Add	LFB15_PutBitmap8C1_Add
+000c7420	__ti19cEventManager_Linux	cEventManager_Linux type_info node
+00090aa0	ASin__6DOUBLE	DOUBLE::ASin()
+00080df0	GetSize__C12cSoundFormat	cSoundFormat::GetSize() const
+00055600	Paint__13sFLC_FrameSS2R3cGDRC10cRectangle	sFLC_FrameSS2::Paint(cGD &, const cRectangle &)
+000ac2c0	__vt_3Log	Log virtual table
+000aefa8	Sample_Size	Sample_Size
+00078830	HLineAdd__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+00084d50	Sub__10CHARFILTERPCc	CHARFILTER::Sub(const char *)
+00092b30	Main__16cSoundCard_Linux	cSoundCard_Linux::Main()
+00065ba0	CalcAddr__9cGD_LFB15RCt6tPoint1Zl	cGD_LFB15::CalcAddr(const tPoint<long> &)
+000970d0	__thunk_56_TimerProc__14cFLCAnimPlayer	[thunk 56] cFLCAnimPlayer::TimerProc()
+00083bc0	__tf12cSoundNotify	cSoundNotify type_info function
+00073710	PutAnimBitmapAlfa_I__9cGD_LFB32R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutAnimBitmapAlfa_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0004c2b0	__tf7cDirent	cDirent type_info function
+000960f0	__tf5cPipe	cPipe type_info function
+00098920	Notify__10cSoundPlay18eSoundChannelEvent	cSoundPlay::Notify(eSoundChannelEvent)
+00096f00	__tf8cFFilter	cFFilter type_info function
+000895d0	PutAnimBitmap__3cGDR11cAnimBitmapUlRCt6tPoint1ZlRC10cRectangleP12cPaletteFull	cGD::PutAnimBitmap(cAnimBitmap &, unsigned long, const tPoint<long> &, const cRectangle &, cPaletteFull *)
+000c7234	__tit9tMemBlock1Zc	tMemBlock<char> type_info node
+00085170	DelRecipient__12cMsgTypeNodeP12cMsgReceiver	cMsgTypeNode::DelRecipient(cMsgReceiver *)
+000750b0	SaveBitmap_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_LFB8::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+0005dd80	LFB32_PutBitmap24	LFB32_PutBitmap24
+00083fd0	__7cStringPCc	cString::cString(const char *)
+00068160	PutBitmapAMask_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000a8100	__vt_10cSoundCard	cSoundCard virtual table
+000900c0	__8cVObjectRC10cRectangleUsP8cVObjectUs	cVObject::cVObject(const cRectangle &, unsigned short, cVObject *, unsigned short)
+000a0847	LDBRET_UnresolvedKey	LDBRET_UnresolvedKey
+00087b50	Line__11cGD_MinimalRCt6tPoint1ZlT1G6cColor	cGD_Minimal::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+00098580	__tft5tNode1Z25cSoundChannel_SoftwareMix	tNode<cSoundChannel_SoftwareMix> type_info function
+0008fe90	AddChild__8cVObjectP8cVObject	cVObject::AddChild(cVObject *)
+0009f780	__vt_10cData_Font	cData_Font virtual table
+00085530	SendMsg__10cMsgCenterP12cMsgTypeNodeG3PTR	cMsgCenter::SendMsg(cMsgTypeNode *, PTR)
+000945b0	IdentifyFileSystem__FPCc	IdentifyFileSystem(const char *)
+00094360	CreateSerialClient__16cIPCSystem_LinuxbUl	cIPCSystem_Linux::CreateSerialClient(bool, unsigned long)
+000c542c	_edata	_edata
+00047810	Enable__10cVOAButton	cVOAButton::Enable()
+000c6440	CT_ALPHALOWER	CT_ALPHALOWER
+000903e0	GetLeft__C7cVolume	cVolume::GetLeft() const
+0005d4a0	LFB24_HLine	LFB24_HLine
+0005ecc0	__tf11cLibPointer	cLibPointer type_info function
+000a5be0	__vt_10cIPCSystem	cIPCSystem virtual table
+00090540	Filter__5sWave	sWave::Filter()
+0005f5f0	__12cLocaleEntryPCc	cLocaleEntry::cLocaleEntry(const char *)
+0009e380	__vt_9cTextFile	cTextFile virtual table
+0005fc90	SFB16_Fill	SFB16_Fill
+000c5178	_GLOBAL_OFFSET_TABLE_	_GLOBAL_OFFSET_TABLE_
+000658d0	HLineAdd__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+0009c628	__vt_12cData_Sample.10cMemBlock_	cData_Sample virtual table (base cMemBlock_)
+00050280	Create__18cSharedData_BitmapPCc	cSharedData_Bitmap::Create(const char *)
+0005fc30	SFB16_SaveBitmap	SFB16_SaveBitmap
+00092940	IsAbsolute__11cDirentname	cDirentname::IsAbsolute()
+000c7440	_end	_end
+0007a450	__tf17cIPCOStream2Block	cIPCOStream2Block type_info function
+000c5470	_22cSharedData_AnimBitmap.List	_22cSharedData_AnimBitmap.List
+0007ba60	__11cMemoryPipeUl	cMemoryPipe::cMemoryPipe(unsigned long)
+0004cd80	__12cData_BitmapPCcb	cData_Bitmap::cData_Bitmap(const char *, bool)
+000c6340	CT_ALPHAUPPER	CT_ALPHAUPPER
+00063240	PutAnimBitmapLMask_I__9cGD_LFB15R11cAnimBitmapUlR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutAnimBitmapLMask_I(cAnimBitmap &, unsigned long, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005fa90	Add__15cLocaleDataBaseP12cLocaleEntry	cLocaleDataBase::Add(cLocaleEntry *)
+000800e0	GetColor15__C6cColor	cColor::GetColor15() const
+00075e60	VLineAdd__8cGD_LFB8RCt6tPoint1ZlUlG6cColor	cGD_LFB8::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+000c6fdc	__ti9cVOMsgBox	cVOMsgBox type_info node
+00097ed0	Process__10cVODragBoxR6sInput	cVODragBox::Process(sInput &)
+0007b900	GetSize__C10cMemBlock_	cMemBlock_::GetSize() const
+00078f20	__9cIPCO_IPXP10cIPXSocketRC11cIPXAddress	cIPCO_IPX::cIPCO_IPX(cIPXSocket *, const cIPXAddress &)
+000af04c	__vt_t6tHNode1Z8cVObject	tHNode<cVObject> virtual table
+00096980	Filter__15LastChance_SPR0	LastChance_SPR0::Filter()
+0005c610	LFB16_PutBitmapSub	LFB16_PutBitmapSub
+000901d0	_._8cVObject	cVObject::~cVObject()
+00084750	__pl__FPCcR7cString	operator+(const char *, cString &)
+000478d0	SetText__10cVOAButtonP5cFontPCc	cVOAButton::SetText(cFont *, const char *)
+0005f720	Load__15cLocaleDataBasePCcb	cLocaleDataBase::Load(const char *, bool)
+00076710	PutBitmapAMask_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmapAMask_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00093820	_._16cIPCServer_TCPIP	cIPCServer_TCPIP::~cIPCServer_TCPIP()
+0008c710	__9cSprClickR11cAnimBitmap	cSprClick::cSprClick(cAnimBitmap &)
+000a0628	__vt_6cHNode	cHNode virtual table
+00052f60	_._9cEnvClass	cEnvClass::~cEnvClass()
+000af11c	__vt_t5tNode1Z15cIPCSession_IPX	tNode<cIPCSession_IPX> virtual table
+0009f774	__vt_10cData_Font.10cMemBlock_	cData_Font virtual table (base cMemBlock_)
+0005b7e0	CheckAllFatal__19cHeap_CompatibilityPc	cHeap_Compatibility::CheckAllFatal(char *)
+00047aa0	TimerRequired__12cApplication	cApplication::TimerRequired()
+00090bb0	Abs__6DOUBLE	DOUBLE::Abs()
+000aeec0	_9cKeyboard.RawkeyToAscii_	_9cKeyboard.RawkeyToAscii_
+0005fbc0	SetText__12cLocaleEntryPCc	cLocaleEntry::SetText(const char *)
+000aef90	VMouse	VMouse
+000787d0	VLineSub__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::VLineSub(const tPoint<long> &, unsigned long, cColor)
+00059b90	__9cVOWindowRCt6tPoint1ZlR7cBitmapG10cRectangleUsP8cVObject	cVOWindow::cVOWindow(const tPoint<long> &, cBitmap &, cRectangle, unsigned short, cVObject *)
+000aefc4	MSG1	MSG1
+00079b80	__15cIPCBrowser_IPXUlP10cIPXSocket	cIPCBrowser_IPX::cIPCBrowser_IPX(unsigned long, cIPXSocket *)
+0004a6d0	GetFreeSize__13cAnimSkeleton	cAnimSkeleton::GetFreeSize()
+000c6d78	__ti10cVOConsole	cVOConsole type_info node
+000966c0	__thunk_56__._13cAnimSkeleton	[thunk 56] cAnimSkeleton::~cAnimSkeleton()
+000975b0	InsertPos__t6cArray1ZPci	cArray<char *>::InsertPos(int)
+00080180	__mi__C6cColorG6cColor	cColor::__mi(cColor) const
+000551d0	__9cTextFileRC5cFile	cTextFile::cTextFile(const cFile &)
+000802d0	__6cColor	cColor::cColor()
+0008af00	_._3cGD	cGD::~cGD()
+00057560	IsFrame__13sFLC_SubChunk	sFLC_SubChunk::IsFrame()
+00082060	ConvertSW__6cMixerG3PTRUlUl	cMixer::ConvertSW(PTR, unsigned long, unsigned long)
+00093d20	__tf16cIPCServer_TCPIP	cIPCServer_TCPIP type_info function
+0005ebf0	__tf9cLibMouse	cLibMouse type_info function
+00093de0	__17cIPCSession_TCPIPPCc	cIPCSession_TCPIP::cIPCSession_TCPIP(const char *)
+00092ff0	SetProperties__16cSoundCard_LinuxUlUcb	cSoundCard_Linux::SetProperties(unsigned long, unsigned char, bool)
+0005fb60	_._12cLocaleEntry	cLocaleEntry::~cLocaleEntry()
+000507f0	_Validate__12cData_Sample	cData_Sample::_Validate()
+00050ab0	Replace__8cEditRowc	cEditRow::Replace(char)
+0005bd60	LFB15_VLineSub	LFB15_VLineSub
+00047a40	IsMouseRequired__12cApplication	cApplication::IsMouseRequired()
+000af1d4	__vt_t5tNode1Z25cSoundChannel_SoftwareMix	tNode<cSoundChannel_SoftwareMix> virtual table
+0008c2f0	Process__14cSprABitmapAdd	cSprABitmapAdd::Process()
+0007be50	EndPull__11cMemoryPipe	cMemoryPipe::EndPull()
+0005dd20	LFB24_FillAlfa	LFB24_FillAlfa
+00050430	_GLOBAL_.I.Create__18cSharedData_BitmapPCc	cSharedData_Bitmap::_GLOBAL_.I.Create(const char *)
+00065a20	VLineSub__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::VLineSub(const tPoint<long> &, unsigned long, cColor)
+000aee9c	LocaleDataBase	LocaleDataBase
+0005bb90	LFB15_PutBitmapSub	LFB15_PutBitmapSub
+000c708c	__ti9cGD_LFB24	cGD_LFB24 type_info node
+00053790	GetAct__8cVOFiler	cVOFiler::GetAct()
+00047830	Disable__10cVOAButton	cVOAButton::Disable()
+0005e020	LFB32_Fill	LFB32_Fill
+000c7160	__ti6cMouse	cMouse type_info node
+00078cf0	__tf10cIPCServer	cIPCServer type_info function
+00087ea0	Clear__3cGDG6cColor	cGD::Clear(cColor)
+0004ff00	Create__22cSharedData_AnimBitmapPCcb	cSharedData_AnimBitmap::Create(const char *, bool)
+00066480	PutBitmapLMask_I__9cGD_LFB16R7cBitmapT1RC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmapLMask_I(cBitmap &, cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00095ab0	WaitForEvent__19cEventManager_LinuxP8cTime_US	cEventManager_Linux::WaitForEvent(cTime_US *)
+000942e0	Connect__16cIPXSocket_LinuxRC11cIPXAddress	cIPXSocket_Linux::Connect(const cIPXAddress &)
+000c6ef0	__tit5tNode1Z9cEnvClass	tNode<cEnvClass> type_info node
+00047ad0	PointerRequired__12cApplication	cApplication::PointerRequired()
+00095990	Wait__7cThread	cThread::Wait()
+00097600	RemovePos__t6cArray1ZPci	cArray<char *>::RemovePos(int)
+0007f390	__12cPaletteFullP8cPalette	cPaletteFull::cPaletteFull(cPalette *)
+0005c4c0	LFB15_FillSub	LFB15_FillSub
+000774f0	PutAnimBitmapAdd_I__9cGD_SFB16R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutAnimBitmapAdd_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+000aefea	CaptureFlag	CaptureFlag
+0005d160	LFB24_PutBitmap	LFB24_PutBitmap
+00054ac0	Load__5cFileb	cFile::Load(bool)
+00053230	__tf6cEvent	cEvent type_info function
+0006bb30	__9cGD_LFB16G3PTRRC10cDimensionUl	cGD_LFB16::cGD_LFB16(PTR, const cDimension &, unsigned long)
+00096580	__tft6tHNode1Z8cVObject	tHNode<cVObject> type_info function
+000826d0	GetFrequency__16cSoundCard_Dummy	cSoundCard_Dummy::GetFrequency()
+00066b40	PutBitmapAlfa_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00084530	__eq__7cStringPCc	cString::operator==(const char *)
+0007a340	Construct__17cIPCOStream2BlockP5cIPCOUlb	cIPCOStream2Block::Construct(cIPCO *, unsigned long, bool)
+0009edc0	__vt_14cFLCAnimPlayer	cFLCAnimPlayer virtual table
+00047a90	NetworkRequired__12cApplication	cApplication::NetworkRequired()
+00090730	GetSampleFormat__5sWave	sWave::GetSampleFormat()
+00097220	_._11cIPCSession	cIPCSession::~cIPCSession()
+00044f10	__opPCc__C11cLineEditor	cLineEditor::__opPCc() const
+00057330	GetDataAddr__15sFLC_FrameSound	sFLC_FrameSound::GetDataAddr()
+00090320	__6sInput6eIType	sInput::sInput(eIType)
+0007beb0	EVENT_Move__6cMouseRCt6tPoint1Zl	cMouse::EVENT_Move(const tPoint<long> &)
+000aee8c	HBRET2Text_	HBRET2Text_
+00077530	VLineAlfa__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0009e040	__vt_8cVOFiler	cVOFiler virtual table
+000ac240	__vt_9cCD_Linux	cCD_Linux virtual table
+0005d800	LFB24_VLineAlfa	LFB24_VLineAlfa
+0007d510	Action__12cVOMultiLineQ212cVOMultiLine10eML_Action	cVOMultiLine::Action(cVOMultiLine::eML_Action)
+000827c0	GetFrequency__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetFrequency()
+000c70dc	__ti11cIPCSession	cIPCSession type_info node
+000c6fec	__ti9cVOBitmap	cVOBitmap type_info node
+00044480	_._10cConsoleVO	cConsoleVO::~cConsoleVO()
+00057b40	MakeMultiPal__10cData_FontPv	cData_Font::MakeMultiPal(void *)
+000c6dcc	__ti11cVOPulldown	cVOPulldown type_info node
+000c6540	CT_NUM	CT_NUM
+00096660	_._t9tMemBlock1Z6cColor	tMemBlock<cColor>::~tMemBlock()
+0008d0b0	RemoveR__8cVObject	cVObject::RemoveR()
+00090ad0	ATan__6DOUBLE	DOUBLE::ATan()
+0007eae0	GetNearest__C8cPaletteG6cColor	cPalette::GetNearest(cColor) const
+000983a0	__thunk_12__Validate__8cPalette	[thunk 12] cPalette::_Validate()
+00096750	_._7cVTimer	cVTimer::~cVTimer()
+00057020	Show__10sFLC_FrameR3cGDR8cPaletteRC10cRectangle	sFLC_Frame::Show(cGD &, cPalette &, const cRectangle &)
+00095a60	Remove__19cEventManager_LinuxPv	cEventManager_Linux::Remove(void *)
+000550f0	WriteLine__9cTextFilePci	cTextFile::WriteLine(char *, int)
+00087a80	LFB__4cVVC	cVVC::LFB()
+000559b0	Play__15sFLC_FrameSound	sFLC_FrameSound::Play()
+00092220	__tf10Log_Stdout	Log_Stdout type_info function
+000aee75	_12cApplication.Redbook	_12cApplication.Redbook
+00055380	_._5cFile	cFile::~cFile()
+00055310	IsEnd__C5cFile	cFile::IsEnd() const
+000964a0	Set__10cDimensionUlUl	cDimension::Set(unsigned long, unsigned long)
+0008d0e0	SelfDestR__8cVObject	cVObject::SelfDestR()
+00082190	ConvertUB__6cMixerG3PTRUlUl	cMixer::ConvertUB(PTR, unsigned long, unsigned long)
+0004a280	Paint__10cVOListReqR3cGDRCt6tPoint1ZlRC10cRectangle	cVOListReq::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+0004b570	GetNumOfPalette__11cAnimBitmap	cAnimBitmap::GetNumOfPalette()
+0007b3c0	Dump__13cSystemMemory	cSystemMemory::Dump()
+000a05c8	__vt_7cLibVVC	cLibVVC virtual table
+0006b4b0	Fill_I__9cGD_LFB16G6cColorRC10cRectangle	cGD_LFB16::Fill_I(cColor, const cRectangle &)
+0005fbe0	__tf12cLocaleEntry	cLocaleEntry type_info function
+00082dc0	_._19cSoundServerChannel	cSoundServerChannel::~cSoundServerChannel()
+00090ce0	Sin__6DOUBLE	DOUBLE::Sin()
+000849a0	_GLOBAL_.I.__7cStringPCc	cString::_GLOBAL_.I.(const char *)
+000938d0	IsDataAvailable__16cIPCServer_TCPIPPC8cTime_US	cIPCServer_TCPIP::IsDataAvailable(const cTime_US *)
+00087d10	PutAnimBitmapSub_I__11cGD_MinimalR11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00082cb0	__12cSoundServerUs	cSoundServer::cSoundServer(unsigned short)
+000aae60	__vt_8cVObject	cVObject virtual table
+00094560	_._16cIPCSystem_Linux	cIPCSystem_Linux::~cIPCSystem_Linux()
+000a4ec0	__vt_9cGD_SFB16	cGD_SFB16 virtual table
+00095740	Launch__5cTask	cTask::Launch()
+000775b0	VLineAdd__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+000c6d28	__ti6cShell	cShell type_info node
+0005eb20	__tf12cLibKeyboard	cLibKeyboard type_info function
+00082780	GetPhysicalFrameLength__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetPhysicalFrameLength()
+000c71ec	__ti19cSoundServerChannel	cSoundServerChannel type_info node
+0005b5e0	Print__10cHeapBlockUl	cHeapBlock::Print(unsigned long)
+00096920	Filter2__5sSPR1	sSPR1::Filter2()
+0005c9e0	LFB16_PutBitmap8Alfa	LFB16_PutBitmap8Alfa
+0008dea0	GetIMouseButtons__10cIntuition	cIntuition::GetIMouseButtons()
+00090e20	Sqrt__6DOUBLE	DOUBLE::Sqrt()
+000825b0	_._6cMixer	cMixer::~cMixer()
+00074ae0	HLineSub__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::HLineSub(const tPoint<long> &, unsigned long, cColor)
+00095b50	Sleep__11cSyncSystemUl	cSyncSystem::Sleep(unsigned long)
+0007ad20	_GetKey__9cKeyboard	cKeyboard::_GetKey()
+0005e900	LFB32_FillSub	LFB32_FillSub
+00057420	GetDataAddr__17sFLC_FrameByteRun	sFLC_FrameByteRun::GetDataAddr()
+0007ddd0	AppearSlider__12cVOMultiLine	cVOMultiLine::AppearSlider()
+00078930	__8cGD_SFB8G3PTRRC10cDimensionUl	cGD_SFB8::cGD_SFB8(PTR, const cDimension &, unsigned long)
+00098bc0	Close__8cLibrary	cLibrary::Close()
+000af064	__vt_t9tMemBlock1Z6cColor	tMemBlock<cColor> virtual table
+00074860	FillSub__9cGD_LFB32G6cColorRC10cRectangle	cGD_LFB32::FillSub(cColor, const cRectangle &)
+000c70e4	__ti10cIPCSystem	cIPCSystem type_info node
+0004b650	GetSize__11cAnimBitmapUl	cAnimBitmap::GetSize(unsigned long)
+00057410	GetDataSize__17sFLC_FrameByteRun	sFLC_FrameByteRun::GetDataSize()
+00054eb0	Read__9cTextFilePvUl	cTextFile::Read(void *, unsigned long)
+00088250	VLineClip__3cGDRt6tPoint1ZlRUlRC10cRectangle	cGD::VLineClip(tPoint<long> &, unsigned long &, const cRectangle &)
+00083930	SetStepSpeed__25cSoundChannel_SoftwareMixUl	cSoundChannel_SoftwareMix::SetStepSpeed(unsigned long)
+00078c60	VM_GetIPCSystem__Fv	VM_GetIPCSystem()
+00097390	_._9cKeyboard	cKeyboard::~cKeyboard()
+0005d140	LFB16_FillAlfa	LFB16_FillAlfa
+00056930	__tf14cFLCAnimPlayer	cFLCAnimPlayer type_info function
+00093f40	CreateIPXSocket__16cIPCSystem_LinuxUlUl	cIPCSystem_Linux::CreateIPXSocket(unsigned long, unsigned long)
+00087cb0	FillSub__11cGD_MinimalG6cColorRC10cRectangle	cGD_Minimal::FillSub(cColor, const cRectangle &)
+00053190	Signal__16cEvent_Forwarder	cEvent_Forwarder::Signal()
+00052910	__tf8cEditRow	cEditRow type_info function
+00050070	_GLOBAL_.D.Create__22cSharedData_AnimBitmapPCcb	cSharedData_AnimBitmap::_GLOBAL_.D.Create(const char *, bool)
+0005e7c0	LFB32_PutBitmap8C1_AMask	LFB32_PutBitmap8C1_AMask
+0004a790	Free__13cAnimSkeletonUl	cAnimSkeleton::Free(unsigned long)
+00050af0	Deletion__8cEditRow	cEditRow::Deletion()
+00077490	FillSub__9cGD_SFB16G6cColorRC10cRectangle	cGD_SFB16::FillSub(cColor, const cRectangle &)
+0007a000	__tf14cIPCServer_IPX	cIPCServer_IPX type_info function
+000c7008	__ti5cHeap	cHeap type_info node
+0009ed98	__vt_14cFLCAnimPlayer.7cVTimer	cFLCAnimPlayer virtual table (base cVTimer)
+0004a500	Play__13cAnimSkeletonb	cAnimSkeleton::Play(bool)
+00087ef0	CRefresh__3cGDRC10cRectangle	cGD::CRefresh(const cRectangle &)
+00064fd0	PutAnimBitmapSub_I__9cGD_LFB15R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB15::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00046500	SetSample__10cVOAButtonR7cSample	cVOAButton::SetSample(cSample &)
+00074a40	HLineAdd__9cGD_LFB32RCt6tPoint1ZlUlG6cColor	cGD_LFB32::HLineAdd(const tPoint<long> &, unsigned long, cColor)
+00085650	GetType__12cMsgTypeNode	cMsgTypeNode::GetType()
+00075f40	PutBitmapAlfa_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005ba90	LFB15_PutBitmapAlfa	LFB15_PutBitmapAlfa
+000aa480	__vt_9cSprClick	cSprClick virtual table
+00088070	HLineSub__3cGDGt6tPoint1ZlUlG6cColorRC10cRectangle	cGD::HLineSub(tPoint<long>, unsigned long, cColor, const cRectangle &)
+000c71a8	__ti8cPointer	cPointer type_info node
+0004fb00	_._16cData_AnimBitmap	cData_AnimBitmap::~cData_AnimBitmap()
+00078cd0	_._10cIPCServer	cIPCServer::~cIPCServer()
+0007a240	Write__17cIPCOStream2BlockPCvUlbT3	cIPCOStream2Block::Write(const void *, unsigned long, bool, bool)
+000c72f8	__tit6tPoint1Zl	tPoint<long> type_info node
+0005f580	__5cNodeP5cNodeT1	cNode::cNode(cNode *, cNode *)
+00080c10	__7cSampleG12cSoundFormatbUlUl	cSample::cSample(cSoundFormat, bool, unsigned long, unsigned long)
+000802a0	__6cColorUcUcUc	cColor::cColor(unsigned char, unsigned char, unsigned char)
+00049c90	SetAct__11cVOPulldownUl	cVOPulldown::SetAct(unsigned long)
+00065710	FillAlfa__9cGD_LFB15G6cColorRC10cRectangle	cGD_LFB15::FillAlfa(cColor, const cRectangle &)
+0007b9c0	__10cMemBlock_	cMemBlock_::cMemBlock_()
+00082480	GetMasterVolume__22cSoundCard_SoftwareMix	cSoundCard_SoftwareMix::GetMasterVolume()
+0007aeb0	Reset__12cKeySequence	cKeySequence::Reset()
+00096a00	__t5tList1Z22cSharedData_AnimBitmap	tList<cSharedData_AnimBitmap>::tList()
+00083240	Stop__25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix::Stop()
+00080860	Init__7cRandom	cRandom::Init()
+0007b920	IsLocked__10cMemBlock_	cMemBlock_::IsLocked()
+00097270	__thunk_12__._15cIPCSession_IPX	[thunk 12] cIPCSession_IPX::~cIPCSession_IPX()
+00091b80	CopyMem	CopyMem
+00047a20	IsKeyboardRequired__12cApplication	cApplication::IsKeyboardRequired()
+000985b0	__tft9tMemBlock1Zc	tMemBlock<char> type_info function
+00080e30	__as__12cSoundFormatUc	cSoundFormat::operator=(unsigned char)
+00052270	Deletion__10cVOEditRow	cVOEditRow::Deletion()
+00095ba0	__tf19cEventManager_Linux	cEventManager_Linux type_info function
+00085690	GetPriority__11cMsgRecNode	cMsgRecNode::GetPriority()
+00054b40	Save__5cFileG3PTRUl	cFile::Save(PTR, unsigned long)
+000c6d84	__ti7cBitmap	cBitmap type_info node
+0005eb50	MapAllSymbol__9cLibMouse	cLibMouse::MapAllSymbol()
+0005f510	_._5cNode	cNode::~cNode()
+000af0e0	__vt_9cVOButton	cVOButton virtual table
+000c6240	CT_ALPHA	CT_ALPHA
+00091d70	GetCDInfo__9cCD_Linux	cCD_Linux::GetCDInfo()
+00042c00	RestoreShell__8cConsole	cConsole::RestoreShell()
+0006f4e0	FillAlfa__9cGD_LFB24G6cColorRC10cRectangle	cGD_LFB24::FillAlfa(cColor, const cRectangle &)
+0005c4b0	LFB15_FillAdd	LFB15_FillAdd
+0008d160	SetPalette__7cScreenR8cPalette	cScreen::SetPalette(cPalette &)
+0005f080	AddPrev__6cHNodeP6cHNode	cHNode::AddPrev(cHNode *)
+00048560	Const__10cVOListReqRC10cRectangleUlR7cBitmapR5cFontPPCc	cVOListReq::Const(const cRectangle &, unsigned long, cBitmap &, cFont &, const char **)
+0005ed90	__tf7cLibVVC	cLibVVC type_info function
+00090490	__7cVolumess	cVolume::cVolume(short, short)
+00076510	SaveBitmap_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_SFB16::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+00095fb0	UsePipe__5cPipePCc	cPipe::UsePipe(const char *)
+0007f410	GetAddr__10cPalette32	cPalette32::GetAddr()
+00078730	PutAnimBitmapSub_I__8cGD_SFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutAnimBitmapSub_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00054760	_._8cVOFiler	cVOFiler::~cVOFiler()
+000c7118	__ti14cIPCServer_IPX	cIPCServer_IPX type_info node
+00079fc0	__tf15cIPCSession_IPX	cIPCSession_IPX type_info function
+00081230	_._10cSoundCard	cSoundCard::~cSoundCard()
+000657f0	HLine__9cGD_LFB15RCt6tPoint1ZlUlG6cColor	cGD_LFB15::HLine(const tPoint<long> &, unsigned long, cColor)
+0005bc10	LFB15_HLineAdd	LFB15_HLineAdd
+000814a0	Wait__20cSoundRecorderBuffer	cSoundRecorderBuffer::Wait()
+00082520	SetBuffer__6cMixerUlG12cSoundFormatUc	cMixer::SetBuffer(unsigned long, cSoundFormat, unsigned char)
+000908b0	GetAddr__Q25sWave5sData	sWave::sData::GetAddr()
+00059100	_._5cFont	cFont::~cFont()
+00092020	__ls__C12Log_SafeFilePCc	Log_SafeFile::__ls(const char *) const
+00050530	_._18cSharedData_Bitmap	cSharedData_Bitmap::~cSharedData_Bitmap()
+00097370	Ungrab__9cKeyboard	cKeyboard::Ungrab()
+00077650	Line__9cGD_SFB16RCt6tPoint1ZlT1G6cColor	cGD_SFB16::Line(const tPoint<long> &, const tPoint<long> &, cColor)
+000870e0	_GLOBAL_.I.VVC	_GLOBAL_.I.VVC
+000c7124	__ti15cIPCSession_IPX	cIPCSession_IPX type_info node
+0009c304	__vt_18cSharedData_Bitmap	cSharedData_Bitmap virtual table
+00074d30	PutBitmap_I__8cGD_LFB8R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB8::PutBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0007a190	IsConnected__17cIPCOStream2Block	cIPCOStream2Block::IsConnected()
+00045c10	__10cVOAButtonRCt6tPoint1ZlR7cBitmapT2R5cFontPCc23eVOAButtonTextAlignmentT1bN28UsP8cVObject	cVOAButton::cVOAButton(const tPoint<long> &, cBitmap &, cBitmap &, cFont &, const char *, eVOAButtonTextAlignment, const tPoint<long> &, bool, bool, bool, unsigned short, cVObject *)
+0007b010	__as__12cKeySequencePCc	cKeySequence::operator=(const char *)
+0008b190	__10sVModeInfoRC10cDimension7eBMType	sVModeInfo::sVModeInfo(const cDimension &, eBMType)
+0007b640	__9cMemBlockUl	cMemBlock::cMemBlock(unsigned long)
+00079170	IsDataAvailable__9cIPCO_IPXPC8cTime_US	cIPCO_IPX::IsDataAvailable(const cTime_US *)
+00065b70	IsAsyncRefreshCapable__9cGD_LFB15	cGD_LFB15::IsAsyncRefreshCapable()
+00087bd0	HLineSub__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::HLineSub(const tPoint<long> &, unsigned long, cColor)
+00078810	VLineAdd__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::VLineAdd(const tPoint<long> &, unsigned long, cColor)
+000c6e64	__ti12cData_Bitmap	cData_Bitmap type_info node
+00048380	__10cVOListReqRCt6tPoint1ZlUlR7cBitmapT3R5cFontPPCc	cVOListReq::cVOListReq(const tPoint<long> &, unsigned long, cBitmap &, cBitmap &, cFont &, const char **)
+00087a70	GetBuffer0GD__4cVVC	cVVC::GetBuffer0GD()
+000983b0	_._8cPointer	cPointer::~cPointer()
+000678a0	PutBitmapSub_I__9cGD_LFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB16::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00046570	Press__10cVOAButton	cVOAButton::Press()
+0004e020	MakeAnimBitmap__15LastChance_TER0R11cAnimBitmapUl	LastChance_TER0::MakeAnimBitmap(cAnimBitmap &, unsigned long)
+00076060	CalcModulo__8cGD_LFB8Ul	cGD_LFB8::CalcModulo(unsigned long)
+00082760	GetNuberOfFrames__20cSoundRecorderBuffer	cSoundRecorderBuffer::GetNuberOfFrames()
+000adb20	__vt_5cTask	cTask virtual table
+00093d60	GetSession__17cIPCBrowser_TCPIPUl	cIPCBrowser_TCPIP::GetSession(unsigned long)
+000804c0	GetNextEvent__8cPointer	cPointer::GetNextEvent()
+00075ca0	FillAlfa__8cGD_LFB8G6cColorRC10cRectangle	cGD_LFB8::FillAlfa(cColor, const cRectangle &)
+0008f130	__tf10cIntuition	cIntuition type_info function
+0005bb10	LFB15_PutBitmapAdd	LFB15_PutBitmapAdd
+0005b710	List__19cHeap_Compatibility	cHeap_Compatibility::List()
+00087c50	HLine__11cGD_MinimalRCt6tPoint1ZlUlG6cColor	cGD_Minimal::HLine(const tPoint<long> &, unsigned long, cColor)
+000968c0	Filter__5sTER1	sTER1::Filter()
+00094580	__tf16cIPXSocket_Linux	cIPXSocket_Linux type_info function
+00077b50	SaveBitmap_I__8cGD_SFB8R7cBitmapRC10cRectangleRCt6tPoint1Zl	cGD_SFB8::SaveBitmap_I(cBitmap &, const cRectangle &, const tPoint<long> &)
+0006f8d0	_._9cGD_LFB24	cGD_LFB24::~cGD_LFB24()
+00092180	_._8Log_File	Log_File::~Log_File()
+00082ea0	GetSample__3cAO	cAO::GetSample()
+00077f20	PutAnimBitmap_I__8cGD_SFB8R11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB8::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00044f50	GetVO__10cVOConsole	cVOConsole::GetVO()
+00085800	CreateGD__7cBitmap	cBitmap::CreateGD()
+0005fd10	SFB8_Fill	SFB8_Fill
+0005fc70	SFB16_PutBitmap8_AMask	SFB16_PutBitmap8_AMask
+00098510	__thunk_12_GetFormat__25cSoundChannel_SoftwareMix	[thunk 12] cSoundChannel_SoftwareMix::GetFormat()
+000a0845	LDBRET_Ok	LDBRET_Ok
+00048e70	SetSample__10cVOListReqR7cSample	cVOListReq::SetSample(cSample &)
+00054720	__tf8cVOFiler	cVOFiler type_info function
+00097730	Paint__10cVOSliderVR3cGDRCt6tPoint1ZlRC10cRectangle	cVOSliderV::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+0005a6f0	Process__10cVOTextBoxR6sInput	cVOTextBox::Process(sInput &)
+00080680	__4cVCD	cVCD::cVCD()
+000c6db4	__ti12cApplication	cApplication type_info node
+0005b540	_._9cVOBitmap	cVOBitmap::~cVOBitmap()
+000aefcc	VVC	VVC
+00087d70	PutAnimBitmap_I__11cGD_MinimalR11cAnimBitmapUlRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutAnimBitmap_I(cAnimBitmap &, unsigned long, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0006f8a0	__tf9cGD_LFB24	cGD_LFB24 type_info function
+0005f1d0	__tf6cHNode	cHNode type_info function
+000aefc0	MsgCenter	MsgCenter
+000a8468	__vt_25cSoundChannel_SoftwareMix	cSoundChannel_SoftwareMix virtual table
+0005ec20	MapAllSymbol__11cLibPointer	cLibPointer::MapAllSymbol()
+0009bd48	__vt_16cData_AnimBitmap.10cMemBlock_	cData_AnimBitmap virtual table (base cMemBlock_)
+00090b30	Cosh__6DOUBLE	DOUBLE::Cosh()
+0007fae0	Construct__8cPaletteUl	cPalette::Construct(unsigned long)
+00095920	Stop__7cThread	cThread::Stop()
+000433c0	_._10cVOConsole	cVOConsole::~cVOConsole()
+000574f0	GetNumberOfSubChunks__10sFLC_Chunk	sFLC_Chunk::GetNumberOfSubChunks()
+000479e0	IsIntuitionRequired__12cApplication	cApplication::IsIntuitionRequired()
+0005dd10	LFB24_FillSub	LFB24_FillSub
+000787b0	HLineAlfa__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00085730	__tf11cMsgRecNode	cMsgRecNode type_info function
+000530f0	GetCount__7cEnvVar	cEnvVar::GetCount()
+000945f0	__tf11cFileSystem	cFileSystem type_info function
+0004a7a0	_Validate__13cAnimSkeleton	cAnimSkeleton::_Validate()
+00047b00	SoundRequired__12cApplication	cApplication::SoundRequired()
+0004fbb0	__16cData_AnimBitmap	cData_AnimBitmap::cData_AnimBitmap()
+00090a30	__amd__6DOUBLET0	DOUBLE::operator%=(DOUBLE)
+0006ba50	VLineAlfa__9cGD_LFB16RCt6tPoint1ZlUlG6cColor	cGD_LFB16::VLineAlfa(const tPoint<long> &, unsigned long, cColor)
+0005c030	LFB15_PutBitmap8AlfaC1_AMask	LFB15_PutBitmap8AlfaC1_AMask
+000af100	__vt_8cLibrary	cLibrary virtual table
+0009bd30	__vt_13cData_MapItem.10cMemBlock_	cData_MapItem virtual table (base cMemBlock_)
+00097460	_._6cMouse	cMouse::~cMouse()
+0004fe30	__tf13cData_Palette	cData_Palette type_info function
+0007bb90	Push__11cMemoryPipePCvUl	cMemoryPipe::Push(const void *, unsigned long)
+00082710	_._16cSoundCard_Dummy	cSoundCard_Dummy::~cSoundCard_Dummy()
+00096e70	__9cFFHidden	cFFHidden::cFFHidden()
+000523c0	SetPoiFontOffset__10cVOEditRowGt6tPoint1Zl	cVOEditRow::SetPoiFontOffset(tPoint<long>)
+000928f0	IsHidden__11cDirentname	cDirentname::IsHidden()
+00079d30	GetNumberOfSessions__15cIPCBrowser_IPX	cIPCBrowser_IPX::GetNumberOfSessions()
+000af240	__vt_10cIPXSocket	cIPXSocket virtual table
+0005bfb0	LFB15_PutBitmap8Sub	LFB15_PutBitmap8Sub
+00093e90	_._11cIPCO_TCPIP	cIPCO_TCPIP::~cIPCO_TCPIP()
+00087d90	PutBitmapSub_I__11cGD_MinimalR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00093c00	CreateTCPIPClient__FPCcUlb	CreateTCPIPClient(const char *, unsigned long, bool)
+0004cce0	SaveAsBMP__FR7cBitmapPCc	SaveAsBMP(cBitmap &, const char *)
+0005fb90	IsSolved__12cLocaleEntry	cLocaleEntry::IsSolved()
+0004b7e0	GetOffsetAddress__C11cAnimBitmap	cAnimBitmap::GetOffsetAddress() const
+00077570	VLineSub__9cGD_SFB16RCt6tPoint1ZlUlG6cColor	cGD_SFB16::VLineSub(const tPoint<long> &, unsigned long, cColor)
+00053110	__tf7cEnvVar	cEnvVar type_info function
+00057390	GetDataAddr__15sFLC_FrameColor	sFLC_FrameColor::GetDataAddr()
+0007a3c0	__17cIPCOStream2BlockP5cIPCOUlb	cIPCOStream2Block::cIPCOStream2Block(cIPCO *, unsigned long, bool)
+000c6e0c	__ti11cAnimBitmap	cAnimBitmap type_info node
+000823f0	DeleteChannel__22cSoundCard_SoftwareMixP13cSoundChannel	cSoundCard_SoftwareMix::DeleteChannel(cSoundChannel *)
+0006f750	HLineAlfa__9cGD_LFB24RCt6tPoint1ZlUlG6cColor	cGD_LFB24::HLineAlfa(const tPoint<long> &, unsigned long, cColor)
+00091ec0	SetVolume__9cCD_LinuxUs	cCD_Linux::SetVolume(unsigned short)
+00052340	FontWidth__10cVOEditRowc	cVOEditRow::FontWidth(char)
+0008d640	TimerProc__10cIntuition	cIntuition::TimerProc()
+00081860	FillUBM__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::FillUBM(unsigned long, cSoundChannel_SoftwareMix &)
+00043090	EnableLineWrap__8cConsolei	cConsole::EnableLineWrap(int)
+000c7300	__ti9cMasterVO	cMasterVO type_info node
+00090240	__tf8cVObject	cVObject type_info function
+00053cf0	HandleMultiLn__8cVOFiler	cVOFiler::HandleMultiLn()
+000a9340	__vt_11cGD_Minimal	cGD_Minimal virtual table
+0005daa0	LFB24_PutBitmap8Sub	LFB24_PutBitmap8Sub
+000554c0	Paint__22sFLC_FrameUncompressedR3cGDRC10cRectangle	sFLC_FrameUncompressed::Paint(cGD &, const cRectangle &)
+0004f9e0	__tf13cData_MapItem	cData_MapItem type_info function
+00096550	__tf12cPaletteFull	cPaletteFull type_info function
+00088390	Frame__3cGDRC10cRectangleG6cColorT1	cGD::Frame(const cRectangle &, cColor, const cRectangle &)
+0008ce90	GetRelPointerPos__8cVObject	cVObject::GetRelPointerPos()
+00097720	Process__10cVOSliderVR6sInput	cVOSliderV::Process(sInput &)
+0005e8f0	LFB32_FillAdd	LFB32_FillAdd
+00078c00	CreateIPXBrowser__10cIPCSystemUl	cIPCSystem::CreateIPXBrowser(unsigned long)
+000970e0	__thunk_24__._14cFLCAnimPlayer	[thunk 24] cFLCAnimPlayer::~cFLCAnimPlayer()
+00087dd0	PutBitmapAlfa_I__11cGD_MinimalR7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_Minimal::PutBitmapAlfa_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00079a10	GetIPCO__14cIPCServer_IPXUl	cIPCServer_IPX::GetIPCO(unsigned long)
+000986f0	__t5tList1Z12cMsgTypeNode	tList<cMsgTypeNode>::tList()
+000794c0	__14cIPCServer_IPXP10cIPXSocketPCc	cIPCServer_IPX::cIPCServer_IPX(cIPXSocket *, const char *)
+00082630	DeleteChannel__16cSoundCard_DummyP13cSoundChannel	cSoundCard_Dummy::DeleteChannel(cSoundChannel *)
+000776d0	__9cGD_SFB16G3PTRRC10cDimensionUl	cGD_SFB16::cGD_SFB16(PTR, const cDimension &, unsigned long)
+0006f7e0	IsAsyncRefreshCapable__9cGD_LFB24	cGD_LFB24::IsAsyncRefreshCapable()
+000aae1c	__vt_10cIntuition	cIntuition virtual table
+000788d0	HLine__8cGD_SFB8RCt6tPoint1ZlUlG6cColor	cGD_SFB8::HLine(const tPoint<long> &, unsigned long, cColor)
+00090060	CreateMirror__8cVObject7eBMType	cVObject::CreateMirror(eBMType)
+0008fe00	AddChildL__8cVObjectP8cVObject	cVObject::AddChildL(cVObject *)
+00052bb0	CreateVariable__9cEnvClassPCcT1	cEnvClass::CreateVariable(const char *, const char *)
+00080e80	ScreenShot__FPCc	ScreenShot(const char *)
+00084310	__apl__7cStringPCc	cString::operator+=(const char *)
+00095640	__dv__8cDayTimed	cDayTime::operator/(double)
+000922e0	_TimerFunction__Fi	_TimerFunction(int)
+0004e280	Load__16cData_AnimBitmap	cData_AnimBitmap::Load()
+00079430	Disconnect__9cIPCO_IPX	cIPCO_IPX::Disconnect()
+0005c700	LFB16_VLine	LFB16_VLine
+00079ca0	IsNewServer__15cIPCBrowser_IPXRC11cIPXAddress	cIPCBrowser_IPX::IsNewServer(const cIPXAddress &)
+00094420	IsTCPIPAvailable__16cIPCSystem_Linux	cIPCSystem_Linux::IsTCPIPAvailable()
+0005f270	DeleteList__5cList	cList::DeleteList()
+000af128	__vt_11cIPCBrowser	cIPCBrowser virtual table
+000800a0	GetColor16__C6cColor	cColor::GetColor16() const
+00079f30	CheckLifesign__15cIPCSession_IPXUl	cIPCSession_IPX::CheckLifesign(unsigned long)
+00093690	__16cIPCServer_TCPIPUlUlbi	cIPCServer_TCPIP::cIPCServer_TCPIP(unsigned long, unsigned long, bool, int)
+0009e28a	_9cTextFile.Encode2	_9cTextFile.Encode2
+000aefb0	SoundCard	SoundCard
+00079c20	_._15cIPCBrowser_IPX	cIPCBrowser_IPX::~cIPCBrowser_IPX()
+000788f0	Color2Index__8cGD_SFB8G6cColor	cGD_SFB8::Color2Index(cColor)
+0005efb0	UnLink__6cHNode	cHNode::UnLink()
+000775f0	PutBitmapSub_I__9cGD_SFB16R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_SFB16::PutBitmapSub_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+0005f200	_._6cHNode	cHNode::~cHNode()
+000a6570	__vt_9cMemBlock.10cMemBlock_	cMemBlock virtual table (base cMemBlock_)
+000a5e40	__vt_9cIPCO_IPX	cIPCO_IPX virtual table
+00081e20	FillSWM_LE__6cMixerUlR25cSoundChannel_SoftwareMix	cMixer::FillSWM_LE(unsigned long, cSoundChannel_SoftwareMix &)
+0005b670	__19cHeap_CompatibilityUl	cHeap_Compatibility::cHeap_Compatibility(unsigned long)
+0009c0a0	__vt_22cSharedData_AnimBitmap	cSharedData_AnimBitmap virtual table
+00070f10	PutBitmapAdd_I__9cGD_LFB32R7cBitmapRC10cRectangleRCt6tPoint1ZlP12cPaletteFull	cGD_LFB32::PutBitmapAdd_I(cBitmap &, const cRectangle &, const tPoint<long> &, cPaletteFull *)
+00096f30	__tft5tNode1Z8cFFilter	tNode<cFFilter> type_info function
+00042e90	DecraseLine__8cConsoleii	cConsole::DecraseLine(int, int)
+00000000	GCC.INTERNAL	GCC.INTERNAL

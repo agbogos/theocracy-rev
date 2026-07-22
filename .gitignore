@@ -1,0 +1,27 @@
+# ── Game distribution: binaries & assets ──────────────────────────────────
+# The original Theocracy binaries and data are copyrighted and NOT
+# redistributable. They must be provided out-of-band, not committed.
+#   /linux/    -> theocracy.real, libmvos*.so, server, ... (game dist)
+#   /data/cd   -> ~448M ripped CD assets
+#   /data/game -> ~184M extracted/decrypted game data
+# Kept on purpose: /data/*.tsv and /data/mvos_api.json (small derived symbol/
+# reloc reference tables the docs depend on; no copyrighted content).
+/linux/
+/data/cd/
+/data/game/
+
+# ── Build artifacts ───────────────────────────────────────────────────────
+/port/build/
+build/
+*.o
+*.obj
+*.a
+*.dylib
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# ── Editor / OS / local ───────────────────────────────────────────────────
+.DS_Store
+.claude/settings.local.json

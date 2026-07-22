@@ -1,0 +1,232 @@
+	__10cData_FontPCcb	cData_Font::cData_Font(const char *, bool)
+	__10cMsgSenderPc	cMsgSender::cMsgSender(char *)
+	__10cSemaphoreUlb	cSemaphore::cSemaphore(unsigned long, bool)
+	__10cVOAButtonRC10cRectangleR5cFontPCc23eVOAButtonTextAlignmentbN25UsP8cVObject	cVOAButton::cVOAButton(const cRectangle &, cFont &, const char *, eVOAButtonTextAlignment, bool, bool, bool, unsigned short, cVObject *)
+	__10cVOAButtonRCt6tPoint1ZlR7cBitmapT2bN24UsP8cVObject	cVOAButton::cVOAButton(const tPoint<long> &, cBitmap &, cBitmap &, bool, bool, bool, unsigned short, cVObject *)
+	__10cVOAButtonRCt6tPoint1ZlR7cBitmapT2R5cFontPCc23eVOAButtonTextAlignmentT1bN28UsP8cVObject	cVOAButton::cVOAButton(const tPoint<long> &, cBitmap &, cBitmap &, cFont &, const char *, eVOAButtonTextAlignment, const tPoint<long> &, bool, bool, bool, unsigned short, cVObject *)
+	__10cVOConsolei	cVOConsole::cVOConsole(int)
+	__10cVOListReqRCt6tPoint1ZlUlR7cBitmapT3R5cFontPPCc	cVOListReq::cVOListReq(const tPoint<long> &, unsigned long, cBitmap &, cBitmap &, cFont &, const char **)
+	__11cAnimBitmap	cAnimBitmap::cAnimBitmap()
+	__12cData_BitmapPCcb	cData_Bitmap::cData_Bitmap(const char *, bool)
+	__12cData_SamplePCc	cData_Sample::cData_Sample(const char *)
+	__12cKeySequence	cKeySequence::cKeySequence()
+	__12cLocaleEntryPCc	cLocaleEntry::cLocaleEntry(const char *)
+	__13cAnimSkeletonPCcUl	cAnimSkeleton::cAnimSkeleton(const char *, unsigned long)
+	__13cData_PalettePCc	cData_Palette::cData_Palette(const char *)
+	__14cSprABitmapAddR11cAnimBitmapT1	cSprABitmapAdd::cSprABitmapAdd(cAnimBitmap &, cAnimBitmap &)
+	__16cData_AnimBitmapPCcb	cData_AnimBitmap::cData_AnimBitmap(const char *, bool)
+	__6cShellPCc	cShell::cShell(const char *)
+	__7cBitmapRC10cDimension7eBMType	cBitmap::cBitmap(const cDimension &, eBMType)
+	__7cBitmapRC7cBitmap	cBitmap::cBitmap(const cBitmap &)
+	__7cDirentPCc	cDirent::cDirent(const char *)
+	__7cStringPCc	cString::cString(const char *)
+	__7cThread	cThread::cThread()
+	__ami__8cDayTimeT0	cDayTime::operator-=(cDayTime)
+	__apl__12cKeySequence8eKeyCode	cKeySequence::operator+=(eKeyCode)
+	__as__10cVOEditRowPCc	cVOEditRow::operator=(const char *)
+	__builtin_vec_delete	__builtin_vec_delete
+	__libc_init_first	__libc_init_first
+	__mi__8cDayTimeT0	cDayTime::operator-(cDayTime)
+	__opPc__7cString	cString::operator char *()
+	__pl__8cDayTimeT0	cDayTime::operator+(cDayTime)
+	__strtod_internal	__strtod_internal
+	__strtol_internal	__strtol_internal
+	__tf10cVOAButton	cVOAButton type_info function
+	__tf10cVOConsole	cVOConsole type_info function
+	__tf12cData_Bitmap	cData_Bitmap type_info function
+	__tf12cLocaleEntry	cLocaleEntry type_info function
+	__tf12cMsgReceiver	cMsgReceiver type_info function
+	__tf12cSoundNotify	cSoundNotify type_info function
+	__tf13cAnimSkeleton	cAnimSkeleton type_info function
+	__tf5cNode	cNode type_info function
+	__tf6cHNode	cHNode type_info function
+	__tf6cShell	cShell type_info function
+	__tf7cDirent	cDirent type_info function
+	__tf7cThread	cThread type_info function
+	__tf8cPalette	cPalette type_info function
+	__tf8cVObject	cVObject type_info function
+	__tf9cMemBlock	cMemBlock type_info function
+	__tf9cVOBitmap	cVOBitmap type_info function
+	__write	__write
+	_._10cData_Font	cData_Font::~cData_Font()
+	_._10cSemaphore	cSemaphore::~cSemaphore()
+	_._10cVOAButton	cVOAButton::~cVOAButton()
+	_._10cVOConsole	cVOConsole::~cVOConsole()
+	_._10cVOListReq	cVOListReq::~cVOListReq()
+	_._11cAnimBitmap	cAnimBitmap::~cAnimBitmap()
+	_._12cMsgReceiver	cMsgReceiver::~cMsgReceiver()
+	_._13cAnimSkeleton	cAnimSkeleton::~cAnimSkeleton()
+	_._13cData_MapItem	cData_MapItem::~cData_MapItem()
+	_._6cShell	cShell::~cShell()
+	_._7cScreen	cScreen::~cScreen()
+	_._7cString	cString::~cString()
+	_._7cThread	cThread::~cThread()
+	_exit	_exit
+	_mcleanup	_mcleanup
+	_Validate__10cMemBlock_	cMemBlock_::_Validate()
+	_Validate__12cData_Bitmap	cData_Bitmap::_Validate()
+	_Validate__13cAnimSkeleton	cAnimSkeleton::_Validate()
+	_Validate__8cPalette	cPalette::_Validate()
+	abort	abort
+	ActivateScreen__10cIntuitionP7cScreen	cIntuition::ActivateScreen(cScreen *)
+	Alloc__9cMemBlockUl	cMemBlock::Alloc(unsigned long)
+	atexit	atexit
+	BeginRefresh__7cScreen	cScreen::BeginRefresh()
+	Box__3cGDRC10cRectangleR7cBitmapUlG6cColorbT1	cGD::Box(const cRectangle &, cBitmap &, unsigned long, cColor, bool, const cRectangle &)
+	CalcAbsCoordTree__8cVObjectGt6tPoint1ZlG10cRectangle	cVObject::CalcAbsCoordTree(tPoint<long>, cRectangle)
+	ChangeShell__8cConsoleP6cShell	cConsole::ChangeShell(cShell *)
+	Clear__8cConsole	cConsole::Clear()
+	Close__5cFile	cFile::Close()
+	CloseAllInputFiles__Fv	CloseAllInputFiles()
+	Construct__7cBitmapRC10cDimension7eBMType	cBitmap::Construct(const cDimension &, eBMType)
+	Construct__8cPaletteUl	cPalette::Construct(unsigned long)
+	Construct__9cMemBlockUl	cMemBlock::Construct(unsigned long)
+	CopyMem	CopyMem
+	CountLines__9cTextFilePi	cTextFile::CountLines(int *)
+	Create__22cSharedData_AnimBitmapPCcb	cSharedData_AnimBitmap::Create(const char *, bool)
+	CreateDPal__10cVOAButton	cVOAButton::CreateDPal()
+	CreateGD__7cBitmap	cBitmap::CreateGD()
+	Delete__22cSharedData_AnimBitmapP22cSharedData_AnimBitmap	cSharedData_AnimBitmap::Delete(cSharedData_AnimBitmap *)
+	DeleteChildren__6cHNode	cHNode::DeleteChildren()
+	Edit__10cVOConsole	cVOConsole::Edit()
+	EndRefresh__7cScreen	cScreen::EndRefresh()
+	Equal__12cKeySequencePCc	cKeySequence::Equal(const char *)
+	exit	exit
+	External_PlayAnim__FPCcT0RC10cRectangle	External_PlayAnim(const char *, const char *, const cRectangle &)
+	Fatal__FPc	Fatal(char *)
+	fclose	fclose
+	fflush	fflush
+	FindClass__10cEnvSystemPCc	cEnvSystem::FindClass(const char *)
+	FindVariable__9cEnvClassPCc	cEnvClass::FindVariable(const char *)
+	fopen	fopen
+	fprintf	fprintf
+	Frame__3cGDRC10cRectangleG6cColorT1	cGD::Frame(const cRectangle &, cColor, const cRectangle &)
+	FrameAlpha__3cGDRC10cRectangleUlG6cColorbT1	cGD::FrameAlpha(const cRectangle &, unsigned long, cColor, bool, const cRectangle &)
+	free	free
+	Free__13cAnimSkeletonUl	cAnimSkeleton::Free(unsigned long)
+	Free__9cMemBlock	cMemBlock::Free()
+	GetBoundingBox__11cAnimBitmap	cAnimBitmap::GetBoundingBox()
+	GetHelpText__8cVObject	cVObject::GetHelpText()
+	GetIMouseButtons__10cIntuition	cIntuition::GetIMouseButtons()
+	GetPalette__11cAnimBitmapUl	cAnimBitmap::GetPalette(unsigned long)
+	GetPosition__5cFile	cFile::GetPosition()
+	GetRelPointerPos__8cVObject	cVObject::GetRelPointerPos()
+	GetTextLength__FR5cFontPCc	GetTextLength(cFont &, const char *)
+	GetValue__7cEnvVari	cEnvVar::GetValue(int)
+	Goto__9cTextFilei	cTextFile::Goto(int)
+	Hide__10cVOConsole	cVOConsole::Hide()
+	HLine___3cGDRCt6tPoint1ZllG6cColorRC10cRectangle	cGD::HLine_(const tPoint<long> &, long, cColor, const cRectangle &)
+	IdentifyFileSystem__FPCc	IdentifyFileSystem(const char *)
+	Initialize__10cVOAButton	cVOAButton::Initialize()
+	Initialize__8cVObject	cVObject::Initialize()
+	InitTree__8cVObject	cVObject::InitTree()
+	IsBlockMode__5cFile	cFile::IsBlockMode()
+	IsFileName__12cLocaleEntry	cLocaleEntry::IsFileName()
+	IsGottaRemove__8cVObject	cVObject::IsGottaRemove()
+	IsInFocus__8cVObject	cVObject::IsInFocus()
+	IsLinked__C5cNode	cNode::IsLinked() const
+	IsOpen__C5cFile	cFile::IsOpen() const
+	IsValid__10cMemBlock_	cMemBlock_::IsValid()
+	Kill__7cThread	cThread::Kill()
+	Launch__7cThread	cThread::Launch()
+	Load__15cLocaleDataBasePCcb	cLocaleDataBase::Load(const char *, bool)
+	Load__5cFileb	cFile::Load(bool)
+	Lock__10cSemaphore	cSemaphore::Lock()
+	main	main
+	malloc	malloc
+	memcpy	memcpy
+	monstartup	monstartup
+	MoveToCenter__8cVObjectP8cVObject	cVObject::MoveToCenter(cVObject *)
+	Notify__8cVObjectRC10sVOMessage	cVObject::Notify(const sVOMessage &)
+	Open__10cDirectory	cDirectory::Open()
+	OpenDisplay__4cVVCRC13cVModeRequest	cVVC::OpenDisplay(const cVModeRequest &)
+	OpenR__5cFileb	cFile::OpenR(bool)
+	OpenR__9cTextFileb	cTextFile::OpenR(bool)
+	OpenW__5cFile	cFile::OpenW()
+	Paint__10cVOAButtonR3cGDRCt6tPoint1ZlRC10cRectangle	cVOAButton::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+	Paint__9cVOBitmapR3cGDRCt6tPoint1ZlRC10cRectangle	cVOBitmap::Paint(cGD &, const tPoint<long> &, const cRectangle &)
+	Play__12cSoundServerR3cAO	cSoundServer::Play(cAO &)
+	Play__13cAnimSkeletonb	cAnimSkeleton::Play(bool)
+	Play__4cVCDUl	cVCD::Play(unsigned long)
+	PlayFLCFile__FPcR3cGDRCt6tPoint1Zli	PlayFLCFile(char *, cGD &, const tPoint<long> &, int)
+	PlayLoop__12cSoundServerR3cAO	cSoundServer::PlayLoop(cAO &)
+	Press__10cVOAButton	cVOAButton::Press()
+	Print__8cConsolePCce	cConsole::Print(const char *, ...)
+	printf	printf
+	Process__10cVOAButtonR6sInput	cVOAButton::Process(sInput &)
+	Process__8cConsolePCc	cConsole::Process(const char *)
+	Process__9cVOBitmapR6sInput	cVOBitmap::Process(sInput &)
+	ProcIniFile__10cEnvSystemPCcUl	cEnvSystem::ProcIniFile(const char *, unsigned long)
+	pthread_create	pthread_create
+	pthread_getspecific	pthread_getspecific
+	pthread_key_create	pthread_key_create
+	pthread_key_delete	pthread_key_delete
+	pthread_mutex_lock	pthread_mutex_lock
+	pthread_mutex_trylock	pthread_mutex_trylock
+	pthread_mutex_unlock	pthread_mutex_unlock
+	pthread_once	pthread_once
+	pthread_setspecific	pthread_setspecific
+	puts	puts
+	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, cPaletteFull *)
+	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlRC10cRectangle14eTextAlignmentP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, const cRectangle &, eTextAlignment, cPaletteFull *)
+	PutText__FR3cGDR5cFontPCcGt6tPoint1ZlRC10cRectangleP12cPaletteFull	PutText(cGD &, cFont &, const char *, tPoint<long>, const cRectangle &, cPaletteFull *)
+	RawkeyToAscii__9cKeyboard8eKeyCodeUc	cKeyboard::RawkeyToAscii(eKeyCode, unsigned char)
+	Read__5cFilePvUl	cFile::Read(void *, unsigned long)
+	Read__9cTextFilePvUl	cTextFile::Read(void *, unsigned long)
+	ReadLine__9cTextFilePci	cTextFile::ReadLine(char *, int)
+	Refresh__8cVObject	cVObject::Refresh()
+	RefreshFocus__10cIntuition	cIntuition::RefreshFocus()
+	RefreshTree__8cVObject	cVObject::RefreshTree()
+	Release__10cVOAButton	cVOAButton::Release()
+	remove	remove
+	Reset__12cKeySequence	cKeySequence::Reset()
+	RestoreShell__8cConsole	cConsole::RestoreShell()
+	Rnd__7cRandom	cRandom::Rnd()
+	Round__6DOUBLE	DOUBLE::Round()
+	SaveAsBMP__FR7cBitmapPCc	SaveAsBMP(cBitmap &, const char *)
+	ScreenShot__FPCc	ScreenShot(const char *)
+	SeekB__5cFilel	cFile::SeekB(long)
+	SeekB__9cTextFilel	cTextFile::SeekB(long)
+	SeekC__5cFilel	cFile::SeekC(long)
+	SeekE__5cFilel	cFile::SeekE(long)
+	Send__10cMsgSenderG3PTR	cMsgSender::Send(PTR)
+	Set__8cDayTimell	cDayTime::Set(long, long)
+	SetBlockMode__5cFileb	cFile::SetBlockMode(bool)
+	SetBySys__8cDayTime	cDayTime::SetBySys()
+	SetCP__11cAnimBitmapUlRCt6tPoint1Zl	cAnimBitmap::SetCP(unsigned long, const tPoint<long> &)
+	SetExitKey__10cVOConsole8eKeyCodeUc	cVOConsole::SetExitKey(eKeyCode, unsigned char)
+	SetPalette__7cScreenR8cPalette	cScreen::SetPalette(cPalette &)
+	SetPointer__7cScreenP7cSprite	cScreen::SetPointer(cSprite *)
+	SetRepeatMode__10cVOAButtonb	cVOAButton::SetRepeatMode(bool)
+	SetRepeatValues__10cVOAButtonUlUlUlUl	cVOAButton::SetRepeatValues(unsigned long, unsigned long, unsigned long, unsigned long)
+	SetSample__10cVOAButtonR7cSample	cVOAButton::SetSample(cSample &)
+	SetSample__10cVOListReqR7cSample	cVOListReq::SetSample(cSample &)
+	SetSoundSrv__10cVOAButtonR12cSoundServer	cVOAButton::SetSoundSrv(cSoundServer &)
+	SetSoundSrv__10cVOListReqR12cSoundServer	cVOListReq::SetSoundSrv(cSoundServer &)
+	Setup__10cVOConsoleP10cIntuitionRC10cRectangleR10cData_Fontb	cVOConsole::Setup(cIntuition *, const cRectangle &, cData_Font &, bool)
+	SetVolume__3cAORC7cVolume	cAO::SetVolume(const cVolume &)
+	Show__10cVOConsole	cVOConsole::Show()
+	Sleep__11cSyncSystemUl	cSyncSystem::Sleep(unsigned long)
+	sprintf	sprintf
+	Sqrt__6DOUBLE	DOUBLE::Sqrt()
+	sscanf	sscanf
+	Stop__3cAO	cAO::Stop()
+	StopAll__12cSoundServer	cSoundServer::StopAll()
+	strcat	strcat
+	strchr	strchr
+	strcmp	strcmp
+	strcpy	strcpy
+	strncpy	strncpy
+	strrchr	strrchr
+	strtok	strtok
+	Subscribe__12cMsgReceiverPcUsb	cMsgReceiver::Subscribe(char *, unsigned short, bool)
+	Tile__3cGDRC10cRectangleR7cBitmapT1	cGD::Tile(const cRectangle &, cBitmap &, const cRectangle &)
+	UnLink__5cNode	cNode::UnLink()
+	UnLinkList__5cList	cList::UnLinkList()
+	Unlock__10cSemaphore	cSemaphore::Unlock()
+	Use__13cSystemMemoryR9cMemBlock	cSystemMemory::Use(cMemBlock &)
+	VLine___3cGDRCt6tPoint1ZllG6cColorRC10cRectangle	cGD::VLine_(const tPoint<long> &, long, cColor, const cRectangle &)
+	VM_GetCDRomName__Fv	VM_GetCDRomName()
+	VM_GetFrameCounter__Fv	VM_GetFrameCounter()
+	Wait__7cThread	cThread::Wait()
+	Write__5cFilePCvUl	cFile::Write(const void *, unsigned long)
