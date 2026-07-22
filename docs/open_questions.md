@@ -31,16 +31,25 @@ Consolidated list of remaining threads, deduped from the per-subsystem docs. Rou
 16. **Asset loaders** — the `c…` (runtime) ↔ `s…` (on-disk) pairings: FLC video, `sSPR1` / `sTER1` sprites & terrain, bitmap / font / sample / palette formats.
 17. **Memory loose ends** — `priority` (`cMemBlock+0x18`) role in eviction order; `cHeap_Compatibility` / `cHeapBlock` (second allocator) vs. `cSystemMemory`; `cMemBlockPTR` RAII semantics.
 
-## macOS HLE emulator (new — see [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md))
+## macOS port (see [porting/guest-libmvos.md](porting/guest-libmvos.md))
+
+> **Approach pivoted (2026-07-22) to guest-libmvos** — real libmvos runs under
+> Unicorn, so questions that only mattered for *reimplementing* libmvos are now
+> **moot**: #13 (`cGD` LFB blit pipeline), #21 (`eBMType` enum), #22 (`cThread`
+> subclass census, for a native scheduler), #23 (MVOS object layouts the game
+> inlines). The libc surface (#25) is implemented (0 unimplemented traps). The
+> game-logic threads (#1–12, #16–19) remain valid — they're about the game's own
+> internals, independent of the port approach.
+
 20. ~~Decompile libmvos `main`~~ **DONE** — boot sequence documented in [subsystems/application-bootstrap.md](subsystems/application-bootstrap.md); next: `LoadDevicePlugins` (`0xa4990`).
 21. **`eBMType` enum** — full value table (vvc_x gives 2/4/5/6/7; 6 vs 7 distinction unknown; used everywhere in bitmap ctors).
 22. **Game-side `cThread` subclass census** — how many guest threads exist and what they do (sizes the green-thread scheduler). Search game vtables for `cThread` method slots.
 23. **MVOS object layouts the game inlines** — systematic pass: which imported classes' fields does game code touch directly? (Determines the layout-compatibility surface for HLE objects; cString/cNode/cMemBlock already done in [subsystems/memory-and-containers.md](subsystems/memory-and-containers.md).)
 24. ~~**`inst.linux` `Unpack` format** — RE the installer's container to build a native CD-data extractor.~~ **RESOLVED** — the `.pck` packs are gzip-wrapped **PHLS** archives (flattened DFS record block + contiguous data); `tools/phls_extract.py` extracts byte-exact (`tdat.pck` → 7191 files under `data/game/data/`). Format: [reference/phls-format.md](reference/phls-format.md). Two follow-ups fell out:
     - ~~**27. `RSA4096` text/config encryption**~~ **RESOLVED** — symmetric XOR with two repeating keys (`"theocracy sux"` period 13, `"mutant technology"` period 17) over the body after the 7-byte `RSA4096` header (user supplied the recovered `XorBuff`, in `tools/crypt/TheocracyEncDec.cpp`). Verified byte-exact. Tool: `tools/theocracy_crypt.py`. M2 ports `XorBuff` into the HLE `cTextFile` read path.
-    - **28. `mvos.cfg` source** — not in the packs; `inst.linux` installs it. Reconstruct from the `EnvSystem` keys the boot reads, or RE `inst.linux`.
-25. **libc import audit** — the ~30 libc symbols the game imports (incl. glibc-internal `__strtod_internal`/`__strtol_internal`); implement by behavior.
-26. **Game data** — obtain the CD/ISO (hard blocker for emulator M2+).
+    - ~~**28. `mvos.cfg` source**~~ **RESOLVED** — not in the packs; we ship a hand-authored minimal `data/game/mvos.cfg` (the libmvos cfg loader reads it), tracked via a `.gitignore` carve-out. Reconstructed from the `EnvSystem` keys the boot reads (`[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`, `[sound] card`, `[network] enable`).
+25. ~~**libc import audit**~~ **RESOLVED** — the ~30 libc symbols (incl. glibc-internal `__strtod_internal`/`__strtol_internal`) plus pthread/dl/sockets/SMPEG are implemented in the HLE OS-shim (`port/src/traps.cpp`); a full boot into gameplay shows **0 unimplemented traps**.
+26. ~~**Game data** — obtain the CD/ISO~~ **RESOLVED** — user provided the CD in `data/cd/`; runtime reads assets from there (`/mnt/cdrom` remapped) and from `data/game/` (extracted packs).
 
 ## Minor / deferred
 18. Map loader `FUN_081c7a00` → actual file read (deferred).

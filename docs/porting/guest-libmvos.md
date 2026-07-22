@@ -87,7 +87,7 @@ implemented traps: 18 (~114k calls)
 UNIMPLEMENTED: 3 low-freq (see trap report)
 ```
 
-## G4 — plugins, OpenSubsystems, Start (in progress)
+## G4 — plugins, OpenSubsystems, Start (done)
 
 ### Landed
 - Libc: `strncmp`, `__strtol_internal`, `__strtod_internal`, `gettimeofday`, `strcat`, sockets/`pipe`/`fcntl`/`sem_*`/`setitimer` stubs

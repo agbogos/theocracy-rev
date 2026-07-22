@@ -25,7 +25,7 @@ Running document — kept concise; append findings as we go.
 | `inst.linux`, `uninst.linux` | installer/uninstaller. `inst.linux` is **fully unstripped** (518 syms): zlib statically linked + `Unpack(cString, cString, cDirEntry)` — RE target for a native CD-data extractor |
 | `readme.linux` | notes the 15/16bpp requirement (root-caused in vvc_x doc) and the broken in-game MP-server spawn (root-caused: `cTask::Launch` fork/execlp + era glibc bug) |
 
-Game **data is not in this folder** — installed from CD by `inst.linux` into `/usr/games/theocracy_base/data`. A CD image is still needed for anything past emulator milestone M1.
+Game **data is not in this folder** — installed from CD by `inst.linux` into `/usr/games/theocracy_base/data`. The CD has since been provided (`data/cd/`) and the packs extracted to `data/game/` — see [reference/phls-format.md](reference/phls-format.md); no longer a blocker.
 
 ## Heritage note — MVOS is an AmigaOS homage, not a port
 
@@ -90,7 +90,7 @@ The API recreates AmigaOS concepts on Linux: `cIntuition`+`cScreen`/`ActivateScr
 - **Application bootstrap — first pass done (since corrected).** See [subsystems/application-bootstrap.md](subsystems/application-bootstrap.md). Key result: **`main()` lives in libmvos** (Ghidra `0xa51e0`) and calls the game's exported `Init`/`Start` — full framework inversion. Platform: MPEG via **SMPEG**, device backends **dlopen'd** (shipped family is **X11**, see [porting/vvc_x-backend.md](porting/vvc_x-backend.md)), SIGALRM heartbeat, BSD sockets + IPX, pthreads. Engine and game are **mutually linked** (game exports 348 symbols back).
 - **Audio / threads / processes — first pass done.** See [subsystems/platform-audio-threads.md](subsystems/platform-audio-threads.md). OSS `/dev/dsp` + software mixer on a `cThread` (pthread+pipe); `cTask` = fork/execlp.
 - **Video plugin — fully decompiled.** See [porting/vvc_x-backend.md](porting/vvc_x-backend.md): complete backend contract incl. `SetVideoMode` depth table, no-op `ShowBuffer`, event pump.
-- **Porting strategy chosen:** HLE emulator on macOS — see [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) for architecture, ABI contract, milestones.
+- **Port — PLAYABLE (guest-libmvos):** both `theocracy.real` and real `libmvos.so` run under Unicorn; only the OS/library boundary is HLE'd. Single-player is playable end-to-end. See [porting/guest-libmvos.md](porting/guest-libmvos.md). (The earlier pure-HLE native-replace plan in [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) is superseded but remains the best ABI-contract/boot writeup.)
 
 ## Open questions / next steps
 - Confirm `cGD` base vs. `_LFB*` backend dispatch (vtable layout).

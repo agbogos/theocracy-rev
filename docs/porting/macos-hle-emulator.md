@@ -1,5 +1,16 @@
 # macOS native port — HLE emulator plan
 
+> **⚡ SUPERSEDED (2026-07-22) — pivoted to guest-libmvos.** This documents the
+> *pure-HLE native-replace* approach: run only the game under Unicorn and
+> reimplement the entire libmvos API natively. It worked up the boot/Init path
+> but hit the wall that rendering the menu required hand-reimplementing the whole
+> libmvos GUI toolkit (every widget ctor / `Init` / `Paint` / `cGD` primitive /
+> font / bitmap — an unbounded surface). The project now maps **both**
+> `theocracy.real` **and** the real `libmvos.so` under Unicorn and HLE-only the
+> finite OS/library boundary — see **[guest-libmvos.md](guest-libmvos.md)** (the
+> current architecture, playable). Kept as historical record; the ABI/boot RE
+> facts below remain accurate, but the *approach* is not current.
+
 The chosen porting strategy for modern macOS (Apple Silicon). Decision: **no OS-level emulation, no VM, keep `theocracy.real` byte-for-byte intact** → build a bespoke user-mode emulator that executes the game's i386 code and **high-level-emulates (HLE) the entire libmvos API boundary natively** (SDL/Metal/CoreAudio). The same philosophy as a console emulator: the game binary is sacred, the platform is reimplemented.
 
 Why this boundary works (all confirmed by RE — see the contract inventory below):

@@ -2,6 +2,12 @@
 
 `vvc_x` is one of the game's `dlopen`'d display plugins. It's a small (~27 KB `.text`), unstripped GCC 2.x shared object that turns the engine's abstract display into an **X11 window presented via MIT-SHM**. This is the reference implementation for any modern port — it fully specifies the backend seam.
 
+> **Still current as a reference.** Under the [guest-libmvos](guest-libmvos.md)
+> architecture we don't run this plugin: real libmvos's `dlopen`/`dlsym` are
+> HLE'd (synthetic device objects), and `OpenDisplay`/`SwapBuffers` are trapped
+> to a native SDL RGB565 backend (`port/src/video.cpp`). The seam below is what
+> those traps implement.
+
 ## Backend seam (the whole replaceable surface)
 Two layers, both small:
 

@@ -1,15 +1,18 @@
 # Theocracy RE — docs
 
-Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linux binaries: `libmvos.so` engine + game executable + device plugins. **Project goal: a native macOS port via an HLE emulator** (keep `theocracy.real` byte-for-byte intact, reimplement the libmvos boundary natively) — see [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md).
+Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linux binaries: `libmvos.so` engine + game executable + device plugins. **Project goal: run Theocracy natively on modern macOS (Apple Silicon).**
+
+**Current architecture — [porting/guest-libmvos.md](porting/guest-libmvos.md) (playable):** map **both** `theocracy.real` and the real `libmvos.so` under Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl / sockets / SMPEG). Single-player is playable (menu → realm → units, war, save/load, cutscenes with audio). The earlier *pure-HLE native-replace* plan ([porting/macos-hle-emulator.md](porting/macos-hle-emulator.md), M1/M2) is **superseded** — it hit an unbounded GUI-reimplementation wall; kept as historical record + a source of RE'd layouts. Working docs live at repo root: `../task_fifo.md` (remaining work) and `../user-test.md` (manual QA pass).
 
 ## Index
 - [overview.md](overview.md) — binary facts, distribution inventory, heritage note, full class/subsystem map
 - [open_questions.md](open_questions.md) — remaining threads / TODO backlog
 - **Porting**
-  - [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) — **the port plan**: HLE architecture, game↔engine ABI contract (232 imports / 348 exports), boot sequence, subsystem contracts, milestones
-  - [porting/m1-loader.md](porting/m1-loader.md) — **M1 DONE**: the working ELF loader + Unicorn bring-up (`port/`); confirmed ELF facts, trap mechanism, and the M2 worklist
-  - [porting/m2-core.md](porting/m2-core.md) — **M2 in progress**: native MVOS layer — vtable synthesis (native↔guest virtual dispatch), singleton wiring, first method handlers; ctor faults 2→1
-  - [porting/vvc_x-backend.md](porting/vvc_x-backend.md) — the X11+MIT-SHM display/input plugin, fully decompiled; the video/input contract for any replacement backend
+  - [porting/guest-libmvos.md](porting/guest-libmvos.md) — **★ CURRENT ARCHITECTURE (playable)**: dual-image linker (`guestlink.cpp`), the OS-boundary HLE surface, render/input/audio/MPEG bring-up (milestone log G1–G11)
+  - [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) — *superseded* pure-HLE plan; still the best writeup of the game↔engine ABI contract (232 imports / 348 exports), boot sequence, subsystem contracts
+  - [porting/m1-loader.md](porting/m1-loader.md) — *superseded* (single-image loader); confirmed ELF facts + trap mechanism that carried into `guestlink`
+  - [porting/m2-core.md](porting/m2-core.md) — *superseded* (pure-HLE native MVOS layer); source of RE'd struct layouts (vtables, singletons, `cTextFile`, render boundary)
+  - [porting/vvc_x-backend.md](porting/vvc_x-backend.md) — the X11+MIT-SHM display/input plugin, fully decompiled; the video/input contract the SDL backend traps implement
 - **Reference**
   - [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) — **M0 deliverable**: full demangled API (252 classes / 2400 exports / the 232-symbol HLE boundary). Generated artifacts in `data/`; tooling in `tools/` (GNU-v2 demangler + inventory builder + `regen_api.sh`).
   - [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS** archive format + `tools/phls_extract.py` (extracts the CD game data → `data/game/`); the `RSA4096` XOR text-encryption (`tools/theocracy_crypt.py`)
@@ -51,8 +54,8 @@ Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linu
 | Game flow / main loop | first pass done |
 | In-game loop & simulation | first pass done |
 | SimulationStep (one tick) | first pass done (units-mgr is next) |
-| **macOS HLE emulator — M0 (API inventory + headers)** | **DONE — GNU-v2 demangler, 252-class inventory, 232-symbol trap boundary, `include/mvos_api.hpp`; see [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md)** |
-| **macOS HLE emulator — M1 (loader + bring-up)** | **DONE — `port/` C++/Unicorn host: maps ELF, traps 232 imports, runs 215 `.ctors`, calls `Init`, all 9 flags `0→1`; see [porting/m1-loader.md](porting/m1-loader.md)** |
-| **macOS HLE emulator — M2 core (native MVOS layer)** | **in progress — vtable synthesis (34 vtables/157 slots), 10 singletons, first handlers; `.ctors` faults 2→1; see [porting/m2-core.md](porting/m2-core.md)** |
-| **macOS HLE emulator — next** | M2 cont.: `cSystemMemory` + `cFile`/`cTextFile` (+RSA4096) + system asset globals → video → first pixels. CD data extracted (`data/game/`). |
+| macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp`; see [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) |
+| macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted; see banners in [m1-loader.md](porting/m1-loader.md) / [m2-core.md](porting/m2-core.md) |
+| **macOS port — guest-libmvos (current)** | **PLAYABLE — dual-image emulator; single-player runs (menu → realm → units, war, save/load), cutscenes with audio, 0 unimplemented traps; see [porting/guest-libmvos.md](porting/guest-libmvos.md)** |
+| **macOS port — next** | Auto `R_386_COPY` singleton sync (linker) → abort/Fatal policy → province-view perf → breadth. Full list: `../task_fifo.md`; QA: `../user-test.md`. |
 | Everything else | mapped only (see overview) |

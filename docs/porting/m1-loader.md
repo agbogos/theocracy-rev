@@ -1,5 +1,12 @@
 # M1 — ELF loader + Unicorn bring-up (DONE)
 
+> **⚡ SUPERSEDED (2026-07-22) — pivoted to guest-libmvos.** M1 was the pure-HLE
+> loader (single image: `theocracy.real` only, all 232 libmvos imports trapped).
+> The current path uses a **dual-image** linker (`port/src/guestlink.cpp`) that
+> maps `theocracy.real` *and* real `libmvos.so`, and traps only the OS boundary
+> — see **[guest-libmvos.md](guest-libmvos.md)**. The ELF facts, trap mechanism,
+> and Unicorn setup below carried over; the single-image approach did not.
+
 The first executable milestone of the [macOS HLE emulator](macos-hle-emulator.md):
 load `theocracy.real`, wire the 232-import trap boundary, run the game's own
 C++ global constructors under emulation, call `cApplication::Init`, and read

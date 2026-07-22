@@ -1,5 +1,15 @@
 # M2 core — native MVOS layer (in progress)
 
+> **⚡ SUPERSEDED (2026-07-22) — pivoted to guest-libmvos.** M2 was the pure-HLE
+> effort to hand-reimplement libmvos natively (vtable synthesis, singleton
+> wiring, `cTextFile`, `sscanf`, the render-boundary imports, `PaintTree` /
+> `CalcAbsCoordTree`). It reached a live render loop but proved the GUI surface
+> unbounded. The project pivoted to running **real libmvos** under Unicorn —
+> see **[guest-libmvos.md](guest-libmvos.md)**. `port/src/mvos.cpp` /
+> `video.cpp`'s render code is left in tree but **not linked** (CMake comments
+> `mvos.cpp` out). Kept as historical record + a source of RE'd struct layouts;
+> the approach is not current.
+
 M2 = enough native HLE to reach the menu. This doc tracks the **core
 infrastructure** landed so far in [`port/`](../../port), on top of the
 [M1 loader](m1-loader.md). The through-line: replace M1's logging stubs with

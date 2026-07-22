@@ -3,10 +3,12 @@
 _Last updated: 2026-07-22._ Read this first, then `docs/README.md`.
 
 ## Goal
-Make **Theocracy** (Philos Laboratories, 2000; Linux binaries in `linux/`) run **natively on modern macOS** (Apple Silicon). Chosen approach, decided with the user — do **not** relitigate:
-- **HLE emulator**, not a VM, not OS-level emulation shims, not a decompile-first rewrite.
-- Keep `theocracy.real` **byte-for-byte intact**; run its i386 code under a CPU emulator (Unicorn) and **high-level-emulate the libmvos API boundary natively** (SDL/CoreAudio). Console-emulator philosophy: the game is sacred, the platform is reimplemented.
-- Full plan: `docs/porting/macos-hle-emulator.md`.
+Make **Theocracy** (Philos Laboratories, 2000; Linux binaries in `data/cd/linux/`) run **natively on modern macOS** (Apple Silicon). Not a VM, not OS-level emulation shims, not a decompile-first rewrite — the game binary stays byte-for-byte intact and its i386 code runs under Unicorn.
+
+### ⚡ Current architecture — guest-libmvos (PLAYABLE). Read `docs/porting/guest-libmvos.md`.
+Map **both** `theocracy.real` **and** the real `libmvos.so` under Unicorn; HLE-only the finite OS/library boundary (libc / pthread / dl / sockets / SMPEG). The real engine runs, so the GUI/render/asset code is not reimplemented by hand. **Single-player is playable**: menu → Single Player → realm → units (select/move), diplomacy/war, save/load, cutscenes with video+audio; 0 unimplemented traps. Remaining work: `task_fifo.md`; manual QA: `user-test.md`.
+
+**Pivot note.** The project originally pursued *pure-HLE native-replace* (run only the game, reimplement all of libmvos natively — `docs/porting/macos-hle-emulator.md`, M1/M2). That reached a live render loop but hit an unbounded GUI-reimplementation wall, so we pivoted (2026-07-22). The **"Done so far" and "M2 core" sections below are historical** — kept for the RE facts (ABI, boot, struct layouts) they contain, which still apply. `port/src/mvos.cpp`/`video.cpp`'s pure-HLE render code is left in tree but **not linked**.
 
 ## Why this is viable (all RE-confirmed)
 - The game links only `libmvos.so` + libc; **every OS dep (X11, OSS, pthreads, fork, sockets, CD) sits behind the libmvos boundary.**
@@ -51,22 +53,27 @@ Game-side Ghidra pass debunked the M1 guess: `DAT_085bf980` is **not** a mysteri
 
 **RENDER LOOP LIVE — the game drives the SDL window (this session).** Reimplemented the three render-boundary imports natively (`mvos.cpp`, from libmvos originals): `ActivateScreen__10cIntuition` (`0x9d830` — game's `cScreen` header IS a `cVModeRequest` w/h/depth@+0/+4/+8, root cVObject@+0x14; opens the SDL window + stores screen at `Intuition+0x24`, the active screen the render path reads), `BeginRefresh__7cScreen` (`0x9d2a0` → `Video::pump()`), `EndRefresh__7cScreen` (`0x9d2d0` → `Video::present()`; real one does `PaintTree(root, *(VVC+0x14))` + `SwapBuffers`). Plus a `cLocaleEntry` text placeholder (ctor points `+0x10` at the key string → non-null button labels). **`cApplication::Start` now runs end-to-end, NO fault**: boot → `Init` → `MainMenu_Run` builds all 11 buttons → `ActivateScreen` opens the window → `BeginRefresh`/`EndRefresh` loop presents frames, waiting on the event pipe (15s emulation timeout, clean). Placeholder gradient bg drawn on activation. `THEOC_START=1`.
 
-## Status (2026-07-22) — game is playable
+## Status (2026-07-22) — game is playable (guest-libmvos)
 
-Guest-libmvos path: dual ELF + HLE OS boundary + SDL present + Intuition input.
-**User-verified:** start game, move units, declare war. See `docs/porting/guest-libmvos.md`
-(G1–G9). G9 is **partially complete** (core loop running; polish open).
+Dual-image emulator: `theocracy.real` + real `libmvos.so` under Unicorn, HLE-only
+OS boundary, SDL present, Intuition input pipe. Full milestone log (G1–G11) in
+`docs/porting/guest-libmvos.md`. **User-verified:** start a game, move units,
+declare war, save/load. Landed since the pivot: menu click→realm, mouse via the
+`Intuition+0x28` pipe, `eKeyCode` keyboard + text fields, gameplay audio
+(`/dev/dsp`→SDL), setitimer→TimerSystem, **real game cursor sprite**, MPEG
+cutscenes via libav **with audio** (swresample→mixer). 0 unimplemented traps.
 
-### G10 polish (landed, partial)
-- **Audio:** SDL mixer; OSS `/dev/dsp` writes play on host
-- **MPEG:** libav decode (link `avformat/avcodec/avutil/swscale`); `THEOC_SKIP_MOVIES=1` to skip
-- **Cursor:** still debug crosshair (real sprite paint deferred)
+Build (needs `unicorn SDL2 avformat avcodec avutil swscale swresample` from brew):
+```sh
+cmake -S port -B port/build && cmake --build port/build
+DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc     # defaults to data/cd/linux/*
+```
 
-### Next
-1. Real game pointer sprite paint
-2. Hardening: COPY rebind, Fatal/abort, long sessions
-3. Deeper gameplay / multiplayer
-Run: `DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc`
+### Next (see `task_fifo.md`, top = first)
+1. **Auto `R_386_COPY` singleton sync** in the linker (drop the manual sync in `main.cpp`)
+2. **abort/Fatal policy** — loud-abort mode so latent faults surface
+3. **Province-view perf** (last open functional bug; also slow on the Win VM)
+4. Long-session stability, breadth (full UI surface, multiplayer)
 ## Gotchas / conventions (will bite you)
 - **Shell is zsh with `noclobber` ON** — use `>|` to overwrite files in Bash calls, or redirects fail with "file exists".
 - **Ghidra is via MCP, ONE binary at a time**; the user switches the open file manually — ask them. Load the ghidra MCP tool schemas via ToolSearch (`select:mcp__ghidra__...`) before calling.
