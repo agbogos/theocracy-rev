@@ -265,9 +265,10 @@ THEOC_SKIP_MOVIES=1 ./port/build/theoc   # fast boot
 ```
 
 ### Remaining debt
-- R_386_COPY rebind, Fatal/abort policy
+- Fatal/abort policy (non-fatal in bring-up)
 - Long-session stability, multiplayer
 - Province-view performance (also on Win VM)
+- *(R_386_COPY shared storage — fixed in G12)*
 
 ## G11 — keyboard eKeyCode + Intuition pipe (done)
 
@@ -284,6 +285,33 @@ matrix alone is not enough for text fields.
 **Fix:** full SDL scancode → eKey map; push type 8/0x10; matrices + qualifier
 byte (`Intuition+0xb0`); VKeyboard ring write idx at `+0x7c`; focus-lost clears
 matrices (ReleaseAll).
+
+## G12 — R_386_COPY shared storage (done)
+
+**Problem.** `R_386_COPY` gives the executable (game) ownership of the storage
+for globals defined in the DSO (libmvos): VVC/Intuition/… singletons, the 24-byte
+`EnvSystem`, the 9 `_12cApplication.*` subsystem flags (45 non-vtable symbols in
+all). Real `ld.so` then makes **every** reference in **both** images resolve to
+the game's `.bss` copy. Our linker only rebound the GOT (`GLOB_DAT`), but libmvos
+reaches these via **`R_386_32`** to its *own* DSO-local slot — so libmvos wrote
+its slot while the game read its copy, and they diverged. The workaround was
+three manual mvos↔game syncs in `main.cpp` (after mvos ctors, after the cfg
+loader, after `OpenSubsystems`), plus a flags mirror — fragile, one-shot, and a
+maintained address list.
+
+**Fix (`guestlink.cpp`).** For a non-vtable COPY'd global, resolve libmvos's own
+absolute (`R_386_32`) refs to the **game copy** too (`copy_to_game` map consulted
+in `build_idx`), so storage is genuinely shared — exactly what `ld.so` does.
+Vtables (`__vt_*`) stay pointing at libmvos's own relocated body (virtual
+dispatch must hit libmvos code; the game copy is a byte-identical snapshot).
+Deleted all three manual syncs + the flags mirror (~50 lines).
+
+```
+COPY data globals shared to game storage: 45
+… OpenSubsystems returned
+VVC (game) = 0x601bc3e0   VKeyboard = 0x601ba230   …   (all populated, no sync)
+Single Player → Realm Shell        0 unimplemented, 0 faults
+```
 
 ## Build / run
 

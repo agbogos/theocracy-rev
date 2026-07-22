@@ -187,15 +187,40 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         return 0;
     };
 
-    // build_idx: for a given image, defined symbols always use *this* image's
-    // address (so mvos R_386_32 to a vtable hits mvos's relocated body, not the
-    // game's empty COPY placeholder). UND uses global bind/trap.
+    // R_386_COPY hands storage ownership of these globals to the game .bss: the
+    // executable owns the copy, and the real ld.so makes *every* reference in
+    // both images resolve to it. libmvos reaches some of them via R_386_32 to
+    // its own DSO-local slot, which then diverges from the game copy — the old
+    // workaround was a manual mvos↔game sync in main.cpp after each write
+    // (singletons, EnvSystem, the cApplication.* flags). Give libmvos the game
+    // address for its absolute refs too, so storage is genuinely shared and no
+    // sync is needed. Vtables (__vt_*) keep pointing at libmvos's own relocated
+    // body (virtual dispatch must hit libmvos code; the game copy is a
+    // byte-identical snapshot regardless).
+    std::unordered_map<std::string, uint32_t> copy_to_game;
+    for (const auto& r : game.relocs()) {
+        if (r.type != elf32::R_386_COPY) continue;
+        const auto& s = game.sym(r.sym);
+        if (s.name.empty() || s.name.rfind("__vt", 0) == 0) continue;
+        copy_to_game[s.name] = r.offset;
+    }
+    std::printf("  COPY data globals shared to game storage: %zu\n", copy_to_game.size());
+
+    // build_idx: defined symbols use *this* image's address (so mvos R_386_32 to
+    // a vtable hits mvos's relocated body). Exception: a COPY'd data global's
+    // libmvos-side absolute refs resolve to the game .bss copy (shared storage,
+    // above). UND uses global bind/trap.
     auto build_idx = [&](const elf32::Image& img, uint32_t bias) {
         IdxMap idx(img.dynsyms().size(), 0);
         for (uint32_t i = 0; i < img.dynsyms().size(); ++i) {
             const auto& s = img.dynsyms()[i];
             if (!s.undef()) {
-                idx[i] = s.value + bias;       // local definition wins
+                uint32_t addr = s.value + bias;             // local definition
+                if (bias == MVOS_BASE && !s.name.empty()) {
+                    auto cit = copy_to_game.find(s.name);
+                    if (cit != copy_to_game.end()) addr = cit->second;  // shared copy
+                }
+                idx[i] = addr;
                 continue;
             }
             idx[i] = resolve(s.name, s.weak());

@@ -103,15 +103,10 @@ int main(int argc, char** argv) {
     }
     if (L.mvos_ctors) run_ctors(m, L.mvos_ctors, L.mvos_ctors_n, "mvos");
 
-    // EnvSystem is a 24-byte R_386_COPY object. mvos .ctors may have built the
-    // DSO-local instance; mirror it into the game before anything uses it.
-    {
-        uint32_t g = 0x08598370, s = guestlink::MVOS_BASE + 0xc54a8;
-        uint8_t buf[24];
-        m.read(s, buf, 24);
-        m.write(g, buf, 24);
-        std::printf("  synced EnvSystem 24 bytes mvos→game (head=%#x)\n", m.r32(g));
-    }
+    // EnvSystem, the cApplication.* flags, and the device singletons are all
+    // R_386_COPY globals whose storage the linker now shares between game and
+    // libmvos (guestlink copy_to_game), so the old manual mvos↔game syncs here
+    // are gone — libmvos's ctors / OpenSubsystems write the game copy directly.
 
     // libmvos IdentifyFileSystem / load mvos.cfg (main calls this before Init).
     {
@@ -125,12 +120,7 @@ int main(int argc, char** argv) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "mvos.cfg loader FAULTED: %s\n", e.what());
         }
-        // EnvSystem may have been filled on the mvos side — sync again.
-        uint32_t g = 0x08598370, s = guestlink::MVOS_BASE + 0xc54a8;
-        uint8_t buf[24];
-        m.read(s, buf, 24);
-        m.write(g, buf, 24);
-        std::printf("  EnvSystem head after cfg = %#x\n", m.r32(g));
+        std::printf("  EnvSystem head after cfg = %#x\n", m.r32(0x08598370));
     }
 
     if (L.game_ctors) run_ctors(m, L.game_ctors, L.game_ctors_n, "game");
@@ -158,28 +148,9 @@ int main(int argc, char** argv) {
                     before[i], v, (before[i] != v) ? "   <- set by Init" : "");
     }
 
-    // Init (game) writes the game's R_386_COPY of the flags; libmvos OpenSubsystems
-    // still addresses the DSO-local copies via R_386_32. Mirror game → mvos so
-    // the required-subsystem checks see the 1s Init just set.
-    if (init_ok) {
-        struct F { uint32_t game; uint32_t mvos_off; };
-        const F fl[] = {
-            {0x085983cc, 0xaee70}, // Sound
-            {0x085986ec, 0xaee71}, // Video
-            {0x08598b90, 0xaee72}, // Mouse
-            {0x0859847c, 0xaee74}, // Keyboard
-            {0x08598c60, 0xaee75}, // Redbook
-            {0x0859848d, 0xaee77}, // Network
-            {0x0859849c, 0xaee73}, // Pointer
-            {0x08598080, 0xaee76}, // Timer
-            {0x085986dc, 0xaee78}, // Intuition
-        };
-        for (auto& f : fl) {
-            uint8_t v; m.read(f.game, &v, 1);
-            m.write(guestlink::MVOS_BASE + f.mvos_off, &v, 1);
-        }
-        std::printf("  mirrored Application flags game → mvos\n");
-    }
+    // The cApplication.* subsystem flags Init just wrote are R_386_COPY globals
+    // with linker-shared storage, so libmvos OpenSubsystems reads the same bytes
+    // — no game→mvos mirror needed.
 
     // OpenSubsystems (libmvos) — dlopen plugins, fill VVC/VKeyboard/… ----------
     bool open_ok = false;
@@ -201,36 +172,16 @@ int main(int argc, char** argv) {
             for (int k = 0; k < n; ++k)
                 std::fprintf(stderr, "    [ESP+%02x] %#010x\n", 4 * k, st[k]);
         }
-        // Pointer singletons are R_386_COPY'd into the game. mvos may still
-        // write its *local* copies when code uses R_386_32 to the DSO symbol.
-        // Sync the important pointer globals from mvos → game after open.
-        struct Sync { const char* n; uint32_t game; uint32_t mvos_off; };
-        // mvos file VAs from data/theocracy_copyrelocs / earlier census.
-        const Sync syncs[] = {
-            {"VVC",            0x08598cec, 0xaefcc},
-            {"VKeyboard",      0x08598b58, 0xaef88},
-            {"VMouse",         0x08598c3c, 0xaef90},
-            {"Intuition",      0x08598454, 0xaefe4},
-            {"SoundCard",      0x08598d0c, 0xaefb0},
-            {"VCD",            0x085984ac, 0xaefa4},
-            {"SystemMemory",   0x08598404, 0xaef8c},
-            {"IPCSystem",      0x08598338, 0xaeea0},
-            {"LocaleDataBase", 0x08598c4c, 0xaee9c},
-            // SystemPointer is mvos-only (no game COPY); still list for logging via mvos.
-        };
-        // SystemPointer lives only in mvos .bss
-        {
-            uint32_t sp = m.r32(guestlink::MVOS_BASE + 0xaef9c);
-            std::printf("  SystemPointer (mvos) = %#x\n", sp);
-        }
-        for (auto& s : syncs) {
-            uint32_t src = guestlink::MVOS_BASE + s.mvos_off;
-            uint32_t val = m.r32(src);
-            uint32_t old = m.r32(s.game);
-            if (val != old) m.w32(s.game, val);
-            std::printf("  sync %s: mvos %#x -> game %#x (was %#x)\n",
-                        s.n, val, s.game, old);
-        }
+        // The device singletons (VVC / VKeyboard / VMouse / Intuition / SoundCard
+        // / VCD / SystemMemory / IPCSystem / LocaleDataBase) are R_386_COPY globals
+        // with linker-shared storage, so OpenSubsystems already published them into
+        // the game copy — no mvos→game sync needed. Log them to confirm.
+        for (auto [n, g] : {std::pair<const char*, uint32_t>
+                 {"VVC", 0x08598cec}, {"VKeyboard", 0x08598b58}, {"VMouse", 0x08598c3c},
+                 {"Intuition", 0x08598454}, {"SoundCard", 0x08598d0c}, {"VCD", 0x085984ac},
+                 {"SystemMemory", 0x08598404}, {"IPCSystem", 0x08598338},
+                 {"LocaleDataBase", 0x08598c4c}})
+            std::printf("  %s (game) = %#x\n", n, m.r32(g));
 
         // Mirror libmvos main: if Intuition required, construct cIntuition
         // (sizeof 0xb4) and publish the global pointer. Start reads
@@ -250,8 +201,7 @@ int main(int argc, char** argv) {
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "cIntuition ctor FAULTED: %s\n", e.what());
             }
-            m.w32(0x08598454, obj);
-            m.w32(guestlink::MVOS_BASE + 0xaefe4, obj);
+            m.w32(0x08598454, obj);   // shared COPY storage → libmvos sees it too
             std::printf("  Intuition = %#x\n", obj);
         }
     }
