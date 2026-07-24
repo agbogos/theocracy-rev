@@ -554,11 +554,39 @@ void TrapLayer::register_builtins() {
         return 0;
     };
     t["usleep"] = [this](Machine& m, uint32_t esp) -> uint32_t {
-        uint32_t us = arg(m, esp, 0);
-        if (us > 100000) us = 100000;  // cap during bring-up
+        uint32_t req = arg(m, esp, 0);
         fps_usleep_calls_++;
+        // The game's frame limiter (cSyncSystem::Sleep) sleeps here waiting for
+        // its 30Hz heartbeat (SIGALRM → _TimerFunction). On real Linux the signal
+        // interrupts usleep and runs the handler; our heartbeat is otherwise only
+        // serviced at SwapBuffers, so a present-coupled timer runs at ~6Hz and the
+        // limiter over-sleeps (~68ms), pinning province at 12fps. Deliver a due
+        // tick right here, exactly as EINTR-from-SIGALRM would (THEOC_LEGACY_SLEEP
+        // reverts to the old blind sleep for A/B).
+        static const bool legacy = std::getenv("THEOC_LEGACY_SLEEP") != nullptr;
+        // Deliver a due heartbeat (EINTR-from-SIGALRM semantics) or a due sound
+        // slice right here. Both are otherwise only serviced at present, so at low
+        // fps the mixer starves and audio stutters; usleep fires ~once per frame
+        // too, doubling the real-time service points and decoupling both from fps.
+        if (!legacy) {
+            if (maybe_redirect_timer(m, esp)) return 0;
+            if (maybe_redirect_sound(m, esp)) return 0;
+        }
+        // Never sleep past the next tick deadline, so the clock keeps 30Hz cadence
+        // and the loop re-evaluates promptly rather than blocking a whole frame.
+        uint32_t cap = 100000;
+        if (!legacy && timer_armed_) {
+            auto now = std::chrono::steady_clock::now();
+            if (timer_next_ <= now) cap = 0;
+            else {
+                auto until = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 timer_next_ - now).count();
+                if (until >= 0 && (uint64_t)until < cap) cap = (uint32_t)until;
+            }
+        }
+        uint32_t us = req > cap ? cap : req;
         fps_usleep_us_ += us;
-        ::usleep(us);
+        if (us) ::usleep(us);
         return 0;
     };
     t["ioctl"] = [](Machine& m, uint32_t esp) -> uint32_t {
@@ -1363,8 +1391,14 @@ void TrapLayer::patch_sound_main_oneshot(Machine& m) {
 }
 
 bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
-    // After SwapBuffers present: green-run Entry once per ~100ms (one OSS
-    // fragment). Entry vcalls Main (one-shot after patch) → write /dev/dsp.
+    // Green-run Entry → Main (one-shot after patch) → write /dev/dsp, producing
+    // one OSS fragment (~91ms of audio). This is BUFFER-DRIVEN, not clock-driven:
+    // a fixed ~one-fragment-per-90ms gate produces ~11/s == the exact 44.1k int16/s
+    // drain, leaving zero margin, so any jitter underruns → audio stutter. Instead
+    // we top the queue up to a small target (~120ms, THEOC_AUDIO_MS) whenever it
+    // drains below (guard further down), with only a light floor to avoid re-firing
+    // every yield. Serviced from both present AND usleep so throughput is decoupled
+    // from the frame rate; the target depth is the audio latency.
     if (redirecting_sound_ || soft_threads_.empty()) return false;
     auto now = std::chrono::steady_clock::now();
     if (next_sound_slice_.time_since_epoch().count() != 0 && now < next_sound_slice_)
@@ -1379,10 +1413,18 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     }
     if (!pick) return false;
 
-    // Don't overfill the host queue (keeps latency low).
+    // Keep the queue topped to a small target: enough to absorb inter-yield
+    // jitter (steady-state yields are ~16ms apart) but low enough that queued
+    // audio isn't heard late. This depth IS the audio latency; too high delays
+    // SFX, too low re-introduces underrun stutter. THEOC_AUDIO_MS tunes it.
+    static const size_t audio_target = []{
+        const char* e = std::getenv("THEOC_AUDIO_MS");
+        int ms = e ? atoi(e) : 120;              // ~120ms buffer / latency
+        return (size_t)(44100.0 * ms / 1000.0);  // int16 entries @ 22050Hz stereo
+    }();
     {
         std::lock_guard<std::mutex> lock(audio_mu_);
-        if (audio_q_.size() > 22050)  // > ~0.5s stereo
+        if (audio_q_.size() > audio_target)
             return false;
     }
 
@@ -1392,7 +1434,7 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     m.w32(sp, pick->arg);
     sp -= 4;
     m.w32(sp, ret);
-    next_sound_slice_ = now + std::chrono::milliseconds(90);
+    next_sound_slice_ = now + std::chrono::milliseconds(15);  // light floor; buffer guard is the real limit
     fps_sound_fires_++;
     static int nred;
     if (nred++ < 4)
@@ -2200,6 +2242,27 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                                 auto_prov_stage_, s.act, s.x, s.y, t);
                     auto_prov_stage_++;
                 }
+            }
+
+            // Frame-rate cap: physics/animation is frame-tied (engine quirk), so
+            // uncapped render = turbo sim. Clamp the minimum present interval to
+            // the design cadence (default 33ms = 30Hz, the game's own timer rate;
+            // THEOC_FRAME_MS overrides, 0 disables). Present-to-present timing so
+            // only too-fast frames are slowed — the game's usleep pacing already
+            // counts toward the interval and is not double-limited.
+            static const int frame_ms = []{
+                const char* e = std::getenv("THEOC_FRAME_MS");
+                return e ? atoi(e) : 33;
+            }();
+            if (frame_ms > 0) {
+                auto now = std::chrono::steady_clock::now();
+                if (last_present_.time_since_epoch().count()) {
+                    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                                       now - last_present_).count();
+                    int64_t target = (int64_t)frame_ms * 1000;
+                    if (elapsed < target) ::usleep((useconds_t)(target - elapsed));
+                }
+                last_present_ = std::chrono::steady_clock::now();
             }
 
             // One guest redirect per present (no nested uc_emu_start). Prefer

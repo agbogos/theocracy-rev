@@ -181,4 +181,11 @@ private:
     int      auto_prov_stage_ = 0;
 
     uint64_t audio_underrun_ = 0;      // callback samples with empty queue (stutter)
+
+    // Frame-rate cap (THEOC_FRAME_MS): the engine steps physics/animation once
+    // per rendered frame, so uncapped render speed = turbo sim. Clamp the minimum
+    // present interval to the design cadence so frame-tied sim runs at intended
+    // speed. Measured present-to-present, so it only slows frames already faster
+    // than target — the game's own usleep pacing is never double-counted.
+    std::chrono::steady_clock::time_point last_present_{};
 };
