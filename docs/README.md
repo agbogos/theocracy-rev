@@ -9,6 +9,7 @@ Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linu
 - [open_questions.md](open_questions.md) — remaining threads / TODO backlog
 - **Porting**
   - [porting/guest-libmvos.md](porting/guest-libmvos.md) — **★ CURRENT ARCHITECTURE (playable)**: dual-image linker (`guestlink.cpp`), the OS-boundary HLE surface, render/input/audio/MPEG bring-up (milestone log G1–G11)
+  - [porting/frame-timing.md](porting/frame-timing.md) — **★ crucial finding**: the present-coupled heartbeat (province 12fps → stalled clock, not slow renderer) and frame-tied simulation ("turbo" after the fix); how wall-clock-shaped bugs masquerade as performance bugs, the `THEOC_FPS` diagnostic, and the `usleep`/frame-cap fixes
   - [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) — *superseded* pure-HLE plan; still the best writeup of the game↔engine ABI contract (232 imports / 348 exports), boot sequence, subsystem contracts
   - [porting/m1-loader.md](porting/m1-loader.md) — *superseded* (single-image loader); confirmed ELF facts + trap mechanism that carried into `guestlink`
   - [porting/m2-core.md](porting/m2-core.md) — *superseded* (pure-HLE native MVOS layer); source of RE'd struct layouts (vtables, singletons, `cTextFile`, render boundary)

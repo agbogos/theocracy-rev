@@ -28,3 +28,6 @@ __pycache__/
 # ── Editor / OS / local ───────────────────────────────────────────────────
 .DS_Store
 .claude/settings.local.json
+
+# ── Profiling / run logs ──────────────────────────────────────────────────
+*.log
