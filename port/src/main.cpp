@@ -89,6 +89,14 @@ int main(int argc, char** argv) {
     m.map(SCRATCH, SCRATCH_SIZE, UC_PROT_READ | UC_PROT_WRITE);
     m.setreg(UC_X86_REG_ESP, STACK_TOP - 16);
 
+    // THEOC_HEAP_TEST=1: exercise the guest allocator standalone and exit. Runs
+    // here (arena mapped, nothing allocated yet) and leaves it fragmented, so it
+    // deliberately does not continue into boot.
+    if (std::getenv("THEOC_HEAP_TEST") && L.traps) {
+        std::printf("\n=== guest heap self-test ===\n");
+        return L.traps->heap_selftest() ? 0 : 1;
+    }
+
     if (L.traps)
         L.traps->install_plugins_and_video(m, guestlink::MVOS_BASE);
 
@@ -189,8 +197,15 @@ int main(int argc, char** argv) {
         // Intuition+0x24 (active screen) — null Intuition → fault @+0x24.
         uint8_t need_i = 0;
         m.read(0x085986dc, &need_i, 1);
-        if (need_i && m.r32(0x08598454) == 0) {
-            uint32_t obj = HEAP_BASE + 0x00f00000;  // carve from high heap
+        if (need_i && m.r32(0x08598454) == 0 && L.traps) {
+            // sizeof(cIntuition) = 0xb4, reserved from the guest allocator.
+            // This used to be a hardcoded HEAP_BASE+0xf00000 "carve from high
+            // heap" — but that address is inside the bump arena and unreserved,
+            // so once cumulative allocation passed 15 MB the guest got it back
+            // as ordinary memory and painted a bitmap over the live singleton.
+            // Symptom: Intuition+0x24 (active cScreen*) = RGB565 pixel pairs,
+            // non-null, so ActivateScreen's null guard passed and it faulted.
+            uint32_t obj = L.traps->guest_alloc(0xb4);
             std::vector<uint8_t> z(0xb4, 0);
             m.write(obj, z.data(), 0xb4);
             uint32_t ctor = guestlink::MVOS_BASE + 0x8d370;  // __10cIntuition

@@ -260,16 +260,146 @@ void TrapLayer::set_errno(Machine& m, int err) {
     m.w32(ERRNO_ADDR, (uint32_t)err);
 }
 
+// Free list is kept twice: by address (so neighbours can be coalesced) and by
+// size (so allocation is a best-fit O(log n) lookup instead of a linear scan —
+// a scenario load churns enough blocks that first-fit would be a real cost).
+void TrapLayer::fl_insert(uint32_t addr, uint32_t size) {
+    free_addr_[addr] = size;
+    free_size_.emplace(size, addr);
+}
+
+void TrapLayer::fl_erase(uint32_t addr, uint32_t size) {
+    free_addr_.erase(addr);
+    auto r = free_size_.equal_range(size);
+    for (auto i = r.first; i != r.second; ++i)
+        if (i->second == addr) { free_size_.erase(i); break; }
+}
+
 uint32_t TrapLayer::bump_alloc(uint32_t size) {
     uint32_t aligned = (size + 15u) & ~15u;   // 16-byte aligned
+    if (!aligned) aligned = 16;               // malloc(0) still needs an address
+
+    // Reuse a freed block before touching fresh memory (best fit).
+    auto it = free_size_.lower_bound(aligned);
+    if (it != free_size_.end()) {
+        uint32_t p = it->second, blk = it->first;
+        fl_erase(p, blk);
+        if (blk - aligned >= 32) {            // split; tail goes back on the list
+            fl_insert(p + aligned, blk - aligned);
+            blk = aligned;
+        }
+        alloc_sz_[p] = blk;
+        heap_live_ += blk;
+        return p;
+    }
+
     if (heap_next_ + aligned > HEAP_BASE + HEAP_SIZE) {
-        std::fprintf(stderr, "[heap] OUT OF MEMORY requesting %u bytes\n", size);
+        std::fprintf(stderr,
+                     "[heap] OUT OF MEMORY requesting %u bytes "
+                     "(live %.1f MB, frontier %.1f MB of %.0f MB)\n",
+                     size, heap_live_ / 1048576.0,
+                     (heap_next_ - HEAP_BASE) / 1048576.0, HEAP_SIZE / 1048576.0);
         return 0;
     }
     uint32_t p = heap_next_;
     heap_next_ += aligned;
-    alloc_sz_[p] = size;
+    alloc_sz_[p] = aligned;
+    heap_live_ += aligned;
     return p;
+}
+
+// Randomized soak of the allocator. The failure this is really guarding is
+// two live blocks overlapping — that corrupts guest memory silently, which is
+// strictly worse than the leak this allocator replaced. Returns true on pass.
+bool TrapLayer::heap_selftest() {
+    uint32_t seed = 12345;                       // deterministic
+    auto rnd = [&] { seed = seed * 1664525u + 1013904223u; return seed >> 8; };
+    std::vector<uint32_t> live;                  // block addresses
+    int errors = 0;
+
+    auto check_overlap = [&](uint32_t p) {
+        uint32_t ps = alloc_sz_.count(p) ? alloc_sz_[p] : 0;
+        for (uint32_t q : live) {
+            if (q == p) { std::printf("  [heaptest] FAIL: %#x handed out twice\n", p); return false; }
+            uint32_t qs = alloc_sz_.count(q) ? alloc_sz_[q] : 0;
+            if (p < q + qs && q < p + ps) {
+                std::printf("  [heaptest] FAIL: %#x+%u overlaps %#x+%u\n", p, ps, q, qs);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    for (int round = 0; round < 6 && errors == 0; ++round) {
+        for (int i = 0; i < 3000; ++i) {
+            if (!live.empty() && (rnd() % 100) < 45) {          // free
+                size_t k = rnd() % live.size();
+                guest_free(live[k]);
+                live[k] = live.back();
+                live.pop_back();
+            } else {                                            // alloc
+                uint32_t want = 1 + rnd() % 6000;
+                uint32_t p = bump_alloc(want);
+                if (!p) { std::printf("  [heaptest] FAIL: OOM (round %d)\n", round); errors++; break; }
+                if (!check_overlap(p)) { errors++; break; }
+                live.push_back(p);
+            }
+        }
+        std::printf("  [heaptest] round %d: %zu live, %.2f MB live, "
+                    "%.2f MB frontier, %zu free blocks\n",
+                    round, live.size(), heap_live_ / 1048576.0,
+                    (heap_next_ - HEAP_BASE) / 1048576.0, free_addr_.size());
+    }
+
+    uint32_t frontier_after_churn = heap_next_;
+    for (uint32_t p : live) guest_free(p);
+    live.clear();
+    std::printf("  [heaptest] all freed: %u B live, %.2f MB frontier, %zu free blocks\n",
+                heap_live_, (heap_next_ - HEAP_BASE) / 1048576.0, free_addr_.size());
+
+    // Everything returned => zero live bytes, and coalescing should have merged
+    // the arena back into (nearly) one block rather than leaving thousands.
+    if (heap_live_ != 0) { std::printf("  [heaptest] FAIL: %u bytes leaked\n", heap_live_); errors++; }
+    if (free_addr_.size() > 4) { std::printf("  [heaptest] FAIL: poor coalescing\n"); errors++; }
+    // Re-allocating after a full free must reuse, not extend the frontier.
+    for (int i = 0; i < 500; ++i) if (!bump_alloc(4096)) { errors++; break; }
+    if (heap_next_ > frontier_after_churn) {
+        std::printf("  [heaptest] FAIL: frontier grew on reuse (%.2f -> %.2f MB)\n",
+                    (frontier_after_churn - HEAP_BASE) / 1048576.0,
+                    (heap_next_ - HEAP_BASE) / 1048576.0);
+        errors++;
+    }
+    std::printf("  [heaptest] %s\n", errors ? "FAILED" : "PASSED");
+    return errors == 0;
+}
+
+// Reuse is more faithful than never-reuse: real malloc hands the same memory
+// back too. Unknown pointers (interior, double free, not ours) are ignored.
+void TrapLayer::guest_free(uint32_t p) {
+    if (!p) return;
+    auto it = alloc_sz_.find(p);
+    if (it == alloc_sz_.end()) return;
+    uint32_t sz = it->second;
+    alloc_sz_.erase(it);
+    heap_live_ -= sz;
+
+    auto nx = free_addr_.lower_bound(p);
+    if (nx != free_addr_.end() && p + sz == nx->first) {   // coalesce forward
+        uint32_t na = nx->first, ns = nx->second;
+        ++nx;
+        fl_erase(na, ns);
+        sz += ns;
+    }
+    if (nx != free_addr_.begin()) {                        // coalesce backward
+        auto pv = std::prev(nx);
+        if (pv->first + pv->second == p) {
+            uint32_t pa = pv->first, ps = pv->second;
+            fl_erase(pa, ps);
+            fl_insert(pa, ps + sz);
+            return;
+        }
+    }
+    fl_insert(p, sz);
 }
 
 uint32_t TrapLayer::stub_alloc(Machine& m, uint32_t size) {
@@ -346,16 +476,26 @@ void TrapLayer::register_builtins() {
     };
     t["realloc"] = [this](Machine& m, uint32_t esp) {
         uint32_t old = arg(m, esp, 0), nsz = arg(m, esp, 1);
+        if (!old) return bump_alloc(nsz);
+        if (!nsz) { guest_free(old); return 0u; }
+        auto it = alloc_sz_.find(old);
+        uint32_t oldsz = it != alloc_sz_.end() ? it->second : 0;
         uint32_t p = bump_alloc(nsz);
-        if (p && old) {
-            auto it = alloc_sz_.find(old);
-            uint32_t cpy = it != alloc_sz_.end() ? std::min(it->second, nsz) : 0;
+        if (p) {
+            uint32_t cpy = std::min(oldsz, nsz);
             for (uint32_t k = 0; k < cpy; ++k) { uint8_t b; m.read(old + k, &b, 1); m.write(p + k, &b, 1); }
+            guest_free(old);   // must come after the copy
         }
         return p;
     };
-    t["free"] = [](Machine&, uint32_t) -> uint32_t { return 0; };  // bump: no-op
-    t["__builtin_vec_delete"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
+    t["free"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        guest_free(arg(m, esp, 0));
+        return 0;
+    };
+    t["__builtin_vec_delete"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        guest_free(arg(m, esp, 0));
+        return 0;
+    };
 
     t["memcpy"] = [](Machine& m, uint32_t esp) {
         uint32_t d = arg(m, esp, 0), s = arg(m, esp, 1), n = arg(m, esp, 2);
@@ -1315,16 +1455,19 @@ void TrapLayer::fps_tick(Machine& m) {
         "[fps] %.1f fps | guest %.1fM blk/s (%.2fM/frame) | "
         "heartbeat %.0f/s mixer %.0f/s\n"
         "      sleep %.0fms/s in %d usleep | gettimeofday %d/s | select %d/s | "
-        "audio q=%.2fs underrun=%llu/s\n",
+        "audio q=%.2fs underrun=%llu/s | heap %.1fMB live (+%.2fMB/s frontier)\n",
         fps, bps / 1e6, bpf / 1e6,
         fps_timer_fires_ / secs, fps_sound_fires_ / secs,
         (fps_usleep_us_ / 1000.0) / secs, fps_usleep_calls_,
         (int)(fps_gettime_calls_ / secs), (int)(fps_select_calls_ / secs),
-        qdepth / 44100.0, (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)));
+        qdepth / 44100.0, (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)),
+        heap_live_ / 1048576.0,
+        ((heap_next_ - fps_heap_base_) / 1048576.0) / secs);
 
     fps_last_ = now;
     fps_frames_ = 0;
     fps_blocks_base_ = m.exec_blocks();
+    fps_heap_base_ = heap_next_;
     fps_timer_fires_ = 0;
     fps_sound_fires_ = 0;
     fps_usleep_us_ = 0;
@@ -1467,6 +1610,10 @@ void TrapLayer::report() const {
                 (unsigned long long)impl_hits);
     std::printf("  UNIMPLEMENTED hit:       %u  (%llu calls)\n", todo,
                 (unsigned long long)todo_hits);
+    std::printf("  guest heap:              %.1f MB live, %.1f MB frontier, "
+                "%.0f MB arena (%zu free blocks)\n",
+                heap_live_ / 1048576.0, (heap_next_ - HEAP_BASE) / 1048576.0,
+                HEAP_SIZE / 1048576.0, free_addr_.size());
     std::sort(todos.begin(), todos.end(),
               [](auto& a, auto& b) { return a.second > b.second; });
     for (auto& [nm, n] : todos)

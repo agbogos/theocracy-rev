@@ -336,6 +336,145 @@ matching Ghidra DB (mvos offset = the libmvos file address).
   #4  0xdead0000           <- call() STOP sentinel
 ```
 
+## G14 — the unreserved `cIntuition` (Load Game crash) (done)
+
+**Symptom.** From a cold boot, main menu → **Load Game** faulted; but menu → start
+a campaign → quit → Load Game worked. Reported as a load-path bug.
+
+```
+Start FAULTED: UC_ERR_READ_UNMAPPED at eip=0x1008d84a accessing 0xc4c4c5e8
+```
+
+**Reading the fault.** `eip` − `MVOS_BASE` = `mvos+0x8d84a` =
+`cIntuition::ActivateScreen+0x1a`:
+
+```
+8d843: mov eax, [edx+0x24]   ; edx = this; +0x24 = currently-active cScreen*
+8d846: test eax,eax
+8d848: je  +0x3d             ; null → nothing to tear down
+8d84a: mov ebx, [eax+0x24]   ; ← fault
+```
+
+Unwinding the prologue (`push ebp; sub 0x24; push edi/esi/ebx` → esp0 = ESP+0x34)
+gives `this` = `0x60f00000`, return address `0x08146058` in the game's
+screen-activation helper (`SetPalette` → `SetPointer` → `ActivateScreen`;
+`Intuition` global `0x08598454`, screen global `0x084c9128`).
+
+So `Intuition+0x24` held **`0xc4c4c5c4`** — non-null, so the guard at `8d848`
+passed, then the deref faulted. That value is not a stale pointer (the heap is
+`0x60xxxxxx`); it is **two adjacent RGB565 pixels of near-identical colour**. The
+singleton had been painted over with bitmap data.
+
+**Root cause — a host object squatting in the guest allocator's arena.**
+`main.cpp` planted the `cIntuition` object (0xb4 bytes) at a hardcoded address:
+
+```c
+uint32_t obj = HEAP_BASE + 0x00f00000;  // "carve from high heap"
+```
+
+`HEAP_BASE` is the **bump arena** `bump_alloc` hands out from, starting at
+`HEAP_BASE` and growing up, with `free()` a no-op. `0x60f00000` is 15 MB in and
+was never reserved — so as soon as cumulative allocation reached 15 MB, the guest
+got that memory back as ordinary heap and wrote over the live singleton.
+
+Measured with `THEOC_FPS=1` (which now reports heap + growth rate) driving
+`THEOC_AUTO_PROVINCE=1` all the way into province view:
+
+| Phase | Guest heap |
+|-------|-----------|
+| Main menu (idle) | **3.3 MB** |
+| Entering a game | **3.3 → 41.1 MB** in ~1 s (+23.5 MB/s) |
+| Province load settled | **50.1 MB** |
+| ~20 s of province play | 50.1 MB, **+0.00 MB/s** |
+
+So the 15 MB line is crossed **during game entry**, not at boot: the singleton
+survived the whole menu intact and died the moment a game started. That matches
+the repro — the crash needs a route that has entered a game at least once. The
+remaining route-dependence is just *what* landed there: the fault needs a
+previously-active screen (`eax != 0`) **and** garbage that lands unmapped; other
+values read junk silently or skip the branch.
+
+Two side observations from the same run: province play is flat at +0.00 MB/s, so
+the no-op `free()` does not leak while resident (load/unload cycles are where it
+would show); and a corrupted `cIntuition` also holds pointer pos (`+0xa0`),
+buttons (`+0xa8`) and pointer-sprite state, which makes it a **likely cause of the
+cursor ghost-trail artifacts** reported on post-game screens (Credits, Load Game)
+— unconfirmed, pending retest.
+
+**Fix.** Reserve it from the same allocator the guest uses —
+`TrapLayer::guest_alloc(0xb4)` (public wrapper over `bump_alloc`). The trap report
+now also prints the guest heap high-water, since this bug was completely
+invisible before.
+
+```
+  Intuition = 0x601c2ca0          (was 0x60f00000)
+  guest heap used: 41.3 MB of 128 MB
+```
+
+> **Rule.** Host-side objects planted in guest space must come from
+> `guest_alloc`, or live in a dedicated region *outside* the arena
+> (`SINGLETON_BASE`, `GUEST_FB_BASE`, `STUB_CODE`, `NULL_FRAME`). A fixed address
+> inside the arena is a delayed-corruption bug. This was the only such carve-out.
+
+## G15 — real guest allocator (`free()` was a no-op) (done)
+
+**Symptom.** Start a Chronicle → quit → start a new campaign → crash during the
+campaign intro. The log says it plainly before the fault:
+
+```
+[heap] OUT OF MEMORY requesting 49839 bytes
+Start FAULTED: UC_ERR_WRITE_UNMAPPED at eip=0x82c9914 accessing 0
+  guest heap used: 128.0 MB of 128 MB
+```
+
+The fault site is `mov [eax+edx*4], ecx` with `eax` = 0 — an array append whose
+base pointer came from a `malloc` that returned 0. Pure OOM cascade, not a
+pointer bug: the arena was simply full.
+
+**Root cause.** The guest heap was a pure bump allocator and **`free()` was a
+no-op** (`// bump: no-op`). Every scenario load allocated tens of MB and returned
+none of it, so the 128 MB arena was consumed by loading two scenarios in one
+session. The engine *does* free correctly — libmvos has whole heap layers
+(`cHeap_Compatibility::Free`, `FreeHeapBlock`, `cSystemMemory::Free`) and the
+province log is full of `Free Province Bitmap:(…)OK` — all of which bottom out in
+the imported `free` we were discarding.
+
+**Fix.** A real allocator in `traps.cpp`: a bump frontier for fresh memory plus a
+**coalescing free list**, kept twice — by address (to merge adjacent blocks) and
+by size (so allocation is a best-fit `O(log n)` lookup rather than a linear scan,
+which matters because a scenario load churns a lot of blocks). `realloc` now
+frees the old block after copying; `__builtin_vec_delete` frees too. Unknown
+pointers (interior, double-free, not ours) are ignored rather than corrupting the
+list.
+
+| | Menu | Province |
+|--|------|----------|
+| Before (frontier, leaked) | 3.3 MB | **50.1 MB** |
+| After (live / frontier) | 2.6 MB | **28.6 / 28.7 MB** |
+
+Frontier now tracks live to within 0.1 MB (7 free blocks), so fragmentation waste
+is negligible and a second load reuses the first one's memory instead of
+extending the arena.
+
+**`THEOC_HEAP_TEST=1`** runs the allocator standalone against a randomized
+alloc/free workload and exits. It guards the failure that would be *worse* than
+the leak — two live blocks overlapping, which corrupts guest memory silently:
+
+```
+  [heaptest] round 5: 1508 live, 4.44 MB live, 4.59 MB frontier, 465 free blocks
+  [heaptest] all freed: 0 B live, 4.59 MB frontier, 1 free blocks
+  [heaptest] PASSED
+```
+
+18k ops with no overlap or double-hand-out; freeing everything collapses 465
+fragments back to **one** block (coalescing is correct); and re-allocating after a
+full free reuses rather than extending the frontier.
+
+Reporting now distinguishes **live** (held right now) from **frontier**
+(high-water of fresh memory) in both the trap report and the `THEOC_FPS` line —
+with a no-op `free` those were the same number, which is why the leak was
+invisible.
+
 ## Build / run
 
 ```sh

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -55,6 +56,20 @@ public:
         return m.r32(esp + 4 + 4u * i);
     }
 
+    // Reserve guest memory from the same bump arena the guest's malloc uses.
+    // Host-side objects planted in guest space MUST come from here — a fixed
+    // address inside the arena is handed out again once cumulative allocation
+    // reaches it, and the guest then writes over the live object.
+    uint32_t guest_alloc(uint32_t size) { return bump_alloc(size); }
+    void guest_release(uint32_t p) { guest_free(p); }
+    // THEOC_HEAP_TEST=1: randomized alloc/free/realloc workload asserting the
+    // allocator never hands out overlapping blocks and reclaims on free.
+    // Leaves the arena fragmented, so it runs standalone and exits.
+    bool heap_selftest();
+    // Frontier = high-water of fresh memory; live = actually held right now.
+    uint32_t heap_used() const { return heap_next_ - guestmap::HEAP_BASE; }
+    uint32_t heap_live() const { return heap_live_; }
+
 private:
 
     void register_builtins();
@@ -72,9 +87,19 @@ private:
     std::vector<uint64_t>    hits_;
     std::unordered_map<std::string, Handler> table_;
 
-    // bump allocator over guestmap::HEAP_BASE
+    // Guest heap over guestmap::HEAP_BASE: a bump frontier for fresh memory
+    // plus a coalescing free list so freed blocks are genuinely reused.
+    // free() used to be a no-op, which made every scenario load leak ~50 MB —
+    // two loads in one session exhausted the 128 MB arena and malloc returned
+    // 0, which the guest then wrote through (see G15).
     uint32_t heap_next_;
-    std::unordered_map<uint32_t, uint32_t> alloc_sz_;
+    uint32_t heap_live_ = 0;                        // bytes currently allocated
+    std::unordered_map<uint32_t, uint32_t> alloc_sz_;  // live block -> block size
+    std::map<uint32_t, uint32_t> free_addr_;        // addr -> size (coalescing)
+    std::multimap<uint32_t, uint32_t> free_size_;   // size -> addr (best fit)
+    void fl_insert(uint32_t addr, uint32_t size);
+    void fl_erase(uint32_t addr, uint32_t size);
+    void guest_free(uint32_t p);
     uint32_t bump_alloc(uint32_t size);
     // RX stub page for guest-callable driver methods (heap is RW only).
     uint32_t stub_next_ = 0;
@@ -169,6 +194,7 @@ private:
     std::chrono::steady_clock::time_point fps_last_{};
     int      fps_frames_ = 0;
     uint64_t fps_blocks_base_ = 0;
+    uint32_t fps_heap_base_ = guestmap::HEAP_BASE;  // heap growth per interval
     int      fps_timer_fires_ = 0;
     int      fps_sound_fires_ = 0;
     uint64_t fps_usleep_us_ = 0;       // host µs slept in usleep() this window

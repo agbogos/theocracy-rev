@@ -202,7 +202,7 @@ incremental native-override seam. `THEOC_NATIVE_BLIT=0` disables it.
 
 | Env | What it does |
 |-----|--------------|
-| `THEOC_FPS=1` | Per-second frame instrument: fps, guest blocks/frame, blocks/sec (saturation check), heartbeat & mixer rates, `usleep`/`gettimeofday`/`select` rates, audio queue depth & underruns/s. The tool that split throughput-vs-timing. |
+| `THEOC_FPS=1` | Per-second frame instrument: fps, guest blocks/frame, blocks/sec (saturation check), heartbeat & mixer rates, `usleep`/`gettimeofday`/`select` rates, audio queue depth & underruns/s, guest heap used + growth rate. The tool that split throughput-vs-timing; the heap column also found the G14 `cIntuition` corruption. |
 | `THEOC_PROFILE=1` | Size-weighted guest basic-block histogram, rolling top-15 every 3s (labelled `game`/`mvos+off`). Found the hot blit functions. |
 | `THEOC_AUTO_PROVINCE=1` | Self-drives menu → Prophecy → OK into province view (wall-clock scheduled) for unattended timing tests. |
 | `THEOC_FRAME_MS=N` | Frame-rate cap in ms (default 83 = 12fps, the designed province rate; 0 disables). |
