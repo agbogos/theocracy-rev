@@ -103,34 +103,50 @@ Result: province **12fps → ~40fps**, heartbeat back to a solid **30Hz**.
 
 ### Symptom
 With Bug 1 fixed, province rendered smoothly at ~40fps, but **the whole
-simulation/animation ran ~1.5× too fast.**
+simulation/animation ran too fast** ("turbo").
 
 ### Root cause
 The engine **steps physics/animation once per rendered frame** (a common
-2000-era assumption: "frame rate is fixed, so one step per frame"). It was tuned
-for a capped frame rate; the *reason the frame limiter exists* is to hold that
-rate constant across hardware. Rendering faster than the design cadence therefore
-runs the sim faster. This is inherent to the engine, not our emulation — you
-cannot have uncapped-smooth **and** correct-speed with a frame-tied sim without
-decoupling them (which means patching game logic in `theocracy.real` — risky).
+2000-era assumption: "frame rate is fixed, so one step per frame"). Bug 1's fix
+sped rendering far past the frame rate the sim was tuned for, so the sim ran
+proportionally fast. This is inherent to the engine, not our emulation.
 
-### Fix — cap the render rate to the design cadence
-Clamp the **minimum** present interval to the game's own master-clock period
-(default **33ms = 30Hz**, matching the `setitimer` rate — the most defensible
-target since the engine is built around that clock). Measured *present-to-present*
-so it only slows frames that are already too fast; the game's own `usleep` pacing
-counts toward the interval and is never double-limited.
+### The designed frame rate — read from the game binary
+`cProvince::Do` (`theocracy.real:0x081da59b`, the province tick) contains the
+frame limiter, and its target constant is explicit:
+
+```c
+Set__8cDayTimell(&target, 0, 0x14585);              // 0x14585 = 83333 µs
+if (elapsed_since_last_frame < target)
+    Sleep__11cSyncSystemUl(target - elapsed);       // sleep the remainder
+```
+
+**`0x14585` = 83,333 µs = exactly 1/12 s → province is designed for 12fps.**
+(The `40000`/`30000` constants just below are unrelated: the async asset-streaming
+budget — spend up to 40ms/frame preloading bitmaps — which is also what causes the
+province-**entry** load spike.) This means the *original* 11.9fps we measured was
+the **designed** rate — province was never too slow in frame rate; what read as
+"slow/bad" was Bug 1's 6Hz heartbeat (laggy input/UI), which Bug 1 fixes
+independently. On Woody it's **12fps render + async 30Hz heartbeat**, the two
+decoupled by the kernel; our single-threaded emulator cannot run them independently.
+
+### Fix — cap the render rate to the designed cadence
+Clamp the **minimum** present interval to the game's own limiter period
+(default **83ms = 12fps**; `THEOC_FRAME_MS` overrides, 0 disables). Measured
+*present-to-present* so it only slows frames that are already too fast; the game's
+own `usleep` pacing counts toward the interval and is never double-limited.
 
 `port/src/traps.cpp`, in `HLE_SwapBuffers` after present:
 ```
-static const int frame_ms = env THEOC_FRAME_MS ?: 33;   // 0 disables
+static const int frame_ms = env THEOC_FRAME_MS ?: 83;   // 0 disables
 if (frame_ms > 0 && elapsed_since_last_present < frame_ms) usleep(remainder);
 ```
 
-Result: province **~30fps, heartbeat 30Hz**, sim stepping 30×/s (design rate).
-`THEOC_FRAME_MS` tunes the cap; if 30fps is not exactly Woody-correct, the exact
-target constant lives in the game's frame limiter (`theocracy.real:0x81da59b`) and
-can be read by loading `theocracy.real` in Ghidra.
+Result: province **12fps with correct sim speed** — faithful to the original.
+12fps is choppy by modern standards but authentic; the proper way to get
+smooth-**and**-correct is to decouple the sim step from the render frame (render at
+30fps, step the sim at 12Hz), which means patching the frame-tied stepping in
+`theocracy.real` — tracked as a future task in `../../task_fifo.md`.
 
 ---
 
@@ -158,12 +174,12 @@ Same shape as the heartbeat: a real-time obligation tied to the render loop.
 
 **The queue depth *is* the audio latency**, so the target is a direct
 latency↔margin tradeoff: too high delays SFX (0.5s buffer = 0.5s lag — audible),
-too low re-introduces underrun. Target is **~120ms** (`THEOC_AUDIO_MS`), which in
-steady province holds the queue at ~0.08–0.19s (the ~91ms fragment granularity
-sets the swing) with **0 underruns/s** — the low point is still ~5× the ~16ms
-inter-yield gap. A brief blip remains during the **province-load spike** (~1s of
-heavy asset loading at ~14fps where the emulator is genuinely compute-busy and
-rarely yields) — transient, on screen entry, not the continuous stutter.
+too low re-introduces underrun. Target is **~120ms** (`THEOC_AUDIO_MS`), which
+holds the queue at ~0.16–0.21s with **0 underruns/s** even at the 12fps default
+(the buffer absorbs the sparse yields — the mixer stays ~11/s, decoupled from the
+frame rate). A brief blip remains during the **province-load spike** (~1s of heavy
+asset loading where the emulator is genuinely compute-busy and rarely yields) —
+transient, on screen entry, not the continuous stutter.
 
 ## Why the native blit work still mattered
 
@@ -189,7 +205,7 @@ incremental native-override seam. `THEOC_NATIVE_BLIT=0` disables it.
 | `THEOC_FPS=1` | Per-second frame instrument: fps, guest blocks/frame, blocks/sec (saturation check), heartbeat & mixer rates, `usleep`/`gettimeofday`/`select` rates, audio queue depth & underruns/s. The tool that split throughput-vs-timing. |
 | `THEOC_PROFILE=1` | Size-weighted guest basic-block histogram, rolling top-15 every 3s (labelled `game`/`mvos+off`). Found the hot blit functions. |
 | `THEOC_AUTO_PROVINCE=1` | Self-drives menu → Prophecy → OK into province view (wall-clock scheduled) for unattended timing tests. |
-| `THEOC_FRAME_MS=N` | Frame-rate cap in ms (default 33 = 30fps; 0 disables). |
+| `THEOC_FRAME_MS=N` | Frame-rate cap in ms (default 83 = 12fps, the designed province rate; 0 disables). |
 | `THEOC_AUDIO_MS=N` | Mixer queue target = audio latency in ms (default 120). Lower = less latency, more underrun risk. |
 | `THEOC_LEGACY_SLEEP=1` | Revert Bug-1 fix (blind `usleep`, heartbeat only from present). |
 | `THEOC_NATIVE_BLIT=0` | Revert to emulated libmvos rasteriser. |

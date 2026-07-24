@@ -2246,13 +2246,14 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
 
             // Frame-rate cap: physics/animation is frame-tied (engine quirk), so
             // uncapped render = turbo sim. Clamp the minimum present interval to
-            // the design cadence (default 33ms = 30Hz, the game's own timer rate;
+            // the game's own designed province cadence: cProvince::Do's frame
+            // limiter targets 0x14585 µs == 83.3ms == exactly 12fps (default;
             // THEOC_FRAME_MS overrides, 0 disables). Present-to-present timing so
             // only too-fast frames are slowed — the game's usleep pacing already
             // counts toward the interval and is not double-limited.
             static const int frame_ms = []{
                 const char* e = std::getenv("THEOC_FRAME_MS");
-                return e ? atoi(e) : 33;
+                return e ? atoi(e) : 83;
             }();
             if (frame_ms > 0) {
                 auto now = std::chrono::steady_clock::now();

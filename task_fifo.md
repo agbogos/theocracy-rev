@@ -6,13 +6,18 @@ already landed and `user-test.md` for the manual QA pass.
 
 ## Remaining (FIFO — prefer top)
 
-1. **Province-view performance** — the last open functional bug. Slow after
-   `setitimer`; also slow on the Win VM, so likely genuine sim/CPU load, not
-   timer-gated. **Tool built:** `THEOC_PROFILE=1` (Machine block profiler) prints
-   a rolling top-15 of hot guest blocks every 3s, labelled `game`/`mvos+off`
-   (mvos off = libmvos *file* addr; Ghidra addr = +0x10000). Needs UI-driving
-   into province view; then map the hot addresses in Ghidra to the heavy
-   function (sim vs. blit vs. trap caller).
+1. **Decouple sim from render (frame-tied engine)** — the engine steps
+   physics/animation once per rendered frame, and `cProvince::Do`
+   (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
+   (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
+   default) for correct sim speed, but 12fps is choppy and — because our
+   single-threaded emulator can't run an async heartbeat — the SIGALRM heartbeat
+   drops to ~2–8Hz at 12fps (input still fine; it goes through the Intuition pipe
+   directly). The proper fix: render at ~30fps but step the sim only every ~2.5
+   frames, so it's smooth **and** correct-speed **and** the heartbeat stays 30Hz.
+   Needs patching the frame-tied stepping in `theocracy.real` (game-logic
+   surgery) — the "gradually rewrite the game natively" territory. See
+   `docs/porting/frame-timing.md`.
 
 2. **Long-session stability** — soak-test a 10+ min session. Suspects: the
    green-run/timer trampoline and the soft-threaded sound mixer (slow ESP drift
@@ -34,6 +39,15 @@ already landed and `user-test.md` for the manual QA pass.
 
 ## Done
 
+- **Province-view "performance" — was wall-clock timing, not throughput** —
+  three coupling bugs, none CPU-bound (blit overrides removed real cost but
+  didn't move the needle). (1) present-coupled 30Hz heartbeat ran at ~6Hz →
+  frame limiter over-slept → 12fps + laggy input; fixed by delivering the tick
+  from inside `usleep` (Linux EINTR semantics). (2) frame-tied sim → capped
+  render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
+  mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
+  `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #1 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and
