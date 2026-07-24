@@ -214,6 +214,7 @@ int main(int argc, char** argv) {
         // the rolling top-N dumps (THEOC_PROFILE=1). Enabled just before Start so
         // boot/ctors aren't in the sample.
         if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
+        else if (std::getenv("THEOC_FPS")) m.enable_block_counter();
 
         // Native overrides for the hot LFB16 software rasterizer (province view
         // was CPU-bound emulating these pixel loops). THEOC_NATIVE_BLIT=0 falls

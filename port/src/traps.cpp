@@ -205,6 +205,7 @@ void TrapLayer::audio_callback(void* userdata, Uint8* stream, int len) {
             self->audio_q_.pop_front();
         } else {
             out[i] = 0;
+            self->audio_underrun_++;   // silence gap = audible stutter (THEOC_FPS)
         }
     }
 }
@@ -540,8 +541,9 @@ void TrapLayer::register_builtins() {
         m.return_double(v);
         return 0;
     };
-    t["gettimeofday"] = [](Machine& m, uint32_t esp) -> uint32_t {
+    t["gettimeofday"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         // struct timeval { time_t tv_sec; suseconds_t tv_usec; } — 32-bit each on i386.
+        fps_gettime_calls_++;
         uint32_t tv = arg(m, esp, 0);
         struct timeval host{};
         gettimeofday(&host, nullptr);
@@ -551,9 +553,11 @@ void TrapLayer::register_builtins() {
         }
         return 0;
     };
-    t["usleep"] = [](Machine& m, uint32_t esp) -> uint32_t {
+    t["usleep"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         uint32_t us = arg(m, esp, 0);
         if (us > 100000) us = 100000;  // cap during bring-up
+        fps_usleep_calls_++;
+        fps_usleep_us_ += us;
         ::usleep(us);
         return 0;
     };
@@ -598,7 +602,7 @@ void TrapLayer::register_builtins() {
         return 0;
     };
     t["fcntl"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["select"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
+    t["select"] = [this](Machine&, uint32_t) -> uint32_t { fps_select_calls_++; return 0; };
     t["gethostbyname"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
     for (const char* nm : {"sem_init", "sem_destroy", "sem_post", "sem_wait",
                            "sem_trywait", "sem_getvalue",
@@ -1258,6 +1262,49 @@ void TrapLayer::register_builtins() {
         t[nm] = [](Machine&, uint32_t) -> uint32_t { return 0; };
 }
 
+void TrapLayer::fps_tick(Machine& m) {
+    if (!fps_init_) {
+        fps_init_ = true;
+        fps_on_ = std::getenv("THEOC_FPS") != nullptr;
+        fps_last_ = std::chrono::steady_clock::now();
+        fps_blocks_base_ = m.exec_blocks();
+    }
+    if (!fps_on_) return;
+    ++fps_frames_;
+    auto now = std::chrono::steady_clock::now();
+    auto dt = now - fps_last_;
+    if (dt < std::chrono::seconds(1)) return;
+
+    double secs = std::chrono::duration<double>(dt).count();
+    uint64_t blocks = m.exec_blocks() - fps_blocks_base_;
+    double fps = fps_frames_ / secs;
+    double bps = blocks / secs;                       // guest blocks / sec
+    double bpf = fps_frames_ ? (double)blocks / fps_frames_ : 0;
+    uint64_t underrun; size_t qdepth;
+    { std::lock_guard<std::mutex> lock(audio_mu_);
+      underrun = audio_underrun_; audio_underrun_ = 0; qdepth = audio_q_.size(); }
+    std::fprintf(stderr,
+        "[fps] %.1f fps | guest %.1fM blk/s (%.2fM/frame) | "
+        "heartbeat %.0f/s mixer %.0f/s\n"
+        "      sleep %.0fms/s in %d usleep | gettimeofday %d/s | select %d/s | "
+        "audio q=%.2fs underrun=%llu/s\n",
+        fps, bps / 1e6, bpf / 1e6,
+        fps_timer_fires_ / secs, fps_sound_fires_ / secs,
+        (fps_usleep_us_ / 1000.0) / secs, fps_usleep_calls_,
+        (int)(fps_gettime_calls_ / secs), (int)(fps_select_calls_ / secs),
+        qdepth / 44100.0, (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)));
+
+    fps_last_ = now;
+    fps_frames_ = 0;
+    fps_blocks_base_ = m.exec_blocks();
+    fps_timer_fires_ = 0;
+    fps_sound_fires_ = 0;
+    fps_usleep_us_ = 0;
+    fps_usleep_calls_ = 0;
+    fps_gettime_calls_ = 0;
+    fps_select_calls_ = 0;
+}
+
 bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     // Host-side SIGALRM without nested uc_emu_start (that crashes Unicorn).
     // Same pattern as sound: rewrite trap return into _TimerFunction(signo);
@@ -1287,6 +1334,7 @@ bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     sp -= 4; m.w32(sp, 14);
     sp -= 4; m.w32(sp, ret);
     m.redirect_guest(fn, sp);
+    fps_timer_fires_++;
     static int nlog;
     if (nlog++ < 8)
         std::printf("  [timer] redirect _TimerFunction (skipped schedule %d)\n", skipped);
@@ -1345,6 +1393,7 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     sp -= 4;
     m.w32(sp, ret);
     next_sound_slice_ = now + std::chrono::milliseconds(90);
+    fps_sound_fires_++;
     static int nred;
     if (nred++ < 4)
         std::printf("  [audio] green-run Entry=%#x arg=%#x\n", pick->entry, pick->arg);
@@ -2086,6 +2135,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                 std::printf("  [cursor] present spr=%#x gd=%#x timer=%s\n",
                             spr, gd_, timer_armed_ ? "on" : "off");
             video_.present();  // pumps SDL
+            fps_tick(m);       // THEOC_FPS: per-second frame/throughput report
 
             // Click-hand frame advance (also done by TimerProc when timer runs).
             tick_pointer_click_anim();
@@ -2112,6 +2162,43 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                     update_intuition_pointer(mouse_x_, mouse_y_, 0);
                     mouse_buttons_ = 0;
                     std::printf("  [input] AUTO_MENU L-up\n");
+                }
+            }
+
+            // THEOC_AUTO_PROVINCE=1: self-drive menu → Prophecy → OK into the
+            // province view for unattended timing tests. Wall-clock scheduled
+            // (fps varies wildly across screens; frame counts are unreliable).
+            //   (80,260)  = Prophecy / new game button
+            //   (466,537) = "OK" that starts the game in province view
+            if (std::getenv("THEOC_AUTO_PROVINCE")) {
+                using clock = std::chrono::steady_clock;
+                if (auto_prov_t0_.time_since_epoch().count() == 0)
+                    auto_prov_t0_ = clock::now();
+                double t = std::chrono::duration<double>(clock::now() - auto_prov_t0_).count();
+                struct Step { double t; int x, y, act; };  // act 0=aim 1=down 2=up
+                static const Step steps[] = {
+                    {1.5,  80, 260, 0}, {1.7,  80, 260, 1}, {1.9,  80, 260, 2},
+                    {3.5, 466, 537, 0}, {3.7, 466, 537, 1}, {3.9, 466, 537, 2},
+                };
+                const int nsteps = (int)(sizeof steps / sizeof steps[0]);
+                if (auto_prov_stage_ < nsteps && t >= steps[auto_prov_stage_].t) {
+                    const Step& s = steps[auto_prov_stage_];
+                    if (s.act == 0) {
+                        mouse_x_ = s.x; mouse_y_ = s.y;
+                        update_intuition_pointer(s.x, s.y, 0);
+                        push_intuition_move(s.x, s.y);
+                    } else if (s.act == 1) {
+                        push_intuition_button_edges(0, 1);
+                        update_intuition_pointer(mouse_x_, mouse_y_, 1);
+                        mouse_buttons_ = 1;
+                    } else {
+                        push_intuition_button_edges(1, 0);
+                        update_intuition_pointer(mouse_x_, mouse_y_, 0);
+                        mouse_buttons_ = 0;
+                    }
+                    std::printf("  [auto-prov] stage %d act %d at %d,%d (t=%.1fs)\n",
+                                auto_prov_stage_, s.act, s.x, s.y, t);
+                    auto_prov_stage_++;
                 }
             }
 

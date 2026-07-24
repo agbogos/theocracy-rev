@@ -111,6 +111,13 @@ public:
     // live windows; hot addresses are labelled game/mvos for the Ghidra DBs.
     void enable_profiling(uint32_t mvos_base);
 
+    // Lightweight always-on guest work counter (THEOC_FPS): counts executed
+    // basic blocks so the frame instrument can report guest-work-per-frame and
+    // per-second throughput without the full profiler histogram. No-op if
+    // profiling is already on (block_hook counts too). Read via exec_blocks().
+    void enable_block_counter();
+    uint64_t exec_blocks() const { return blocks_; }
+
     // Address of the last invalid memory access (for diagnostics).
     uint32_t last_fault_addr() const { return last_fault_addr_; }
     uint32_t last_fault_eip() const { return last_fault_eip_; }
@@ -126,8 +133,10 @@ private:
     static bool mem_hook(uc_engine*, int type, uint64_t addr, int size,
                          int64_t value, void* user);
     static void block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
+    static void count_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     void prof_dump();
 
+    uint64_t blocks_ = 0;            // executed basic blocks (THEOC_FPS/PROFILE)
     bool profiling_ = false;
     uint32_t prof_mvos_base_ = 0;
     uint64_t prof_ticks_ = 0;

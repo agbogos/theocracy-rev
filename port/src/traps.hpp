@@ -157,4 +157,28 @@ private:
     // If due, redirect trap return → _TimerFunction (no nested uc_emu_start).
     // Returns true if redirect_guest was used.
     bool maybe_redirect_timer(Machine& m, uint32_t esp);
+
+    // --- THEOC_FPS frame instrument (throughput-vs-timing diagnostic) ---------
+    // Reports per second: FPS (presents), guest-work/frame (blocks), guest
+    // blocks/sec (throughput ceiling → saturation check), and heartbeat/mixer
+    // redirect rates. Distinguishes CPU-bound (low FPS + constant blocks/sec)
+    // from timing-bound (low FPS + blocks/sec drops → emulator idling).
+    void fps_tick(Machine& m);
+    bool     fps_on_ = false;
+    bool     fps_init_ = false;
+    std::chrono::steady_clock::time_point fps_last_{};
+    int      fps_frames_ = 0;
+    uint64_t fps_blocks_base_ = 0;
+    int      fps_timer_fires_ = 0;
+    int      fps_sound_fires_ = 0;
+    uint64_t fps_usleep_us_ = 0;       // host µs slept in usleep() this window
+    int      fps_usleep_calls_ = 0;
+    int      fps_gettime_calls_ = 0;
+    int      fps_select_calls_ = 0;
+
+    // THEOC_AUTO_PROVINCE self-driver (unattended timing tests).
+    std::chrono::steady_clock::time_point auto_prov_t0_{};
+    int      auto_prov_stage_ = 0;
+
+    uint64_t audio_underrun_ = 0;      // callback samples with empty queue (stutter)
 };

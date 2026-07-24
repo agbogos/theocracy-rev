@@ -89,10 +89,25 @@ uint32_t Machine::esp() const { return reg(UC_X86_REG_ESP); }
 // accumulate size per block-start EIP (Σ instruction bytes ≈ work ≈ time). Only
 // guest code (game/mvos, < 0x50000000) is counted; host trap/stub/scratch pages
 // are skipped. Dumped as a rolling window so the top-N tracks the current screen.
+void Machine::count_hook(uc_engine*, uint64_t addr, uint32_t, void* user) {
+    auto* self = static_cast<Machine*>(user);
+    if ((uint32_t)addr >= 0x50000000) return;    // host trap/stub/scratch — ignore
+    self->blocks_++;
+}
+
+void Machine::enable_block_counter() {
+    if (profiling_) return;                      // block_hook already counts
+    uc_hook h;
+    uc_check(uc_hook_add(uc_, &h, UC_HOOK_BLOCK, (void*)&Machine::count_hook,
+                         this, 1, 0),
+             "uc_hook_add(count)");
+}
+
 void Machine::block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user) {
     auto* self = static_cast<Machine*>(user);
     uint32_t a = (uint32_t)addr;
     if (a >= 0x50000000) return;                 // host trap/stub/scratch — ignore
+    self->blocks_++;
     self->prof_[a] += size;
     if ((++self->prof_ticks_ & 0x3ffff) == 0) {  // check the clock ~every 256k blocks
         auto now = std::chrono::steady_clock::now();
