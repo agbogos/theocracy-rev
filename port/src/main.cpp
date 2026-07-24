@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "blit.hpp"
 #include "elf32.hpp"
 #include "guestlink.hpp"
 #include "machine.hpp"
@@ -213,6 +214,11 @@ int main(int argc, char** argv) {
         // the rolling top-N dumps (THEOC_PROFILE=1). Enabled just before Start so
         // boot/ctors aren't in the sample.
         if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
+
+        // Native overrides for the hot LFB16 software rasterizer (province view
+        // was CPU-bound emulating these pixel loops). THEOC_NATIVE_BLIT=0 falls
+        // back to the emulated libmvos originals for A/B comparison.
+        install_native_blit(m, guestlink::MVOS_BASE);
 
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";

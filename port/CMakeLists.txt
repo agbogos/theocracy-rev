@@ -14,6 +14,7 @@ add_executable(theoc
   src/traps.cpp
   src/video.cpp
   src/mpeg.cpp
+  src/blit.cpp
   # Legacy pure-HLE MVOS method layer (superseded by guest libmvos):
   # src/mvos.cpp
 )
