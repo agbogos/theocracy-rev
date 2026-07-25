@@ -92,7 +92,8 @@ uint32_t Machine::esp() const { return reg(UC_X86_REG_ESP); }
 void Machine::count_hook(uc_engine*, uint64_t addr, uint32_t, void* user) {
     auto* self = static_cast<Machine*>(user);
     if ((uint32_t)addr >= 0x50000000) return;    // host trap/stub/scratch — ignore
-    self->blocks_++;
+    self->blocks_.fetch_add(1, std::memory_order_relaxed);
+    self->last_block_.store((uint32_t)addr, std::memory_order_relaxed);
 }
 
 void Machine::enable_block_counter() {
@@ -107,7 +108,8 @@ void Machine::block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user) {
     auto* self = static_cast<Machine*>(user);
     uint32_t a = (uint32_t)addr;
     if (a >= 0x50000000) return;                 // host trap/stub/scratch — ignore
-    self->blocks_++;
+    self->blocks_.fetch_add(1, std::memory_order_relaxed);
+    self->last_block_.store(a, std::memory_order_relaxed);
     self->prof_[a] += size;
     if ((++self->prof_ticks_ & 0x3ffff) == 0) {  // check the clock ~every 256k blocks
         auto now = std::chrono::steady_clock::now();

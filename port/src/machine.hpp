@@ -1,6 +1,7 @@
 // Unicorn i386 wrapper: guest memory, the HLE trap layer, and the
 // native->guest "call a guest function" primitive.
 #pragma once
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -116,7 +117,14 @@ public:
     // per-second throughput without the full profiler histogram. No-op if
     // profiling is already on (block_hook counts too). Read via exec_blocks().
     void enable_block_counter();
-    uint64_t exec_blocks() const { return blocks_; }
+    uint64_t exec_blocks() const { return blocks_.load(std::memory_order_relaxed); }
+
+    // Last guest basic-block address executed (0 if the block counter is off).
+    // Written from the emulation thread, read by the stall watchdog thread —
+    // relaxed atomics, since a diagnostic only needs an approximately-current
+    // value. With exec_blocks() this answers the freeze question: blocks still
+    // climbing = guest spinning at this EIP; blocks frozen = stuck host-side.
+    uint32_t last_block() const { return last_block_.load(std::memory_order_relaxed); }
 
     // Address of the last invalid memory access (for diagnostics).
     uint32_t last_fault_addr() const { return last_fault_addr_; }
@@ -136,7 +144,8 @@ private:
     static void count_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     void prof_dump();
 
-    uint64_t blocks_ = 0;            // executed basic blocks (THEOC_FPS/PROFILE)
+    std::atomic<uint64_t> blocks_{0};  // executed basic blocks (THEOC_FPS/PROFILE)
+    std::atomic<uint32_t> last_block_{0};  // last guest block EIP (watchdog)
     bool profiling_ = false;
     uint32_t prof_mvos_base_ = 0;
     uint64_t prof_ticks_ = 0;

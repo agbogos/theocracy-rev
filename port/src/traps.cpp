@@ -161,6 +161,10 @@ TrapLayer::TrapLayer(std::vector<std::string> names)
 }
 
 TrapLayer::~TrapLayer() {
+    if (wd_thread_.joinable()) {
+        wd_stop_.store(true, std::memory_order_relaxed);
+        wd_thread_.join();
+    }
     if (audio_dev_) {
         SDL_CloseAudioDevice(audio_dev_);
         audio_dev_ = 0;
@@ -169,6 +173,86 @@ TrapLayer::~TrapLayer() {
         if (f.fp && f.fp != stdin && f.fp != stdout && f.fp != stderr) std::fclose(f.fp);
     for (auto& [_, f] : fds_)
         if (f.host_fd >= 0) ::close(f.host_fd);
+}
+
+// THEOC_AUTO_KEYS=1: tap SPACE every few seconds through the real SDL event
+// path. The mouse self-drivers never press a key, so the keyboard half of the
+// input path had no unattended coverage — and SPACE (eKey 0x51, odd) is exactly
+// the case that wedged cIntuition::PushKeyInput on a stale flags word. Called
+// from both present paths so it also fires during cutscenes (where it skips).
+void TrapLayer::auto_keys_tick() {
+    static const bool on = std::getenv("THEOC_AUTO_KEYS") != nullptr;
+    if (!on) return;
+    using clock = std::chrono::steady_clock;
+    static auto t0 = clock::now();
+    static int fired = 0;
+    static bool held = false;
+    double t = std::chrono::duration<double>(clock::now() - t0).count();
+    auto tap = [&](bool down) {
+        SDL_Event ev{};
+        ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+        ev.key.keysym.scancode = SDL_SCANCODE_SPACE;
+        std::printf("  [input] AUTO_KEYS space %s @%.1fs\n", down ? "down" : "up", t);
+        on_sdl_event(ev);
+    };
+    if (!held && t >= 6.0 * (fired + 1)) { tap(true);  held = true; }
+    else if (held && t >= 6.0 * (fired + 1) + 0.2) { tap(false); held = false; fired++; }
+}
+
+// ---- stall watchdog ---------------------------------------------------------
+// A freeze is only ambiguous until you know whether the CPU is still running.
+// This thread watches the present counter; when frames stop it samples guest
+// blocks and trap calls over half a second and says which side is stuck.
+void TrapLayer::start_watchdog(Machine& m) {
+    if (wd_thread_.joinable()) return;
+    const char* env = std::getenv("THEOC_WATCHDOG");
+    if (!env) return;
+    double secs = std::atof(env);
+    if (secs <= 1.0) secs = 10.0;          // "=1" means "on", not "1 second"
+    wd_m_ = &m;
+    m.enable_block_counter();              // no-op if THEOC_FPS/PROFILE armed it
+    std::fprintf(stderr, "[watchdog] stall watchdog ON (report after %.0fs "
+                 "without a frame)\n", secs);
+    wd_thread_ = std::thread([this, secs] { watchdog_loop(secs); });
+}
+
+void TrapLayer::watchdog_loop(double stall_sec) {
+    using clock = std::chrono::steady_clock;
+    uint64_t seen = present_seq_.load(std::memory_order_relaxed);
+    auto last_frame = clock::now();
+    while (!wd_stop_.load(std::memory_order_relaxed)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        uint64_t now_seq = present_seq_.load(std::memory_order_relaxed);
+        auto now = clock::now();
+        if (now_seq != seen) {             // frames still coming — not wedged
+            seen = now_seq;
+            last_frame = now;
+            continue;
+        }
+        double stalled = std::chrono::duration<double>(now - last_frame).count();
+        if (stalled < stall_sec) continue;
+        // Sample both counters across a window: are we moving at all?
+        uint64_t b0 = wd_m_->exec_blocks(), t0 = trap_seq_.load(std::memory_order_relaxed);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        uint64_t db = wd_m_->exec_blocks() - b0;
+        uint64_t dt = trap_seq_.load(std::memory_order_relaxed) - t0;
+        uint32_t eip = wd_m_->last_block();
+        const char* tn = last_trap_.load(std::memory_order_relaxed);
+        const uint32_t mvos = mvos_base_ ? mvos_base_ : 0x10000000u;
+        char lbl[48];
+        if (eip >= mvos && eip < mvos + 0x200000)
+            std::snprintf(lbl, sizeof lbl, "mvos+%#x", eip - mvos);
+        else
+            std::snprintf(lbl, sizeof lbl, "game %#010x", eip);
+        std::fprintf(stderr,
+                     "\n[watchdog] STALLED %.1fs with no frame — guest %s\n"
+                     "  +%llu blocks / +%llu traps in 0.5s | last guest EIP %s"
+                     " | last trap %s | heap %.1f MB live\n",
+                     stalled, db ? "STILL RUNNING (spinning)" : "NOT EXECUTING (stuck host-side)",
+                     (unsigned long long)db, (unsigned long long)dt, lbl,
+                     tn ? tn : "(none)", heap_live_ / 1048576.0);
+        last_frame = now;                  // re-report once per stall_sec
+    }
 }
 
 void TrapLayer::ensure_audio() {
@@ -935,17 +1019,21 @@ void TrapLayer::register_builtins() {
         uint32_t h = arg(m, esp, 0);
         if (!h) return (uint32_t)-1;
         auto* mov = mpeg_.get(h);
-        if (!mov || !mov->playing) return 0;  // STOPPED
+        if (!mov || !mov->playing) { movie_playing_ = false; return 0; }  // STOPPED
         if (mov->frame_i >= mov->frames.size()) {
             mov->playing = false;
+            movie_playing_ = false;
             m.w32(h + 4, 0);
             return 0;
         }
+        movie_playing_ = true;
         return 1;  // PLAYING
     };
     t["SMPEG_delete"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         uint32_t h = arg(m, esp, 0);
         if (h) mpeg_.erase(h);
+        movie_playing_ = false;
+        if (key_mailbox_) { m.w32(key_mailbox_, 0); m.w32(key_mailbox_ + 4, 0); }
         return 0;
     };
     t["SMPEG_enablevideo"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
@@ -1067,6 +1155,9 @@ void TrapLayer::register_builtins() {
             if (nbytes > GUEST_FB_SIZE) nbytes = GUEST_FB_SIZE;
             m.read(GUEST_FB_BASE, video_.fb(), nbytes);
             video_.present();
+            present_seq_.fetch_add(1, std::memory_order_relaxed);
+            start_watchdog(m); // cutscenes present here, not via SwapBuffers
+            auto_keys_tick();  // may skip this cutscene
         }
         if (mov->frame_i >= mov->frames.size()) {
             mov->playing = false;
@@ -1589,6 +1680,9 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
 uint32_t TrapLayer::dispatch(Machine& m, uint32_t slot, uint32_t esp) {
     if (slot >= names_.size()) return 0;
     hits_[slot]++;
+    // Watchdog breadcrumbs (relaxed; names_ is fixed after construction).
+    trap_seq_.fetch_add(1, std::memory_order_relaxed);
+    last_trap_.store(names_[slot].c_str(), std::memory_order_relaxed);
     auto it = table_.find(names_[slot]);
     if (it != table_.end()) return it->second(m, esp);
     if (hits_[slot] == 1)   // first hit only, to keep the log readable
@@ -1708,15 +1802,46 @@ uint32_t TrapLayer::make_device(Machine& m, const char* kind) {
             0xC3,                         // ret (cdecl)
         };
         if (stub_key) m.write(stub_key, key_stub, sizeof key_stub);
-        // PushKeyInput: zero 8-byte event at sret, ret $4 (stdcall half-clean).
-        uint32_t stub_next = stub_alloc(m, 32);
+        // Driver slot +0x0c "next key event" [vt+0x0c](sret, this). The sret
+        // buffer is {int keycode; int flags} — NOT {count, key}:
+        //   keycode == 0            → queue empty
+        //   (char)flags  < 0        → press   (bit 7 set)
+        //   (char)flags >= 0        → release
+        //   flags & 1               → "clear the key matrix" request
+        // Two guest consumers, and they disagree about what matters:
+        //   cIntuition::PushKeyInput (mvos+0x8e670) drains it into the Intuition
+        //     ring, and re-polls while (flags & 1) BEFORE testing keycode == 0.
+        //     So a stale odd flags word here is an infinite loop in the guest.
+        //   External_PlayAnim's cutscene loop (mvos+0xa1850) breaks on
+        //     keycode == 1 && (char)flags >= 0 — that is how intros are skipped;
+        //     it bypasses the Intuition ring entirely.
+        // We keep the mailbox EMPTY except while a cutscene is on screen, so the
+        // normal input path is untouched (keys already reach the game through
+        // the Intuition ring and the cKeyboard matrix — feeding them here too
+        // would deliver every keystroke twice).
+        key_mailbox_ = bump_alloc(8);
+        if (key_mailbox_) { m.w32(key_mailbox_, 0); m.w32(key_mailbox_ + 4, 0); }
+        uint32_t stub_next = stub_alloc(m, 64);
+        const uint32_t mb = key_mailbox_;
         const uint8_t next_stub[] = {
-            0x8B, 0x44, 0x24, 0x04,                   // mov eax, [esp+4] sret
-            0xC7, 0x00, 0x00, 0x00, 0x00, 0x00,       // mov [eax], 0
-            0xC7, 0x40, 0x04, 0x00, 0x00, 0x00, 0x00, // mov [eax+4], 0
-            0xC2, 0x04, 0x00,                         // ret $4
+            0x8B, 0x44, 0x24, 0x04,                   // mov eax, [esp+4]  sret
+            0x8B, 0x0D, (uint8_t)mb, (uint8_t)(mb >> 8),
+                        (uint8_t)(mb >> 16), (uint8_t)(mb >> 24),   // mov ecx,[mb]
+            0x89, 0x08,                               // mov [eax], ecx    count
+            0x8B, 0x0D, (uint8_t)(mb + 4), (uint8_t)((mb + 4) >> 8),
+                        (uint8_t)((mb + 4) >> 16), (uint8_t)((mb + 4) >> 24),
+            0x89, 0x48, 0x04,                         // mov [eax+4], ecx  flags
+            // Consume: BOTH words. Clearing only the keycode leaves the flags
+            // word set, and PushKeyInput spins on (flags & 1) forever.
+            0xC7, 0x05, (uint8_t)mb, (uint8_t)(mb >> 8),
+                        (uint8_t)(mb >> 16), (uint8_t)(mb >> 24),
+                        0x00, 0x00, 0x00, 0x00,       // mov dword [mb], 0
+            0xC7, 0x05, (uint8_t)(mb + 4), (uint8_t)((mb + 4) >> 8),
+                        (uint8_t)((mb + 4) >> 16), (uint8_t)((mb + 4) >> 24),
+                        0x00, 0x00, 0x00, 0x00,       // mov dword [mb+4], 0
+            0xC2, 0x04, 0x00,                         // ret $4 (eax = sret)
         };
-        if (stub_next) m.write(stub_next, next_stub, sizeof next_stub);
+        if (stub_next && key_mailbox_) m.write(stub_next, next_stub, sizeof next_stub);
         uint32_t kvt = bump_alloc(16 * 4);
         for (uint32_t i = 0; i < 16; ++i) m.w32(kvt + 4 * i, stub0);
         m.w32(kvt + 0x0c, stub_next);
@@ -2133,6 +2258,22 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
                         m.w32(vkey + 0x7c, 0xffffffffu);
                 }
             }
+            // Cutscene skip: External_PlayAnim polls [VKeyboard+0x84][+0x0c]
+            // directly (outside the Intuition ring) and breaks on
+            //   keycode == 1 && (char)flags >= 0.
+            // Only post while a movie is actually on screen — outside one this
+            // mailbox must stay empty or cIntuition::PushKeyInput picks it up
+            // (double input at best, and it hangs on an odd flags word).
+            // Deviation from the original, deliberate: the guest condition is
+            // keycode 1 specifically, so stock only skips on that one key. We
+            // report keycode 1 for ANY key, making every key a skip key.
+            // flags = 0: release-shaped and, critically, bit 0 clear.
+            // THEOC_LEGACY_KEYMB=1 reverts to never posting (unskippable).
+            static const bool legacy_keymb = std::getenv("THEOC_LEGACY_KEYMB") != nullptr;
+            if (down && key_mailbox_ && movie_playing_ && !legacy_keymb) {
+                m.w32(key_mailbox_, 1);
+                m.w32(key_mailbox_ + 4, 0);
+            }
             // ProcessInputs → ProcessTree (UI / edit rows / hotkeys).
             push_intuition_event(down ? 8u : 0x10u, code);
             // Mirror SetQualifierState for polls that skip ProcessInputs.
@@ -2324,6 +2465,9 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                 std::printf("  [cursor] present spr=%#x gd=%#x timer=%s\n",
                             spr, gd_, timer_armed_ ? "on" : "off");
             video_.present();  // pumps SDL
+            present_seq_.fetch_add(1, std::memory_order_relaxed);
+            start_watchdog(m); // THEOC_WATCHDOG: arms on the first frame
+            auto_keys_tick();
             fps_tick(m);       // THEOC_FPS: per-second frame/throughput report
 
             // Click-hand frame advance (also done by TimerProc when timer runs).

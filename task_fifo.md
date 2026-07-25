@@ -51,6 +51,15 @@ results. Order below is **playability first, modernisation after**.
 
 ## Done
 
+- **Cutscene skip wedged the menu in an infinite guest loop (G16)** — skipping an
+  intro with SPACE left `cIntuition::PushKeyInput` spinning at `mvos+0x8e6cc`
+  forever. The driver's next-event struct is `{keycode, flags}`, not
+  `{count, key}`; `flags & 1` means "clear key matrix" and is tested *before* the
+  `keycode == 0` exit, so the stale odd flags word from eKey `0x51` never let the
+  loop end. Fixed by using the real field contract, clearing both words on read,
+  and only filling the mailbox while a movie is actually on screen. Found with
+  the new `THEOC_WATCHDOG`. See G16 in `docs/porting/guest-libmvos.md`.
+
 - **Guest `free()` was a no-op → OOM crash on the second scenario load (G15)** —
   Chronicle → quit → new campaign died with `[heap] OUT OF MEMORY` and then a
   write through a NULL `malloc` result (`game 0x82c9914`, `mov [eax+edx*4],ecx`
@@ -109,6 +118,13 @@ results. Order below is **playability first, modernisation after**.
   G14) — and now that `free()` really recycles, it would be reused sooner.
   Dedicated regions outside the arena (`SINGLETON_BASE`, `GUEST_FB_BASE`,
   `STUB_CODE`) are the other safe home.
+- **`THEOC_WATCHDOG=secs`** — reports a stall and, decisively, whether the guest
+  is still executing (spinning, with the EIP) or wedged host-side (with the last
+  trap). First thing to reach for on any "it froze".
+- `THEOC_AUTO_KEYS=1` — taps SPACE every 6s via the real SDL path (skips
+  cutscenes; unattended coverage for the keyboard input path).
+- `THEOC_LEGACY_KEYMB=1` — never fill the cutscene-skip key mailbox (intros
+  unskippable); A/B switch for input-path hangs.
 - `THEOC_HEAP_TEST=1` — run the guest allocator's self-test standalone and exit.
 - `THEOC_START_SEC` default 600; `0` = unlimited (covers long intros / real play).
 - `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).

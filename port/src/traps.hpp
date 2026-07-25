@@ -14,9 +14,11 @@
 #include "video.hpp"
 #include "mpeg.hpp"
 #include <SDL2/SDL.h>
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <mutex>
+#include <thread>
 
 class TrapLayer {
 public:
@@ -101,6 +103,29 @@ private:
     void fl_erase(uint32_t addr, uint32_t size);
     void guest_free(uint32_t p);
     uint32_t bump_alloc(uint32_t size);
+    // Stall watchdog (THEOC_WATCHDOG=secs, default 10 when set to 1). A host
+    // thread that reports when presents stop, and — crucially — whether the
+    // emulator is still executing guest code. blocks climbing = the guest is
+    // spinning in a loop (the reported EIP is that loop); blocks frozen = we
+    // are wedged host-side, in the last-named trap. Freezes are hard to catch
+    // interactively, so this turns "it hung" into an address.
+    // THEOC_AUTO_KEYS=1: unattended SPACE taps through the SDL event path.
+    void auto_keys_tick();
+    void start_watchdog(Machine& m);
+    void watchdog_loop(double stall_sec);
+    std::thread wd_thread_;
+    std::atomic<bool> wd_stop_{false};
+    Machine* wd_m_ = nullptr;
+    std::atomic<uint64_t> present_seq_{0};
+    std::atomic<uint64_t> trap_seq_{0};
+    std::atomic<const char*> last_trap_{nullptr};
+    // True while an SMPEG cutscene is on screen: gates the key mailbox below,
+    // so it is only ever non-empty during a movie.
+    bool movie_playing_ = false;
+    // 8-byte guest mailbox {int keycode; int flags} drained by the VKeyboard
+    // driver-table slot +0x0c stub. Host posts a key-down here; the cutscene
+    // loop in External_PlayAnim polls that slot to decide whether to skip.
+    uint32_t key_mailbox_ = 0;
     // RX stub page for guest-callable driver methods (heap is RW only).
     uint32_t stub_next_ = 0;
     uint32_t stub_alloc(Machine& m, uint32_t size);

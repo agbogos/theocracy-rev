@@ -475,6 +475,66 @@ Reporting now distinguishes **live** (held right now) from **frontier**
 with a no-op `free` those were the same number, which is why the leak was
 invisible.
 
+## G16 — cutscene skip, and the key-event struct we had wrong (done)
+
+Skipping an intro with a key left the game spinning forever once it reached the
+menu: no frame, no trap, ~1.2M guest blocks per half-second at `mvos+0x8e6cc`.
+
+The keyboard driver's "next event" method — `[VKeyboard+0x84][+0x0c](sret, this)`
+— returns `{int keycode; int flags}`, not the `{count, key}` we assumed:
+
+| field | meaning |
+| --- | --- |
+| `keycode` | `0` = queue empty |
+| `(char)flags < 0` | press (bit 7) |
+| `(char)flags >= 0` | release |
+| `flags & 1` | "clear the key matrix" request |
+
+Two guest consumers read it, and they care about different fields:
+
+- `cIntuition::PushKeyInput` (`mvos+0x8e670`) drains it into the Intuition ring,
+  and **re-polls while `flags & 1` *before* testing `keycode == 0`**.
+- `External_PlayAnim`'s play loop (`mvos+0xa1850`) breaks on
+  `keycode == 1 && (char)flags >= 0`, bypassing the Intuition ring — this is the
+  intro-skip path.
+
+Our first cut at skip filled the mailbox with `keycode = 1, flags = eKeyCode`,
+on *every* key-down anywhere, and cleared only `keycode` on read. Pressing SPACE
+(eKey `0x51`, odd) therefore left `flags & 1` set permanently, and the next
+`PushKeyInput` — i.e. the first one the menu ran — looped on it forever. The
+exit test sat one branch past the loop and was never reached.
+
+Fixed by matching the real contract: `flags = 0` (bit 0 clear), the stub clears
+**both** words on read, and the mailbox is only ever non-empty **while a cutscene
+is on screen** (`movie_playing_`, set from `SMPEG_status`). Outside a movie it
+stays empty, so the normal input path is exactly as before — keys already reach
+the game via the Intuition ring and the `cKeyboard` matrix, and feeding them here
+too would deliver every keystroke twice.
+
+Deliberate deviation: stock only skips on `keycode == 1` (one specific key). We
+report `keycode 1` for any key, so **any key skips a cutscene**.
+`THEOC_LEGACY_KEYMB=1` reverts to never posting (cutscenes unskippable).
+
+### Instruments added by this hunt
+
+- **`THEOC_WATCHDOG=secs`** (default 10) — a host thread that reports when
+  presents stop, and crucially whether the emulator is *still executing guest
+  code*: blocks climbing = the guest is spinning, and the reported EIP is the
+  loop; blocks frozen = wedged host-side in the named trap. This is what turned
+  "it hangs" into `mvos+0x8e6cc` in one run. Freezes are hard to catch
+  interactively, so reach for this first.
+- **`THEOC_AUTO_KEYS=1`** — taps SPACE every 6s through the real SDL event path,
+  from both present sites (so it also fires during cutscenes). The mouse
+  self-drivers never pressed a key, which is why this hang had no unattended
+  coverage.
+
+Verified: intros skip on space (menu at 18s vs ~85s), then 11 further space taps
+in the menu — 0 stalls, steady 12fps, clean exit, 0 unimplemented.
+
+One thing this surfaced and did **not** fix: entering the province, the emulator
+sits >2s executing nothing at all (`+0 blocks / +0 traps`) across the 800×600 →
+640×480 mode switch. It recovers, but it is a host-side blocking wait.
+
 ## Build / run
 
 ```sh
