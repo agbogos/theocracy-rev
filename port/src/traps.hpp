@@ -141,6 +141,18 @@ private:
     };
     // THEOC_AUTO_KEYS=1: unattended SPACE taps through the SDL event path.
     void auto_keys_tick();
+    // THEOC_SOAK=cycles: drive menu → campaign → province → map → quit → menu
+    // repeatedly, snapshotting resource use at the same point each cycle.
+    // THEOC_SOAK_PLAY=sec controls the province dwell (default 20).
+    void soak_tick();
+    bool soak_click_step(int x, int y);
+    void soak_snapshot(const char* tag);
+    uint32_t active_screen() const;
+    std::chrono::steady_clock::time_point soak_t0_{}, soak_step_started_{};
+    int soak_click_phase_ = 0, soak_click_frames_ = 0;
+    int  soak_cycle_ = 0, soak_step_ = 0;
+    bool soak_clicked_ = false, soak_done_ = false;
+    uint32_t soak_screen_before_ = 0;
     void start_watchdog(Machine& m);
     void watchdog_loop(double stall_sec);
     std::thread wd_thread_;

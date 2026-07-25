@@ -1,4 +1,7 @@
 #include "traps.hpp"
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#endif
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -197,6 +200,177 @@ void TrapLayer::auto_keys_tick() {
     };
     if (!held && t >= 6.0 * (fired + 1)) { tap(true);  held = true; }
     else if (held && t >= 6.0 * (fired + 1) + 0.2) { tap(false); held = false; fired++; }
+}
+
+// ---- soak driver (THEOC_SOAK=cycles) ----------------------------------------
+// Loops: main menu → Prophecy → OK → province → map → exit → confirm → menu,
+// snapshotting resource use at the same point in every cycle. This is the G15
+// pattern (load / unload repeatedly), which is what exhausted the guest heap.
+//
+// Steps wait on an observable transition, not a stopwatch. The active cScreen*
+// at Intuition+0x24 changes on every screen change, so "click, then wait for
+// that pointer to differ" survives a slow load; a wall-clock script does not,
+// and one late load would desync every later click onto the wrong screen.
+// A click has to be paced across frames, not squeezed into one. At the 12fps
+// province cadence a frame is 83ms, and the game only samples the pointer once
+// per ProcessInputs — aim and press in the same frame, or a release under one
+// frame later, and the press is never observed. Mirrors the spacing the working
+// AUTO_PROVINCE driver uses. Returns true when the click is finished.
+bool TrapLayer::soak_click_step(int x, int y) {
+    const int kFramesPerPhase = 3;
+    if (++soak_click_frames_ < kFramesPerPhase) return false;
+    soak_click_frames_ = 0;
+    switch (soak_click_phase_++) {
+        case 0:                                  // aim
+            mouse_x_ = x; mouse_y_ = y;
+            update_intuition_pointer(x, y, 0);
+            push_intuition_move(x, y);
+            return false;
+        case 1:                                  // press
+            push_intuition_button_edges(0, 1);
+            update_intuition_pointer(x, y, 1);
+            mouse_buttons_ = 1;
+            return false;
+        default:                                 // release
+            push_intuition_button_edges(1, 0);
+            update_intuition_pointer(x, y, 0);
+            mouse_buttons_ = 0;
+            return true;
+    }
+}
+
+uint32_t TrapLayer::active_screen() const {
+    uint32_t intu = intuition_obj();
+    if (!intu || !machine_) return 0;
+    try { return machine_->r32(intu + 0x24); } catch (...) { return 0; }
+}
+
+void TrapLayer::soak_snapshot(const char* tag) {
+    size_t rss = 0;
+#if defined(__APPLE__)
+    mach_task_basic_info info{};
+    mach_msg_type_number_t cnt = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  (task_info_t)&info, &cnt) == KERN_SUCCESS)
+        rss = info.resident_size;
+#endif
+    uint32_t esp = 0;
+    if (machine_) { try { esp = machine_->reg(UC_X86_REG_ESP); } catch (...) {} }
+    std::fprintf(stderr,
+        "[soak] %-9s cycle %d | heap %.2f MB live / %.2f MB frontier "
+        "| rss %.1f MB | esp %#x | stubs %u B | fds %zu\n",
+        tag, soak_cycle_, heap_live_ / 1048576.0,
+        (heap_next_ - HEAP_BASE) / 1048576.0, rss / 1048576.0, esp,
+        stub_next_ ? stub_next_ - STUB_CODE : 0u, fds_.size());
+    std::fflush(stderr);
+}
+
+void TrapLayer::soak_tick() {
+    static const int want_cycles = [] {
+        const char* e = std::getenv("THEOC_SOAK");
+        if (!e) return 0;
+        int v = std::atoi(e);
+        return v > 0 ? v : 5;
+    }();
+    if (!want_cycles) return;
+
+    using clock = std::chrono::steady_clock;
+    auto now = clock::now();
+
+    // The script. wait_screen = proceed when the active cScreen* changes from
+    // what it was when the step began; wait_sec = settle time (the quit confirm
+    // is an overlay on the same screen, so there is no pointer change to wait
+    // for). Every step has a deadline: a step that never completes is a bug we
+    // want reported loudly, not a driver that hangs silently.
+    struct Step { const char* what; int x, y; bool wait_screen; double wait_sec; double timeout; };
+    static const Step script[] = {
+        {"prophecy",  65, 260, true,  0.0, 90.0},  // main menu → campaign
+        {"ok",       464, 535, true,  0.0, 90.0},  // scrolling intro → province
+        {"play",       0,   0, false, 0.0, 0.0},   // dwell (THEOC_SOAK_PLAY)
+        {"map",       93,  15, true,  0.0, 60.0},  // province → map
+        {"exit",      91,  10, false, 1.5, 60.0},  // map → confirm overlay
+        {"confirm",  357, 326, true,  0.0, 60.0},  // → back at main menu
+    };
+    static const int nsteps = (int)(sizeof script / sizeof script[0]);
+    static const double play_sec = [] {
+        const char* e = std::getenv("THEOC_SOAK_PLAY");
+        double v = e ? std::atof(e) : 20.0;
+        return v > 0 ? v : 20.0;
+    }();
+
+    if (soak_t0_.time_since_epoch().count() == 0) {
+        soak_t0_ = now;
+        soak_step_started_ = now;
+        // Line-buffer stdout so guest prints interleave correctly with our
+        // stderr diagnostics; block buffering makes the log unreadable.
+        setvbuf(stdout, nullptr, _IOLBF, 0);
+        std::fprintf(stderr, "[soak] driver ON — %d cycles, %.0fs play per cycle\n",
+                     want_cycles, play_sec);
+    }
+    if (soak_done_) return;
+
+    // Settle before the very first click: the menu needs to exist.
+    double since_step = std::chrono::duration<double>(now - soak_step_started_).count();
+    if (soak_step_ == 0 && soak_cycle_ == 0 && since_step < 3.0) return;
+
+    const Step& st = script[soak_step_];
+
+    if (!soak_clicked_) {                       // ---- perform the step
+        if (std::strcmp(st.what, "play") == 0) {
+            soak_clicked_ = true;
+            soak_screen_before_ = active_screen();
+            soak_step_started_ = now;
+            return;
+        }
+        if (soak_click_phase_ == 0 && soak_click_frames_ == 0) {
+            soak_screen_before_ = active_screen();
+            std::fprintf(stderr, "[soak] cycle %d step %-8s click %d,%d (win %dx%d screen %#x)\n",
+                         soak_cycle_, st.what, st.x, st.y,
+                         video_.width(), video_.height(), soak_screen_before_);
+        }
+        if (soak_click_step(st.x, st.y)) {
+            soak_click_phase_ = 0;
+            soak_click_frames_ = 0;
+            soak_clicked_ = true;
+            soak_step_started_ = now;
+        }
+        return;
+    }
+
+    // ---- wait for the step to complete
+    bool done = false;
+    if (std::strcmp(st.what, "play") == 0)      done = since_step >= play_sec;
+    else if (st.wait_screen)                    done = active_screen() != soak_screen_before_
+                                                       && active_screen() != 0;
+    else                                        done = since_step >= st.wait_sec;
+
+    if (!done) {
+        if (st.timeout > 0 && since_step > st.timeout) {
+            std::fprintf(stderr,
+                "\n[soak] FAILED: step '%s' (cycle %d) did not complete in %.0fs.\n"
+                "  active screen %#x (was %#x), win %dx%d — driver stopping.\n",
+                st.what, soak_cycle_, st.timeout, active_screen(),
+                soak_screen_before_, video_.width(), video_.height());
+            soak_snapshot("TIMEOUT");
+            soak_done_ = true;
+        }
+        return;
+    }
+
+    soak_clicked_ = false;
+    soak_step_++;
+    soak_step_started_ = now;
+    if (soak_step_ >= nsteps) {                 // ---- cycle complete
+        soak_step_ = 0;
+        soak_cycle_++;
+        soak_snapshot("cycle-end");
+        if (soak_cycle_ >= want_cycles) {
+            double mins = std::chrono::duration<double>(now - soak_t0_).count() / 60.0;
+            std::fprintf(stderr, "[soak] COMPLETE — %d cycles in %.1f min\n",
+                         soak_cycle_, mins);
+            soak_done_ = true;
+        }
+    }
 }
 
 double TrapLayer::slowlog_ms() {
@@ -2262,6 +2436,20 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
         update_intuition_pointer(mouse_x_, mouse_y_, mouse_buttons_);
         push_intuition_move(mouse_x_, mouse_y_);
         push_intuition_button_edges(prev, mouse_buttons_);
+        // THEOC_REPORT_CLICKS=1: log every click, in a form that can be pasted
+        // straight into a self-driver script. The active cScreen* changes on
+        // every screen transition, so it doubles as a screen identity — clicks
+        // sharing a screen value belong to the same screen.
+        static const bool report_clicks = std::getenv("THEOC_REPORT_CLICKS") != nullptr;
+        if (report_clicks && e.type == SDL_MOUSEBUTTONDOWN) {
+            uint32_t intu = intuition_obj();
+            uint32_t scr = 0;
+            if (intu && machine_) { try { scr = machine_->r32(intu + 0x24); } catch (...) {} }
+            std::printf("  [click] %d,%d  btn=%u  win=%dx%d  screen=%#x\n",
+                        mouse_x_, mouse_y_, (unsigned)bit,
+                        video_.width(), video_.height(), scr);
+            std::fflush(stdout);
+        }
         static int nlog;
         if (nlog++ < 16)
             std::printf("  [input] mouse btn mask=%u→%u at %d,%d (Intuition pipe)\n",
@@ -2521,6 +2709,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             present_seq_.fetch_add(1, std::memory_order_relaxed);
             start_watchdog(m); // THEOC_WATCHDOG: arms on the first frame
             auto_keys_tick();
+            soak_tick();       // THEOC_SOAK: load/unload cycle driver
             fps_tick(m);       // THEOC_FPS: per-second frame/throughput report
 
             // Click-hand frame advance (also done by TimerProc when timer runs).

@@ -7,16 +7,7 @@ results. Order below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-1. **Long-session stability** — soak-test a 10+ min session with **several
-   scenario load/unload cycles** (the pattern that found G15). The biggest known
-   cause, a leaking `free()`, is fixed; remaining suspects are the
-   green-run/timer trampoline and the soft-threaded sound mixer (slow ESP drift
-   self-heals on EBP epilogues, but unverified over hours). Watch the
-   `live` vs `frontier` split in the trap report / `THEOC_FPS` line — live
-   climbing across cycles means a real leak, frontier climbing alone means
-   fragmentation.
-
-2. **Cursor ghost trails** — on some screens (Credits, Load Game) the software
+1. **Cursor ghost trails** — on some screens (Credits, Load Game) the software
    cursor leaves behind copies of itself. Cosmetic only, no gameplay effect.
    G14 (`cIntuition` corruption) **noticeably reduced but did not eliminate** it,
    so there is a genuine second cause: likely those screens don't full-repaint
@@ -25,11 +16,11 @@ results. Order below is **playability first, modernisation after**.
    to save/restore the sprite's background rect around present, or force a full
    repaint on those screens.
 
-3. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
+2. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
 
 ## Modernisation (deferred — after playability)
 
-4. **Decouple sim from render (frame-tied engine)** — the engine steps
+3. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -42,14 +33,27 @@ results. Order below is **playability first, modernisation after**.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-5. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+4. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-6. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
 ## Done
+
+- **Long-session soak PASSED (2026-07-25)** — `THEOC_SOAK=20 THEOC_SOAK_PLAY=20`
+  drove 20 full load/unload cycles (menu → Prophecy → OK → province → map → exit
+  → confirm → menu) in 9.2 min: **0 stalls, 0 faults, 0 unimplemented**, no
+  `[slow]` section over 400ms. Cleared three suspects — guest **ESP identical**
+  (`0x6ffff3e4`) across all 20 cycles, so the green-thread mixer does not drift;
+  stub page flat at 144 B of 64 KB (stubs are per-device, not per-cycle); fds
+  flat at 1. Residual, documented and **not** chased: guest heap live grows a
+  very linear **+18 KB/cycle** (11.65 → 12.01 MB over 20), i.e. ~7000 cycles to
+  exhaust the 128 MB arena; host RSS +0.45 MB/cycle but non-monotonic (reads as
+  allocator caching). G15 was 50 MB/cycle and killed the *second* load — that
+  class of bug is gone. Attributing 18 KB/cycle would need an allocation-site
+  histogram, which is the tool to build if this ever matters.
 
 - **Cutscene skip wedged the menu in an infinite guest loop (G16)** — skipping an
   intro with SPACE left `cIntuition::PushKeyInput` spinning at `mvos+0x8e6cc`
@@ -98,7 +102,7 @@ results. Order below is **playability first, modernisation after**.
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #4 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #3 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and
@@ -126,6 +130,15 @@ results. Order below is **playability first, modernisation after**.
   stuck host-side; this says *which handler*. The frame-cap sleep is discounted.
 - `THEOC_WATCHDOG_SAMPLE=<path>` — on a host-side stall, capture a native stack
   (`sample`) of exactly that moment; aggregate profiles can't isolate one.
+- `THEOC_SOAK=cycles` / `THEOC_SOAK_PLAY=sec` — drive load/unload cycles
+  unattended (menu → Prophecy → OK → province → map → exit → confirm → menu),
+  with a per-cycle resource snapshot. Steps wait on the active `cScreen*`
+  (`Intuition+0x24`) changing, not on wall-clock, so a slow load delays the next
+  step instead of desyncing every click after it; each step has a deadline and
+  fails loudly. Clicks are paced aim/press/release 3 frames apart — at 12fps a
+  same-frame press is never observed by the game.
+- `THEOC_REPORT_CLICKS=1` — log every click as `x,y` + window size + active
+  screen, to lift coordinates for a new driver script.
 - `THEOC_AUTO_KEYS=1` — taps SPACE every 6s via the real SDL path (skips
   cutscenes; unattended coverage for the keyboard input path).
 - Known, accepted: `SMPEG_new` decodes a whole movie up front (~0.9s for the
@@ -138,7 +151,7 @@ results. Order below is **playability first, modernisation after**.
 - `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).
 - Keyboard: letters/digits/arrows/modifiers/F-keys/enter/space/backspace; `[` `]`
   not in the original eKey table (won't-fix).
-- Audio can stutter in province view (tied to frame cost — see #4).
+- Audio can stutter in province view (tied to frame cost — see #3).
 - Timer: `redirect_guest` from present (nested `uc_emu_start` crashes Unicorn).
   Sound preferred when its slice is due.
 
