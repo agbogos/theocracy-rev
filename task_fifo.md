@@ -121,8 +121,16 @@ results. Order below is **playability first, modernisation after**.
 - **`THEOC_WATCHDOG=secs`** — reports a stall and, decisively, whether the guest
   is still executing (spinning, with the EIP) or wedged host-side (with the last
   trap). First thing to reach for on any "it froze".
+- `THEOC_SLOWLOG=ms` (default 250) — report any host-side section that blocks the
+  emulation thread longer than the threshold. The watchdog says *that* we are
+  stuck host-side; this says *which handler*. The frame-cap sleep is discounted.
+- `THEOC_WATCHDOG_SAMPLE=<path>` — on a host-side stall, capture a native stack
+  (`sample`) of exactly that moment; aggregate profiles can't isolate one.
 - `THEOC_AUTO_KEYS=1` — taps SPACE every 6s via the real SDL path (skips
   cutscenes; unattended coverage for the keyboard input path).
+- Known, accepted: `SMPEG_new` decodes a whole movie up front (~0.9s for the
+  intro) and `SMPEG_delete` frees it (~0.4s), so ~1.35s brackets a cutscene.
+  Not worth lazy/threaded decode — once per cutscene, and skippable.
 - `THEOC_LEGACY_KEYMB=1` — never fill the cutscene-skip key mailbox (intros
   unskippable); A/B switch for input-path hangs.
 - `THEOC_HEAP_TEST=1` — run the guest allocator's self-test standalone and exit.

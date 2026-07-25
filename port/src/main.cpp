@@ -276,6 +276,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (L.traps) L.traps->stop_watchdog();  // frames stop legitimately now
     if (L.traps) L.traps->report();
     std::printf("\nGuest-libmvos: Init=%s OpenSub=%s Start=%s\n",
                 init_ok ? "ok" : "fail",

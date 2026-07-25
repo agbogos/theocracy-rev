@@ -531,9 +531,33 @@ report `keycode 1` for any key, so **any key skips a cutscene**.
 Verified: intros skip on space (menu at 18s vs ~85s), then 11 further space taps
 in the menu — 0 stalls, steady 12fps, clean exit, 0 unimplemented.
 
-One thing this surfaced and did **not** fix: entering the province, the emulator
-sits >2s executing nothing at all (`+0 blocks / +0 traps`) across the 800×600 →
-640×480 mode switch. It recovers, but it is a host-side blocking wait.
+### Correction: the "2s mode-switch stall" was the instrument, not the port
+
+The first watchdog build reported a >2s host-side stall entering the province.
+That was a **false positive of our own making**: once `Start` returns, the window
+hold presents through `Video::keep_open_for`, which does not go through the
+counter the watchdog reads, so the watchdog saw "no frames, guest not executing"
+and reported the process *shutting down* as a stall. A stack captured at the
+moment of the report showed `~TrapLayer`. Fixed by disarming the watchdog in
+`main` before the wind-down; a full province run now reports **zero** stalls.
+
+Worth remembering: an instrument that measures liveness by a counter must be
+switched off wherever that counter legitimately stops advancing.
+
+Measured host-side costs, with the deliberate frame-cap sleep discounted from
+`THEOC_SLOWLOG` (else every capped frame reports as an 83ms "slow" section):
+
+| section | cost | when |
+| --- | --- | --- |
+| `SMPEG_new` | 912 / 350 / 178 ms | start of each cutscene |
+| `SMPEG_delete` | 443 / 177 ms | end of each cutscene |
+| `video_.open` | 209 ms | first window creation, one-time |
+
+The mode switch is innocent. The cutscene cost is real — `SMPEG_new` decodes the
+whole movie into RAM up front (the intro is 1192 frames + 1.1M audio samples), so
+~1.35s of frozen screen brackets the big one. **Accepted as-is**: it is once per
+cutscene, on screens a keypress already skips. Fixing it would mean lazy or
+threaded decode in `mpeg.cpp`, with A/V-sync risk, for no gameplay gain.
 
 ## Build / run
 

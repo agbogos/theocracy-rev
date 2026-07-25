@@ -199,6 +199,16 @@ void TrapLayer::auto_keys_tick() {
     else if (held && t >= 6.0 * (fired + 1) + 0.2) { tap(false); held = false; fired++; }
 }
 
+double TrapLayer::slowlog_ms() {
+    static const double lim = [] {
+        const char* e = std::getenv("THEOC_SLOWLOG");
+        if (!e) return 0.0;
+        double v = std::atof(e);
+        return v > 1.0 ? v : 250.0;    // "=1" means "on", not "1 ms"
+    }();
+    return lim;
+}
+
 // ---- stall watchdog ---------------------------------------------------------
 // A freeze is only ambiguous until you know whether the CPU is still running.
 // This thread watches the present counter; when frames stop it samples guest
@@ -210,6 +220,7 @@ void TrapLayer::start_watchdog(Machine& m) {
     double secs = std::atof(env);
     if (secs <= 1.0) secs = 10.0;          // "=1" means "on", not "1 second"
     wd_m_ = &m;
+    wd_t0_ = std::chrono::steady_clock::now();
     m.enable_block_counter();              // no-op if THEOC_FPS/PROFILE armed it
     std::fprintf(stderr, "[watchdog] stall watchdog ON (report after %.0fs "
                  "without a frame)\n", secs);
@@ -244,13 +255,29 @@ void TrapLayer::watchdog_loop(double stall_sec) {
             std::snprintf(lbl, sizeof lbl, "mvos+%#x", eip - mvos);
         else
             std::snprintf(lbl, sizeof lbl, "game %#010x", eip);
+        double uptime = std::chrono::duration<double>(now - wd_t0_).count();
         std::fprintf(stderr,
-                     "\n[watchdog] STALLED %.1fs with no frame — guest %s\n"
+                     "\n[watchdog] t=%.1fs STALLED %.1fs with no frame — guest %s\n"
                      "  +%llu blocks / +%llu traps in 0.5s | last guest EIP %s"
                      " | last trap %s | heap %.1f MB live\n",
-                     stalled, db ? "STILL RUNNING (spinning)" : "NOT EXECUTING (stuck host-side)",
+                     uptime, stalled,
+                     db ? "STILL RUNNING (spinning)" : "NOT EXECUTING (stuck host-side)",
                      (unsigned long long)db, (unsigned long long)dt, lbl,
                      tn ? tn : "(none)", heap_live_ / 1048576.0);
+        // THEOC_WATCHDOG_SAMPLE=<path>: on a host-side stall (guest not
+        // executing), grab a native stack of ourselves right now. Aggregate
+        // profiles can't isolate a 1.5s window in a 40s run; this samples
+        // exactly the stall.
+        static const char* sample_to = std::getenv("THEOC_WATCHDOG_SAMPLE");
+        if (sample_to && db == 0) {
+            char cmd[512];
+            std::snprintf(cmd, sizeof cmd,
+                          "sample %d 1 -file '%s' >/dev/null 2>&1",
+                          (int)getpid(), sample_to);
+            int rc = std::system(cmd);
+            std::fprintf(stderr, "  [watchdog] host stack -> %s (rc=%d)\n",
+                         sample_to, rc);
+        }
         last_frame = now;                  // re-report once per stall_sec
     }
 }
@@ -1684,10 +1711,23 @@ uint32_t TrapLayer::dispatch(Machine& m, uint32_t slot, uint32_t esp) {
     trap_seq_.fetch_add(1, std::memory_order_relaxed);
     last_trap_.store(names_[slot].c_str(), std::memory_order_relaxed);
     auto it = table_.find(names_[slot]);
-    if (it != table_.end()) return it->second(m, esp);
+    if (it != table_.end()) {
+        SlowSection slow(this, names_[slot].c_str());
+        return it->second(m, esp);
+    }
     if (hits_[slot] == 1)   // first hit only, to keep the log readable
         std::fprintf(stderr, "  [trap] TODO %s\n", names_[slot].c_str());
     return 0;
+}
+
+void TrapLayer::stop_watchdog() {
+    // Called once the run is winding down. Past this point frames legitimately
+    // stop (window hold, teardown), and Video::keep_open_for presents without
+    // going through our counter — so leaving the watchdog armed manufactures a
+    // "host-side stall" that is really just the process exiting.
+    if (!wd_thread_.joinable()) return;
+    wd_stop_.store(true, std::memory_order_relaxed);
+    wd_thread_.join();
 }
 
 void TrapLayer::report() const {
@@ -2318,6 +2358,13 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
 uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
     if (slot >= plugin_exports_.size()) return 0;
     const std::string& name = plugin_exports_[slot];
+    // Watchdog breadcrumbs. These handlers (OpenDisplay, SwapBuffers/present)
+    // do the heaviest host-side work in the whole port, so leaving them out of
+    // the counters made "stuck inside present" look identical to "stuck
+    // nowhere" — a stall reported +0 traps while sitting in OpenDisplay.
+    trap_seq_.fetch_add(1, std::memory_order_relaxed);
+    last_trap_.store(name.c_str(), std::memory_order_relaxed);
+    SlowSection slow(this, name.c_str());
     if (name == "QueryDevice") return 1;
     if (name == "CreateVideoDevice")    return make_device(m, "video");
     if (name == "CreateKeyboardDevice") return make_device(m, "keyboard");
@@ -2362,7 +2409,9 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         int d = req ? (int)m.r32(req + 8) : 5;
         if (w <= 0) w = 800;
         if (h <= 0) h = 600;
-        bool ok = video_.open(w, h, d);
+        bool ok;
+        { SlowSection s1(this, "OpenDisplay:video_.open");
+          ok = video_.open(w, h, d); }
         if (!ok) {
             std::printf("  [HLE] OpenDisplay %dx%d depth %d -> FAIL (SDL)\n", w, h, d);
             return 0;
@@ -2371,10 +2420,13 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         uint32_t nbytes = pitch * (uint32_t)h;
         if (nbytes > GUEST_FB_SIZE) nbytes = GUEST_FB_SIZE;
         // Clear guest FB (and mirror into SDL).
-        std::vector<uint8_t> z(nbytes, 0);
-        m.write(GUEST_FB_BASE, z.data(), nbytes);
-        if (video_.fb_bytes() >= nbytes)
-            std::memcpy(video_.fb(), z.data(), nbytes);
+        {
+            SlowSection s2(this, "OpenDisplay:clear-fb");
+            std::vector<uint8_t> z(nbytes, 0);
+            m.write(GUEST_FB_BASE, z.data(), nbytes);
+            if (video_.fb_bytes() >= nbytes)
+                std::memcpy(video_.fb(), z.data(), nbytes);
+        }
 
         // cDimension {w,h} on the guest stack/scratch area of the object.
         uint32_t dim = bump_alloc(8);
@@ -2464,7 +2516,8 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             if (clog++ < 3)
                 std::printf("  [cursor] present spr=%#x gd=%#x timer=%s\n",
                             spr, gd_, timer_armed_ ? "on" : "off");
-            video_.present();  // pumps SDL
+            { SlowSection s3(this, "present");
+              video_.present(); }  // pumps SDL
             present_seq_.fetch_add(1, std::memory_order_relaxed);
             start_watchdog(m); // THEOC_WATCHDOG: arms on the first frame
             auto_keys_tick();
@@ -2552,7 +2605,13 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                                        now - last_present_).count();
                     int64_t target = (int64_t)frame_ms * 1000;
-                    if (elapsed < target) ::usleep((useconds_t)(target - elapsed));
+                    if (elapsed < target) {
+                        // Deliberate wait — discount it from THEOC_SLOWLOG, or
+                        // every capped frame reports as an 83ms "slow" section
+                        // and buries the real ones.
+                        slow_credit_ms_ += (double)(target - elapsed) / 1000.0;
+                        ::usleep((useconds_t)(target - elapsed));
+                    }
                 }
                 last_present_ = std::chrono::steady_clock::now();
             }

@@ -32,6 +32,9 @@ public:
     // Print the tally of which imports were hit (implemented vs. TODO).
     void report() const;
 
+    // Disarm the stall watchdog before the run winds down (see definition).
+    void stop_watchdog();
+
     uint32_t nslots() const { return (uint32_t)names_.size(); }
 
     Video& video() { return video_; }
@@ -109,6 +112,33 @@ private:
     // spinning in a loop (the reported EIP is that loop); blocks frozen = we
     // are wedged host-side, in the last-named trap. Freezes are hard to catch
     // interactively, so this turns "it hung" into an address.
+    // THEOC_SLOWLOG=ms (default 250): report any host-side section that blocks
+    // the emulation thread for longer than the threshold. The stall watchdog
+    // says *that* we are stuck host-side; this says *which handler*.
+    static double slowlog_ms();
+    // Wall-clock we intentionally slept (frame cap), excluded from [slow].
+    double slow_credit_ms_ = 0;
+    struct SlowSection {
+        TrapLayer* self;
+        const char* what;
+        std::chrono::steady_clock::time_point t0;
+        double credit0 = 0;
+        SlowSection(TrapLayer* s, const char* w) : self(s), what(w) {
+            if (slowlog_ms() > 0) {
+                t0 = std::chrono::steady_clock::now();
+                credit0 = s->slow_credit_ms_;
+            }
+        }
+        ~SlowSection() {
+            double lim = slowlog_ms();
+            if (lim <= 0) return;
+            double ms = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - t0).count();
+            ms -= self->slow_credit_ms_ - credit0;   // minus deliberate waits
+            if (ms >= lim)
+                std::fprintf(stderr, "  [slow] %s took %.0f ms\n", what, ms);
+        }
+    };
     // THEOC_AUTO_KEYS=1: unattended SPACE taps through the SDL event path.
     void auto_keys_tick();
     void start_watchdog(Machine& m);
@@ -116,6 +146,7 @@ private:
     std::thread wd_thread_;
     std::atomic<bool> wd_stop_{false};
     Machine* wd_m_ = nullptr;
+    std::chrono::steady_clock::time_point wd_t0_;
     std::atomic<uint64_t> present_seq_{0};
     std::atomic<uint64_t> trap_seq_{0};
     std::atomic<const char*> last_trap_{nullptr};
