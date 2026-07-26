@@ -198,6 +198,11 @@ private:
     std::unordered_map<int, HostFile> fds_;          // guest fd → host
     int next_fd_ = 3;
     uint32_t hostent_buf_ = 0;   // reusable guest `struct hostent` (see gethostbyname)
+    // opendir/readdir: guest DIR* handle -> host DIR* plus a reusable guest
+    // `struct dirent` (readdir returns a pointer to static storage, per contract).
+    struct HostDir { void* d = nullptr; uint32_t ent = 0; };
+    std::unordered_map<uint32_t, HostDir> dirs_;
+    uint32_t next_dir_ = 0x44495200;   // 'DIR\0' — distinctive in a fault dump
     std::string data_root_;
     Video video_;
     std::string smpeg_error_;   // last SMPEG_error message (host)

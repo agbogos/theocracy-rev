@@ -897,22 +897,27 @@ Opening **lobby settings → map selection** crashes with
 preview. The maps are present -- ten of them in `data/game/data/map/netgame/`.
 Its `printf("owl\n")` marker, immediately before `cDirectory::Open`, **never
 appears in any log**, so it dies early in that dialog, before the directory is
-opened. `cDirent::cDirent(const char*)` and `cDirectory::Open` are both on the
-HLE boundary (the game imports them; libmvos exports only a *different* cDirent
-overload, `__7cDirentRC11cDirentname`), and libmvos additionally imports
-`opendir`/`readdir`/`chdir` -- **none of which are implemented**. So the
-directory surface is certainly missing and certainly needed.
+opened. libmvos **does** export both `__7cDirentPCc` (`0x4c030`) and
+`Open__10cDirectory` (`0x4bab0`), so those run as real guest code -- but that
+code calls **`opendir`/`readdir`/`chdir`**, which libmvos imports and which were
+**not implemented**. That is the genuinely missing piece, and it is now filled in
+(Linux/i386 `struct dirent`: `d_name` at offset **11**, `DT_*` values agree
+between Linux and BSD so `d_type` passes through; `chdir` is accepted and ignored
+because every guest path already goes through `resolve_path`).
 
 > **Wrong turn, recorded deliberately (2026-07-26).** An earlier version of this
 > section claimed the crash was a zero GOT slot for `__7cDirentPCc` and blamed a
-> "silent linker gap". That was wrong twice over. The call site was taken from
+> "silent linker gap". That was wrong three times over. The call site was taken from
 > `[ESP+0x18]` -- a stack slot six words deep in the fault dump -- and treated as
 > *the* return address; the actual return slot held a stack pointer. And the
 > "GOT is 0" claim was never measured: it was read off the **file on disk**, not
 > guest memory. `guestlink`'s `resolve()` already warns on unresolved strong UND
 > and **no such warning appears in any run**, so every import does bind. Lesson:
-> a fault dump of raw stack words invites exactly this kind of confident
-> misreading, which is why fault reporting now walks the EBP chain instead.
+> And the supporting claim that libmvos exported "only a different overload" came
+> from reading a **truncated grep** -- it exports `__7cDirentPCc` perfectly well.
+> Lesson: a fault dump of raw stack words invites exactly this kind of confident
+> misreading, which is why fault reporting now walks the EBP chain instead; and a
+> grep that gets cut off is not evidence of absence.
 
 **Instrument added.** `Machine` captures EBP at fault time and faults now print a
 labelled guest backtrace (`game 0x08...` / `mvos+0x...`) rather than 16 raw stack

@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cerrno>
 #include <csignal>
+#include <dirent.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -1479,6 +1480,70 @@ void TrapLayer::register_builtins() {
     // bit is 0x0004, and passing 0x800 through would set O_ASYNC|junk and leave
     // the socket BLOCKING, which would wedge the whole single-threaded emulator on
     // the first recv. Translate the flag set, do not forward it.
+    // Directory enumeration. libmvos imports opendir/readdir/chdir and its
+    // cDirectory::Open (mvos 0x4bab0) drives them; the netgame map-selection
+    // dialog enumerates data/map/netgame this way. All three were unimplemented.
+    //
+    // Guest `struct dirent` is the Linux/i386 non-LFS layout:
+    //   +0x00 u32 d_ino   +0x04 u32 d_off   +0x08 u16 d_reclen
+    //   +0x0a u8  d_type  +0x0b char d_name[256]
+    // d_name is at offset 11 (NOT 12 — the struct is unpadded here), and the
+    // DT_* constants agree between Linux and BSD, so d_type passes through.
+    t["opendir"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        std::string gp = m.cstr(arg(m, esp, 0));
+        std::string hp = resolve_path(gp);
+        DIR* d = ::opendir(hp.c_str());
+        if (!d) {
+            std::printf("  [dir] opendir('%s' -> '%s') failed\n", gp.c_str(), hp.c_str());
+            set_errno(m, 2 /*ENOENT*/);
+            return 0;
+        }
+        uint32_t h = next_dir_++;
+        uint32_t ent = guest_alloc(0x120);          // dirent incl. 256-byte name
+        dirs_[h] = HostDir{(void*)d, ent};
+        std::printf("  [dir] opendir('%s') -> handle %#x\n", gp.c_str(), h);
+        return h;
+    };
+    t["readdir"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t h = arg(m, esp, 0);
+        auto it = dirs_.find(h);
+        if (it == dirs_.end() || !it->second.d || !it->second.ent) return 0;
+        struct dirent* e = ::readdir((DIR*)it->second.d);
+        if (!e) return 0;                            // end of directory
+        const uint32_t p = it->second.ent;
+        std::string name = e->d_name;
+        if (name.size() > 255) name.resize(255);
+        m.w32(p + 0x00, (uint32_t)e->d_ino);
+        m.w32(p + 0x04, 0);
+        uint16_t reclen = (uint16_t)(0x0b + name.size() + 1);
+        uint8_t  dtype  = (uint8_t)e->d_type;
+        m.write(p + 0x08, &reclen, 2);
+        m.write(p + 0x0a, &dtype, 1);
+        m.write(p + 0x0b, name.c_str(), (uint32_t)name.size() + 1);
+        return p;
+    };
+    t["closedir"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t h = arg(m, esp, 0);
+        auto it = dirs_.find(h);
+        if (it == dirs_.end()) return (uint32_t)-1;
+        if (it->second.d) ::closedir((DIR*)it->second.d);
+        if (it->second.ent) guest_release(it->second.ent);
+        dirs_.erase(it);
+        return 0;
+    };
+    t["rewinddir"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        auto it = dirs_.find(arg(m, esp, 0));
+        if (it != dirs_.end() && it->second.d) ::rewinddir((DIR*)it->second.d);
+        return 0;
+    };
+    // chdir: accepted and ignored. Every guest path already goes through
+    // resolve_path() against $THEOC_DATA, so honouring a real host chdir would
+    // desynchronise that mapping rather than help.
+    t["chdir"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        (void)m; (void)esp;
+        return 0;
+    };
+
     t["fcntl"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         int gfd = (int)arg(m, esp, 0), cmd = (int)arg(m, esp, 1);
         uint32_t a = arg(m, esp, 2);
