@@ -1,5 +1,7 @@
 #include "video.hpp"
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <SDL2/SDL.h>
 
 Video::~Video() {
@@ -32,9 +34,35 @@ bool Video::open(int w, int h, int depth_code) {
     }
 
     if (!win_) {
+        // THEOC_FULLSCREEN=1 → borderless fullscreen at the desktop resolution.
+        // FULLSCREEN_DESKTOP (not exclusive FULLSCREEN) because we never want a
+        // real display-mode switch: the guest paints 640×480 / 800×600 and
+        // RenderSetLogicalSize scales it, so changing the panel's mode would buy
+        // nothing and costs a jarring resync on every movie↔menu transition.
+        static const bool want_fs = [] {
+            const char* e = std::getenv("THEOC_FULLSCREEN");
+            return e && *e && std::strcmp(e, "0") != 0;
+        }();
+
+        // The guest is 4:3 and modern panels are not, so the logical-size letterbox
+        // leaves pillarbox bars — deliberate; stretching would distort the art.
+        // Scale sampling: with a non-integer factor (800×600 → a Retina panel is
+        // ~3.2×) nearest makes pixels unevenly sized, which reads as shimmer on
+        // the UI. Linear is the better default, and is a no-op windowed where
+        // logical size == window size.
+        if (want_fs) SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
+        Uint32 flags = SDL_WINDOW_SHOWN;
+        if (want_fs) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         SDL_Window* win = SDL_CreateWindow(
-            "Theocracy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-            w, h, SDL_WINDOW_SHOWN);
+            "Theocracy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags);
+        if (!win && want_fs) {
+            // Never let a fullscreen failure cost us the game — fall back windowed.
+            std::fprintf(stderr, "  [video] fullscreen failed (%s) — falling back to windowed\n",
+                         SDL_GetError());
+            win = SDL_CreateWindow("Theocracy", SDL_WINDOWPOS_CENTERED,
+                                   SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_SHOWN);
+        }
         if (!win) {
             std::fprintf(stderr, "  [video] SDL_CreateWindow failed: %s\n", SDL_GetError());
             return false;
@@ -47,10 +75,15 @@ bool Video::open(int w, int h, int depth_code) {
         }
         win_ = win;
         ren_ = ren;
+        // Ask SDL what we actually got, rather than assuming the request stuck.
+        fullscreen_ = (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
         SDL_ShowCursor(SDL_DISABLE);
-    } else {
+    } else if (!fullscreen_) {
         SDL_SetWindowSize((SDL_Window*)win_, w, h);
     }
+    // In fullscreen the window keeps the desktop size across a guest mode switch;
+    // only the texture + logical size below change. Calling SDL_SetWindowSize here
+    // would fight the fullscreen state instead of rescaling.
 
     SDL_RenderSetLogicalSize((SDL_Renderer*)ren_, w, h);
     SDL_Texture* tex = SDL_CreateTexture((SDL_Renderer*)ren_, SDL_PIXELFORMAT_RGB565,
@@ -65,8 +98,23 @@ bool Video::open(int w, int h, int depth_code) {
     h_ = h;
     depth_ = depth_code;
     fb_.assign((size_t)w * (size_t)h, 0);
-    std::printf("  [video] window %dx%d depth-code %d (RGB565 framebuffer)\n",
-                w, h, depth_code);
+    if (fullscreen_) {
+        // Report the actual letterbox so a "why are there bars" question is
+        // answerable from the log alone (and so a wrong scale is visible here
+        // rather than only on screen).
+        int ow = 0, oh = 0;
+        SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);
+        double s = (ow && oh) ? ((double)ow / w < (double)oh / h ? (double)ow / w
+                                                                : (double)oh / h)
+                              : 1.0;
+        int vw = (int)(w * s), vh = (int)(h * s);
+        std::printf("  [video] FULLSCREEN %dx%d, guest %dx%d scaled %.2fx -> %dx%d"
+                    " (pillarbox %d px, letterbox %d px) depth-code %d\n",
+                    ow, oh, w, h, s, vw, vh, (ow - vw) / 2, (oh - vh) / 2, depth_code);
+    } else {
+        std::printf("  [video] window %dx%d depth-code %d (RGB565 framebuffer)\n",
+                    w, h, depth_code);
+    }
     present();
     return true;
 }

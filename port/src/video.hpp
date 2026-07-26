@@ -17,6 +17,12 @@ public:
     // Open a window + RGB565 framebuffer for the requested mode. depth_code is
     // the libmvos cVModeRequest code (5=16bpp RGB565 primary, 4=15bpp, 6/7=24).
     // We always keep the framebuffer 16-bit RGB565 and convert on present.
+    //
+    // THEOC_FULLSCREEN=1 opens borderless-fullscreen at the desktop resolution.
+    // The framebuffer stays at the guest's mode (640×480 / 800×600) and SDL's
+    // logical size scales it, preserving 4:3 with pillarbox bars. Everything
+    // downstream — the cGD blit traps, save_bmp, and the mouse coordinates the
+    // guest sees — stays in guest space, so nothing else needs to know.
     bool open(int w, int h, int depth_code);
 
     // Push the framebuffer to the window and drain the SDL event queue (so the
@@ -37,6 +43,10 @@ public:
     bool save_bmp(const char* path);
 
     bool is_open() const { return win_ != nullptr; }
+    bool is_fullscreen() const { return fullscreen_; }
+    // Guest-space dimensions (the framebuffer / logical size), NOT the window's
+    // pixel size — in fullscreen those differ. Callers that clamp mouse input
+    // want these, since SDL hands us coordinates already mapped into this space.
     int width() const { return w_; }
     int height() const { return h_; }
     int depth_code() const { return depth_; }
@@ -49,6 +59,7 @@ private:
     void* ren_ = nullptr;   // SDL_Renderer*
     void* tex_ = nullptr;   // SDL_Texture*
     int w_ = 0, h_ = 0, depth_ = 0;
+    bool fullscreen_ = false;   // what we actually got, per SDL_GetWindowFlags
     std::vector<uint16_t> fb_;
     EventHook event_hook_;
 };

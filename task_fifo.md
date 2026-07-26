@@ -203,6 +203,17 @@ results. Order below is **playability first, modernisation after**.
 - `THEOC_LEGACY_KEYMB=1` — never fill the cutscene-skip key mailbox (intros
   unskippable); A/B switch for input-path hangs.
 - `THEOC_HEAP_TEST=1` — run the guest allocator's self-test standalone and exit.
+- **`THEOC_FULLSCREEN=1`** — borderless fullscreen at the desktop resolution
+  (`SDL_WINDOW_FULLSCREEN_DESKTOP`, never an exclusive mode switch). The guest
+  keeps painting its own mode and `SDL_RenderSetLogicalSize` scales it, so 4:3 is
+  preserved with **pillarbox** bars — no stretching. Falls back to windowed if
+  fullscreen creation fails. The `[video]` line reports the real geometry
+  (output size, scale factor, bar widths) so a scaling problem is visible in the
+  log, not just on screen. Guest-side coordinates are untouched: the framebuffer,
+  the `cGD` blit traps, `save_bmp` and the mouse positions the guest sees all stay
+  in 640×480 / 800×600 space. Note `mvos.cfg`'s `[vmachine] fullscreen` is
+  **inert** — the engine's fullscreen path ran through the X11 plugin's
+  `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which we replaced wholesale.
 - `THEOC_START_SEC` default 600; `0` = unlimited (covers long intros / real play).
 - `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).
 - Keyboard: letters/digits/arrows/modifiers/F-keys/enter/space/backspace; `[` `]`
@@ -216,6 +227,7 @@ results. Order below is **playability first, modernisation after**.
 ```sh
 cmake --build port/build
 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc
+# THEOC_FULLSCREEN=1    borderless fullscreen, 4:3 pillarboxed
 # THEOC_SKIP_MOVIES=1   skip cutscenes
 # THEOC_AUTO_MENU=1     auto-click Single Player
 # THEOC_START_SEC=N     host wall-clock for entire Start() (default 600; 0=unlimited)
