@@ -703,6 +703,63 @@ render harness was blind over exactly the frames a video bug appears in. Split
 the click/sweep drivers must *not* run during a cutscene, where a synthesized
 click would skip the thing being photographed.
 
+## G19 — real BSD sockets (multiplayer transport) (done)
+
+Sockets were unconditional lies (`socket`→32, `bind`→0, `recv`→0) — enough for the
+single-instance lock and nothing else. Now real, with the guest↔host translation
+the era gap requires. Guest fds share the existing file fd table; the guest tells
+us which is which by calling `send`/`recv` vs `read`/`write`, so `close` already
+worked.
+
+### Four Linux→BSD divergences, each of which fails silently
+
+The guest is a 1999 Linux i386 binary; we are BSD. Every one of these produces a
+plausible wrong answer rather than an error, which is why they are translated
+explicitly rather than passed through:
+
+| # | Divergence | Consequence if ignored |
+|---|---|---|
+| 1 | `sockaddr_in`: Linux `u16 family @0`; BSD `u8 sin_len @0`, `u8 family @1` | host reads family as `len=2, family=0` |
+| 2 | `O_NONBLOCK`: Linux `0x800`, BSD `0x0004` | `fcntl` sets `O_ASYNC`+junk, socket stays **blocking** → first `recv` wedges the single-threaded emulator |
+| 3 | `errno`: Linux `EAGAIN=11`/`EINPROGRESS=115`/`EADDRINUSE=98` vs BSD `35`/`36`/`48` | a non-blocking socket returns EAGAIN constantly; the guest reads it as a hard error |
+| 4 | **`sin_family` is never set by the engine** — it binds `{family=0, port=5043, addr=INADDR_ANY}` | Linux tolerates `AF_UNSPEC` on an AF_INET socket; BSD returns `EAFNOSUPPORT` |
+
+\#4 was not predicted — it was found by dumping the raw guest sockaddr after a
+translation failure. Worth the general lesson: **never fail a sockaddr silently**,
+because it surfaces as an unexplained `-1` several layers up in guest code. The
+first cut did exactly that and cost a debugging cycle.
+
+`select` is real, over the guest's 1024-bit `fd_set` (32-bit words on i386), but
+its **timeout is capped at 20 ms**: we are single-threaded, so honouring a long
+guest timeout would freeze rendering, input and the audio slice. Capping returns
+"nothing ready" early and the guest polls again — exactly what its non-blocking
+design already expects. `gethostbyname` is real too (it had to be: `cIPCO_TCPIP`'s
+ctor calls it *first* and `perror()`s out if it returns NULL, so a connect could
+never even be attempted), synthesising a Linux `struct hostent` in one reusable
+guest block.
+
+### The single-instance lock stays faked, deliberately
+
+`cApplication::Start` binds `localhost:5043` and, if taken, `Fatal`s with
+`"You can run only one Theocracy in the same time!"`. Honouring that kills the
+*second* instance — which is precisely the two-clients-on-one-Mac setup needed to
+test multiplayer. So `bind` on port 5043 succeeds without touching the network;
+every other port is real. **`THEOC_REAL_LOCK=1`** restores stock behaviour.
+
+That switch also doubles as the proof the transport works end to end:
+
+```
+A (THEOC_REAL_LOCK=1, alone):        [net] bind(:5043) ok
+B (THEOC_REAL_LOCK=1, while A holds): [net] bind(:5043) failed: Address already in use
+                                      You can run only one Theocracy in the same time!
+```
+
+Real bind, real `EADDRINUSE`, and the guest correctly interprets the failure —
+which exercises the errno translation all the way into guest code. With the
+default exemption, two clients both boot to Realm Shell, 0 faults, 0 unimplemented.
+
+Single-player is unaffected: the lock path is the only socket use on that route.
+
 ## Build / run
 
 ```sh

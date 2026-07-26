@@ -6,6 +6,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/socket.h>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -636,8 +642,110 @@ std::string TrapLayer::resolve_path(const std::string& guest) const {
     return data_root_ + "/" + guest;
 }
 
+// ---- guest(Linux/i386) <-> host(BSD/macOS) socket translation ----------------
+// The guest is a 1999 Linux i386 binary and we are on BSD. Three things differ in
+// ways that fail silently rather than loudly, so each is translated explicitly:
+//
+//  1. `struct sockaddr_in`. Linux: u16 family @0, u16 port @2, u32 addr @4.
+//     BSD: u8 sin_len @0, u8 sin_family @1, then the same. Passing a guest
+//     sockaddr straight to the host reads family as 0x0002 -> len=2, family=0.
+//  2. Flag/level constants. Linux O_NONBLOCK is 0x800 (BSD 0x0004),
+//     SOL_SOCKET is 1 (BSD 0xffff), SO_REUSEADDR is 2 (BSD 4).
+//  3. errno values. Linux EAGAIN=11 (BSD 35), EINPROGRESS=115 (BSD 36),
+//     EADDRINUSE=98 (BSD 48). The guest compares against its own numbers, and a
+//     non-blocking socket returns EAGAIN constantly, so getting this wrong turns
+//     "no data yet" into a hard error.
+namespace {
+
+// Host errno -> the Linux value the guest expects. Anything unmapped passes
+// through: the shared low numbers (EINTR/EBADF/EINVAL/EPIPE) already agree.
+int to_linux_errno(int e) {
+    switch (e) {
+        case EAGAIN:       return 11;   // == EWOULDBLOCK on both sides
+        case EINPROGRESS:  return 115;
+        case EALREADY:     return 114;
+        case EADDRINUSE:   return 98;
+        case EADDRNOTAVAIL:return 99;
+        case ECONNREFUSED: return 111;
+        case ECONNRESET:   return 104;
+        case EISCONN:      return 106;
+        case ENOTCONN:     return 107;
+        case ETIMEDOUT:    return 110;
+        case EHOSTUNREACH: return 113;
+        case ENETUNREACH:  return 101;
+        default:           return e;
+    }
+}
+
+constexpr uint32_t kGuestAfInet = 2;   // AF_INET agrees, but check it explicitly
+
+// Read a guest (Linux-layout) sockaddr_in. Returns false for anything that is
+// not AF_INET — we deliberately do not guess at IPX/unix addresses.
+bool guest_to_host_sin(Machine& m, uint32_t gaddr, uint32_t glen, sockaddr_in& out) {
+    if (!gaddr || glen < 8) {
+        std::printf("  [net] bad sockaddr: ptr=%#x len=%u\n", gaddr, glen);
+        return false;
+    }
+    uint16_t fam = 0, port = 0;
+    uint32_t ip = 0;
+    m.read(gaddr + 0, &fam, 2);
+    m.read(gaddr + 2, &port, 2);   // already network byte order in the guest
+    m.read(gaddr + 4, &ip, 4);
+    // Family 0 (AF_UNSPEC) is ACCEPTED as AF_INET. The engine's single-instance
+    // lock binds {family=0, port=5043, addr=INADDR_ANY} — it simply never sets
+    // sin_family. Linux tolerates that on a socket already created as AF_INET;
+    // BSD returns EAFNOSUPPORT. Since our socket() only ever creates AF_INET, the
+    // guest's intent is unambiguous, so honour it the way Linux did rather than
+    // failing a bind the original binary relied on.
+    if (fam != kGuestAfInet && fam != 0) {
+        // Never fail a sockaddr silently — that turns a translation bug into a
+        // mystery "-1" three layers up in guest code.
+        uint8_t raw[16] = {0};
+        m.read(gaddr, raw, glen < 16 ? glen : 16);
+        std::printf("  [net] bad sockaddr family=%u len=%u raw=", fam, glen);
+        for (int i = 0; i < 16; ++i) std::printf("%02x ", raw[i]);
+        std::printf("\n");
+        return false;
+    }
+    std::memset(&out, 0, sizeof out);
+    out.sin_len = sizeof(sockaddr_in);   // the byte the guest does not know about
+    out.sin_family = AF_INET;
+    out.sin_port = port;
+    out.sin_addr.s_addr = ip;
+    return true;
+}
+
+// Write a host sockaddr_in back in guest layout (accept/recvfrom peer address).
+void host_to_guest_sin(Machine& m, uint32_t gaddr, uint32_t glen_ptr,
+                       const sockaddr_in& in) {
+    if (!gaddr) return;
+    uint16_t fam = (uint16_t)kGuestAfInet;
+    uint8_t zero[8] = {0};
+    m.write(gaddr + 0, &fam, 2);
+    m.write(gaddr + 2, &in.sin_port, 2);
+    m.write(gaddr + 4, &in.sin_addr.s_addr, 4);
+    m.write(gaddr + 8, zero, 8);
+    if (glen_ptr) m.w32(glen_ptr, 16);
+}
+
+}  // namespace
+
 void TrapLayer::set_errno(Machine& m, int err) {
     m.w32(ERRNO_ADDR, (uint32_t)err);
+}
+
+// Map a guest fd to its host fd, or -1. Sockets live in the same table as files;
+// the guest tells us which is which by calling send/recv vs read/write.
+int TrapLayer::host_fd_of(int gfd) {
+    auto it = fds_.find(gfd);
+    if (it == fds_.end()) return -1;
+    return it->second.host_fd;
+}
+
+int TrapLayer::adopt_host_fd(int hfd) {
+    int gfd = next_fd_++;
+    fds_[gfd] = HostFile{nullptr, hfd, false, false, false};
+    return gfd;
 }
 
 // Free list is kept twice: by address (so neighbours can be coalesced) and by
@@ -1129,16 +1237,204 @@ void TrapLayer::register_builtins() {
         m.write(d, out.c_str(), (uint32_t)out.size() + 1);
         return d;
     };
-    // Minimal BSD sockets — enough for Start's localhost:5043 single-instance lock.
-    t["socket"] = [](Machine&, uint32_t) -> uint32_t { return 32; };  // fake fd
-    t["bind"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["listen"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["accept"] = [](Machine&, uint32_t) -> uint32_t { return 33; };
-    t["connect"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["send"] = [](Machine& m, uint32_t esp) -> uint32_t { return arg(m, esp, 2); };
-    t["recv"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["recvfrom"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["sendto"] = [](Machine& m, uint32_t esp) -> uint32_t { return arg(m, esp, 2); };
+    // ---- real BSD sockets ---------------------------------------------------
+    // Was: unconditional lies (socket->32, bind->0, recv->0). Those were enough
+    // for the single-instance lock and nothing else.
+    //
+    // THE SINGLE-INSTANCE LOCK IS DELIBERATELY STILL FAKED. cApplication::Start
+    // binds localhost:5043 and Fatal()s if it is taken — "You can run only one
+    // Theocracy in the same time!". Honouring that would make the *second*
+    // instance die, which is exactly the two-client-on-one-Mac setup we need to
+    // test multiplayer with. So bind() on port 5043 succeeds without touching the
+    // network; every other port is real. THEOC_REAL_LOCK=1 restores the original
+    // behaviour if we ever want to observe it.
+    t["socket"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int dom = (int)arg(m, esp, 0), type = (int)arg(m, esp, 1),
+            proto = (int)arg(m, esp, 2);
+        if (dom != (int)kGuestAfInet) {   // IPX etc. — not supported, fail cleanly
+            set_errno(m, 97);             // EAFNOSUPPORT (Linux)
+            return (uint32_t)-1;
+        }
+        // SOCK_STREAM=1 / SOCK_DGRAM=2 agree between Linux and BSD.
+        int hfd = ::socket(AF_INET, type, proto);
+        if (hfd < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        // Address reuse by default: the game rebinds its listen port across
+        // sessions, and BSD's TIME_WAIT would otherwise refuse for ~a minute.
+        int on = 1;
+        ::setsockopt(hfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+        int gfd = adopt_host_fd(hfd);
+        std::printf("  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
+        return (uint32_t)gfd;
+    };
+
+    t["bind"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int gfd = (int)arg(m, esp, 0);
+        uint32_t gaddr = arg(m, esp, 1), glen = arg(m, esp, 2);
+        int hfd = host_fd_of(gfd);
+        sockaddr_in sa{};
+        if (!guest_to_host_sin(m, gaddr, glen, sa)) { set_errno(m, 22); return (uint32_t)-1; }
+        uint16_t port = ntohs(sa.sin_port);
+        static const bool real_lock = std::getenv("THEOC_REAL_LOCK") != nullptr;
+        if (port == 5043 && !real_lock) {
+            std::printf("  [net] bind(:5043) faked OK — single-instance lock "
+                        "(THEOC_REAL_LOCK=1 to honour it)\n");
+            return 0;
+        }
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        if (::bind(hfd, (sockaddr*)&sa, sizeof sa) < 0) {
+            int e = errno;
+            std::printf("  [net] bind(:%u) failed: %s\n", port, std::strerror(e));
+            set_errno(m, to_linux_errno(e));
+            return (uint32_t)-1;
+        }
+        std::printf("  [net] bind(:%u) ok\n", port);
+        return 0;
+    };
+
+    t["listen"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        if (hfd < 0) return 0;   // the faked lock socket never got a real fd
+        if (::listen(hfd, (int)arg(m, esp, 1)) < 0) {
+            set_errno(m, to_linux_errno(errno));
+            return (uint32_t)-1;
+        }
+        return 0;
+    };
+
+    t["accept"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        uint32_t gaddr = arg(m, esp, 1), glen_ptr = arg(m, esp, 2);
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        sockaddr_in peer{};
+        socklen_t plen = sizeof peer;
+        int c = ::accept(hfd, (sockaddr*)&peer, &plen);
+        if (c < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        host_to_guest_sin(m, gaddr, glen_ptr, peer);
+        int gfd = adopt_host_fd(c);
+        std::printf("  [net] accept -> guest fd %d from %s:%u\n", gfd,
+                    inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+        return (uint32_t)gfd;
+    };
+
+    t["connect"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        sockaddr_in sa{};
+        if (!guest_to_host_sin(m, arg(m, esp, 1), arg(m, esp, 2), sa)) {
+            set_errno(m, 22); return (uint32_t)-1;
+        }
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        int r = ::connect(hfd, (sockaddr*)&sa, sizeof sa);
+        if (r < 0) {
+            int e = errno;
+            std::printf("  [net] connect(%s:%u) -> %s\n", inet_ntoa(sa.sin_addr),
+                        ntohs(sa.sin_port), std::strerror(e));
+            set_errno(m, to_linux_errno(e));
+            return (uint32_t)-1;
+        }
+        std::printf("  [net] connect(%s:%u) ok\n", inet_ntoa(sa.sin_addr),
+                    ntohs(sa.sin_port));
+        return 0;
+    };
+
+    t["send"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        std::vector<uint8_t> tmp(n);
+        if (n) m.read(buf, tmp.data(), n);
+        // MSG_NOSIGNAL does not exist on BSD; SO_NOSIGPIPE is set on the fd
+        // instead (below) so a dead peer returns EPIPE rather than killing us.
+        ssize_t s = ::send(hfd, tmp.data(), n, 0);
+        if (s < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        return (uint32_t)s;
+    };
+
+    t["recv"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        std::vector<uint8_t> tmp(n);
+        ssize_t got = ::recv(hfd, tmp.data(), n, 0);
+        if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        if (got > 0) m.write(buf, tmp.data(), (uint32_t)got);
+        return (uint32_t)got;
+    };
+
+    t["sendto"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
+        uint32_t gaddr = arg(m, esp, 4), glen = arg(m, esp, 5);
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        std::vector<uint8_t> tmp(n);
+        if (n) m.read(buf, tmp.data(), n);
+        sockaddr_in sa{};
+        bool have = guest_to_host_sin(m, gaddr, glen, sa);
+        ssize_t s = ::sendto(hfd, tmp.data(), n, 0,
+                             have ? (sockaddr*)&sa : nullptr, have ? sizeof sa : 0);
+        if (s < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        return (uint32_t)s;
+    };
+
+    t["recvfrom"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
+        uint32_t gaddr = arg(m, esp, 4), glen_ptr = arg(m, esp, 5);
+        if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
+        std::vector<uint8_t> tmp(n);
+        sockaddr_in peer{};
+        socklen_t plen = sizeof peer;
+        ssize_t got = ::recvfrom(hfd, tmp.data(), n, 0, (sockaddr*)&peer, &plen);
+        if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        if (got > 0) m.write(buf, tmp.data(), (uint32_t)got);
+        host_to_guest_sin(m, gaddr, glen_ptr, peer);
+        return (uint32_t)got;
+    };
+
+    // Linux SOL_SOCKET=1 / SO_REUSEADDR=2 vs BSD 0xffff / 4. Only the options the
+    // engine actually sets are translated; anything else is accepted and ignored
+    // rather than passed through with a wrong number.
+    t["setsockopt"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        int level = (int)arg(m, esp, 1), opt = (int)arg(m, esp, 2);
+        uint32_t val = arg(m, esp, 3), len = arg(m, esp, 4);
+        if (hfd < 0) return 0;
+        if (level == 1 && (opt == 2 /*SO_REUSEADDR*/ || opt == 9 /*SO_KEEPALIVE*/)) {
+            int v = 1;
+            if (val && len >= 4) v = (int)m.r32(val);
+            ::setsockopt(hfd, SOL_SOCKET, opt == 2 ? SO_REUSEADDR : SO_KEEPALIVE,
+                         &v, sizeof v);
+        }
+        return 0;
+    };
+    t["getsockopt"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t val = arg(m, esp, 3);
+        if (val) m.w32(val, 0);   // "no error" — the only thing this is used for
+        return 0;
+    };
+    t["getsockname"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        if (hfd < 0) return (uint32_t)-1;
+        sockaddr_in sa{};
+        socklen_t l = sizeof sa;
+        if (::getsockname(hfd, (sockaddr*)&sa, &l) < 0) return (uint32_t)-1;
+        host_to_guest_sin(m, arg(m, esp, 1), arg(m, esp, 2), sa);
+        return 0;
+    };
+    t["shutdown"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int hfd = host_fd_of((int)arg(m, esp, 0));
+        if (hfd >= 0) ::shutdown(hfd, (int)arg(m, esp, 1));
+        return 0;
+    };
+    t["inet_addr"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        std::string s = m.cstr(arg(m, esp, 0));
+        return (uint32_t)inet_addr(s.c_str());
+    };
+    t["htonl"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t v = arg(m, esp, 0);
+        return ((v & 0xff) << 24) | ((v & 0xff00) << 8) |
+               ((v >> 8) & 0xff00) | (v >> 24);
+    };
+    t["ntohl"] = t["htonl"];
     t["htons"] = [](Machine& m, uint32_t esp) -> uint32_t {
         uint32_t v = arg(m, esp, 0) & 0xffff;
         return ((v & 0xff) << 8) | (v >> 8);
@@ -1149,9 +1445,145 @@ void TrapLayer::register_builtins() {
         if (p) { m.w32(p, 40); m.w32(p + 4, 41); }
         return 0;
     };
-    t["fcntl"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
-    t["select"] = [this](Machine&, uint32_t) -> uint32_t { fps_select_calls_++; return 0; };
-    t["gethostbyname"] = [](Machine&, uint32_t) -> uint32_t { return 0; };
+    // cIPCO_TCPIP does fcntl(fd, F_SETFL, 0x800) — Linux O_NONBLOCK. On BSD that
+    // bit is 0x0004, and passing 0x800 through would set O_ASYNC|junk and leave
+    // the socket BLOCKING, which would wedge the whole single-threaded emulator on
+    // the first recv. Translate the flag set, do not forward it.
+    t["fcntl"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int gfd = (int)arg(m, esp, 0), cmd = (int)arg(m, esp, 1);
+        uint32_t a = arg(m, esp, 2);
+        int hfd = host_fd_of(gfd);
+        if (hfd < 0) return 0;                 // faked fds: pretend success
+        if (cmd == 4 /*F_SETFL*/) {
+            int fl = ::fcntl(hfd, F_GETFL, 0);
+            if (fl < 0) fl = 0;
+            if (a & 0x800u) fl |= O_NONBLOCK; else fl &= ~O_NONBLOCK;
+            if (::fcntl(hfd, F_SETFL, fl) < 0) {
+                set_errno(m, to_linux_errno(errno));
+                return (uint32_t)-1;
+            }
+            return 0;
+        }
+        if (cmd == 3 /*F_GETFL*/) {
+            int fl = ::fcntl(hfd, F_GETFL, 0);
+            if (fl < 0) return (uint32_t)-1;
+            return (fl & O_NONBLOCK) ? 0x800u : 0u;   // report in Linux terms
+        }
+        return 0;
+    };
+
+    // Real select over the guest's fd_set (1024 bits, 32-bit words on i386),
+    // translating guest fds to host fds and the ready set back.
+    //
+    // The timeout is CAPPED: we are single-threaded, so honouring a long guest
+    // timeout would freeze rendering, input and the audio slice for its duration.
+    // Capping makes select return "nothing ready" early and the guest poll again,
+    // which is exactly what its non-blocking design already expects.
+    t["select"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        fps_select_calls_++;
+        int nfds = (int)arg(m, esp, 0);
+        uint32_t gr = arg(m, esp, 1), gw = arg(m, esp, 2), ge = arg(m, esp, 3);
+        uint32_t gt = arg(m, esp, 4);
+        if (nfds < 0) nfds = 0;
+        if (nfds > 1024) nfds = 1024;
+
+        struct Set { uint32_t g; fd_set h; std::vector<std::pair<int,int>> map; };
+        Set sets[3] = {{gr, {}, {}}, {gw, {}, {}}, {ge, {}, {}}};
+        int maxh = -1;
+        for (auto& s : sets) {
+            FD_ZERO(&s.h);
+            if (!s.g) continue;
+            for (int fd = 0; fd < nfds; ++fd) {
+                uint32_t word = m.r32(s.g + (uint32_t)(fd / 32) * 4);
+                if (!(word & (1u << (fd % 32)))) continue;
+                int hfd = host_fd_of(fd);
+                if (hfd < 0) continue;          // faked fd: never ready
+                FD_SET(hfd, &s.h);
+                s.map.push_back({fd, hfd});
+                if (hfd > maxh) maxh = hfd;
+            }
+        }
+
+        timeval tv{0, 0};
+        constexpr long kCapUs = 20000;          // 20 ms — under one 12fps frame
+        if (gt) {
+            long sec = (long)m.r32(gt), usec = (long)m.r32(gt + 4);
+            long total = sec > 1000 ? kCapUs : sec * 1000000 + usec;
+            tv.tv_usec = total > kCapUs ? kCapUs : (total < 0 ? 0 : total);
+        } else {
+            tv.tv_usec = kCapUs;                // NULL = block forever; we must not
+        }
+        int r = ::select(maxh + 1, sets[0].g ? &sets[0].h : nullptr,
+                         sets[1].g ? &sets[1].h : nullptr,
+                         sets[2].g ? &sets[2].h : nullptr, &tv);
+        if (r < 0) {
+            if (errno == EINTR) return 0;
+            set_errno(m, to_linux_errno(errno));
+            return (uint32_t)-1;
+        }
+        // Rewrite the guest sets to exactly the ready fds.
+        int ready = 0;
+        for (auto& s : sets) {
+            if (!s.g) continue;
+            for (int w = 0; w < (nfds + 31) / 32; ++w) m.w32(s.g + (uint32_t)w * 4, 0);
+            for (auto& [gfd, hfd] : s.map) {
+                if (!FD_ISSET(hfd, &s.h)) continue;
+                uint32_t off = s.g + (uint32_t)(gfd / 32) * 4;
+                m.w32(off, m.r32(off) | (1u << (gfd % 32)));
+                ready++;
+            }
+        }
+        return (uint32_t)ready;
+    };
+
+    // Must be real: cIPCO_TCPIP's ctor calls this FIRST and gives up with perror()
+    // if it returns NULL — which the old stub always did, so a connect could never
+    // even be attempted. Builds a Linux `struct hostent` in guest memory:
+    //   +0x00 h_name  +0x04 h_aliases  +0x08 h_addrtype  +0x0c h_length
+    //   +0x10 h_addr_list
+    // One reusable block, matching the real function's static-storage contract.
+    t["gethostbyname"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        std::string host = m.cstr(arg(m, esp, 0));
+        in_addr_t ip = INADDR_NONE;
+        if (host == "localhost" || host.empty()) {
+            ip = htonl(INADDR_LOOPBACK);
+        } else {
+            ip = inet_addr(host.c_str());
+            if (ip == INADDR_NONE) {
+                addrinfo hints{}, *res = nullptr;
+                hints.ai_family = AF_INET;
+                hints.ai_socktype = SOCK_STREAM;
+                if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0 && res) {
+                    ip = ((sockaddr_in*)res->ai_addr)->sin_addr.s_addr;
+                    freeaddrinfo(res);
+                } else {
+                    std::printf("  [net] gethostbyname('%s') failed\n", host.c_str());
+                    return 0;   // guest prints perror() and gives up, as designed
+                }
+            }
+        }
+        if (!hostent_buf_) hostent_buf_ = guest_alloc(0x80);
+        if (!hostent_buf_) return 0;
+        const uint32_t he      = hostent_buf_;
+        const uint32_t addrlst = he + 0x14;   // char*[2]
+        const uint32_t aliases = he + 0x1c;   // char*[1] = {NULL}
+        const uint32_t addr    = he + 0x20;   // in_addr
+        const uint32_t name    = he + 0x24;
+        std::string nm = host.substr(0, 0x58);
+        m.write(name, nm.c_str(), (uint32_t)nm.size() + 1);
+        m.w32(addr, (uint32_t)ip);
+        m.w32(addrlst, addr);
+        m.w32(addrlst + 4, 0);
+        m.w32(aliases, 0);
+        m.w32(he + 0x00, name);
+        m.w32(he + 0x04, aliases);
+        m.w32(he + 0x08, kGuestAfInet);   // h_addrtype = AF_INET
+        m.w32(he + 0x0c, 4);              // h_length
+        m.w32(he + 0x10, addrlst);
+        std::printf("  [net] gethostbyname('%s') -> %s\n", host.c_str(),
+                    inet_ntoa(in_addr{ip}));
+        return he;
+    };
     for (const char* nm : {"sem_init", "sem_destroy", "sem_post", "sem_wait",
                            "sem_trywait", "sem_getvalue",
                            "sigemptyset", "sigaddset", "signal", "kill", "waitpid",

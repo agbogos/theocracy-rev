@@ -37,8 +37,17 @@ first, modernisation after**.
    to run `theoserver` manually. So `cTask::Launch` (fork/execlp) is **not** on
    the path; we just launch the server as a third process.
 
-   Sketch, in order: real BSD sockets (guest↔host fd table, non-blocking +
-   a real `select`, which today always returns 0) → exempt the 5043 lock →
+   **Sockets: DONE (G19).** Real BSD sockets with the four Linux→BSD translations
+   (`sockaddr_in` layout, `O_NONBLOCK` 0x800→0x0004, Linux errno values, and the
+   engine never setting `sin_family` — it binds `{family=0, port=5043,
+   INADDR_ANY}`, which Linux tolerates and BSD rejects). `select` is real but its
+   timeout is **capped at 20 ms** because we are single-threaded.
+   `gethostbyname` is real (the ctor calls it first and gives up on NULL). The
+   5043 lock is faked so two clients can coexist; **`THEOC_REAL_LOCK=1`** restores
+   stock behaviour and proves the transport (real bind, real `EADDRINUSE`, guest
+   correctly Fatals). Two clients both reach Realm Shell, 0 faults, 0 unimplemented.
+
+   Remaining, in order: →
    host mode to boot `server` instead of `theocracy.real` (headless: skip
    video/audio/MPEG bring-up) → `[network] enable=1` in `mvos.cfg` → test as
    server + 2 clients over loopback. The unknown is the netgame flow itself

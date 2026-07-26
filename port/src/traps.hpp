@@ -87,6 +87,10 @@ private:
     // Guest path "data/…" → host under $THEOC_DATA (default data/game).
     std::string resolve_path(const std::string& guest) const;
     void set_errno(Machine& m, int err);
+    // Socket plumbing: sockets share the fd table with files (the guest tells us
+    // which is which by calling send/recv vs read/write).
+    int host_fd_of(int gfd);
+    int adopt_host_fd(int hfd);
 
     std::vector<std::string> names_;
     std::vector<uint64_t>    hits_;
@@ -193,6 +197,7 @@ private:
     std::unordered_map<uint32_t, HostFile> files_;   // guest FILE*
     std::unordered_map<int, HostFile> fds_;          // guest fd → host
     int next_fd_ = 3;
+    uint32_t hostent_buf_ = 0;   // reusable guest `struct hostent` (see gethostbyname)
     std::string data_root_;
     Video video_;
     std::string smpeg_error_;   // last SMPEG_error message (host)
