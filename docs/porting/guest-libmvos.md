@@ -827,15 +827,25 @@ Verified with three abrupt client disconnects: exit 0, all three accepted.
 
 ### Reproducing it
 
+> **Correction (2026-07-26).** An earlier version of this section claimed the
+> lobby was reached **unattended**. It was not. The click path targeted the
+> *"Join server" text* at `505,361`; the actual control is the **small square
+> button to its left** (~`466,361`), so the automated run never left the server
+> selection screen. Every lobby packet logged below came from the **user clicking
+> manually** — joining, entering a player name, then opening lobby settings. The
+> transport results (connect/accept) are automation; the lobby results are not.
+> Provenance matters here: it also relocates the crash (below) from "somewhere on
+> the lobby path" to specifically **map selection**.
+
 ```sh
 # 1. server
 DYLD_LIBRARY_PATH=/opt/homebrew/lib THEOC_SERVER=1 ./port/build/theoc
-# 2. each client — clicks Multiplayer, selects the server entry, Join server
+# 2. each client — Multiplayer, select entry, then the Join *button* (not its label)
 DYLD_LIBRARY_PATH=/opt/homebrew/lib THEOC_SKIP_MOVIES=1 \
-  THEOC_CLICKS="65,360;350,245;505,361" ./port/build/theoc
+  THEOC_CLICKS="65,360;350,245;466,361" ./port/build/theoc
 ```
 
-Two things make this drivable:
+Two things help drive this:
 
 - **Menu coordinates** come from `data/menu/menu.cfg` (XOR-encrypted; decrypt with
   `tools/theocracy_crypt.py`): `multi 20 350` → click ~`65,360`, per the G17 offset
@@ -876,16 +886,42 @@ and it faulted as a fetch at `eip=0`. Implemented `strrchr` **and** `strchr`;
 both must return a *guest* pointer into the string, not a host one. Both clients
 are back to **0 unimplemented**.
 
-### Still open — a null call at `game 0x082bd6e7`
+### The map-selection crash — root-caused: an unresolved PLT slot
 
-Both clients still end with `Start FAULTED: UC_ERR_FETCH_UNMAPPED at eip=0`, with
-`0x082bd6e7` on the stack as the return address — game code in the netgame region
-(`0x829xxxx–0x82cxxxx`). It is *not* an unimplemented import any more, so it is a
-genuine null function pointer or unset callback on the lobby path. This is the
-next thing to chase, and it needs `theocracy.real` loaded in Ghidra.
+Opening **lobby settings → map selection** crashes with
+`UC_ERR_FETCH_UNMAPPED at eip=0`. Traced end to end:
 
-Everything above the fault works, so the lobby is reachable and stable enough to
-iterate on.
+1. The fault's return address is `0x082bd6e7`. Decoding the bytes before it gives
+   `push 0x084c3b73` (= the string **`"data/map/netgame"`**) then
+   `CALL 0x0804f924`.
+2. `0x0804f924` is a **PLT stub**: `jmp *[0x08597ce4]`.
+3. `.rel.plt` maps GOT `0x08597ce4` to **`__7cDirentPCc`** —
+   `cDirent::cDirent(const char *)`.
+4. That GOT slot is **0**, so the PLT jumps to zero. That is the `eip=0`.
+
+The map dialog (`FUN_082bcb30`) enumerates `data/map/netgame` for `*.map`, reads a
+`0x14`-byte header per file (magic `'M','P'`, version ≥ `0x34`), keeps maps with
+2–8 players, and loads a `.pic` preview. **The maps are present** — ten of them in
+`data/game/data/map/netgame/`. It never gets that far: its `printf("owl\n")`
+marker, immediately before `cDirectory::Open`, never appears in any log.
+
+**Why the slot is zero — a silent linker gap.** The game imports
+`__7cDirentPCc`, but libmvos exports only a *different overload*,
+`__7cDirentRC11cDirentname`. So the symbol belongs on the HLE side, yet it is not
+trapped either: `guestlink`'s `R_386_JMP_SLOT` case is `m.w32(P, S)` with no
+check, so **an unresolved symbol silently writes 0 to the GOT**. Calling it jumps
+to 0 instead of hitting a `TODO` trap — which is why the trap report kept saying
+0 unimplemented while the game died on a missing import.
+
+That makes this two fixes, and the first matters more than this bug:
+
+- **Never write a zero GOT slot.** Point unresolved `JMP_SLOT`/`GLOB_DAT` entries
+  at a trap (or a loud stub) so a missing import reports itself by name instead of
+  faulting at `eip=0`. This is the same lesson as the silent sockaddr rejection in
+  G19 — a silent zero turns a one-line diagnosis into an address hunt.
+- **Implement the directory surface**: `cDirent::cDirent(const char*)` plus
+  libmvos's imported `opendir`/`readdir`/`chdir`, which are also unimplemented and
+  would be the very next wall once the ctor resolves.
 
 ## Build / run
 

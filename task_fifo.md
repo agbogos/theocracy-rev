@@ -67,11 +67,25 @@ first, modernisation after**.
    Fixed en route: `strrchr`/`strchr` (the netgame path is the only route that
    reaches them) — back to 0 unimplemented.
 
-   **Next: a null call at `game 0x082bd6e7`.** Both clients end with
-   `Start FAULTED: UC_ERR_FETCH_UNMAPPED at eip=0`, with `0x082bd6e7` on the stack
-   — game code in the netgame region. Not an unimplemented import (0 of those), so
-   a genuine null function pointer / unset callback on the lobby path. **Needs
-   `theocracy.real` in Ghidra.** After that: actually starting a match, where
+   **Note on provenance:** the lobby packets were produced by the **user clicking
+   manually**, not by automation — the scripted path clicked the "Join server"
+   *text* rather than the small square button to its left (~`466,361`). Transport
+   results (connect/accept) are automated; lobby results were not.
+
+   **Map selection crash — ROOT-CAUSED.** Lobby settings → map selection dies at
+   `eip=0`. The fault's return address decodes to `push "data/map/netgame"` +
+   `CALL 0x0804f924`, a PLT stub `jmp *[0x08597ce4]`, whose `.rel.plt` symbol is
+   **`__7cDirentPCc`** (`cDirent::cDirent(const char*)`) — and that GOT slot is
+   **0**. libmvos exports only the other overload (`__7cDirentRC11cDirentname`),
+   so it belongs to the HLE side, but `guestlink`'s `R_386_JMP_SLOT` case is
+   `m.w32(P, S)` with no check, so **an unresolved symbol silently writes 0**.
+   Two fixes, the first mattering more than this bug:
+   1. **Never write a zero GOT slot** — point unresolved `JMP_SLOT`/`GLOB_DAT` at
+      a trap so a missing import names itself instead of faulting at `eip=0`
+      (same lesson as G19's silent sockaddr rejection).
+   2. Implement `cDirent::cDirent(const char*)` and libmvos's imported
+      `opendir`/`readdir`/`chdir` — also unimplemented, and the next wall.
+   The maps themselves are present (10 in `data/game/data/map/netgame/`). After that: actually starting a match, where
    `NetGame_AssignTeams` and lockstep sync come in — the packet format is already
    decoded (`docs/subsystems/multiplayer-and-factions.md`), so a malformed
    exchange is diagnosable rather than opaque.
