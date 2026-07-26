@@ -58,5 +58,6 @@ Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linu
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp`; see [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted; see banners in [m1-loader.md](porting/m1-loader.md) / [m2-core.md](porting/m2-core.md) |
 | **macOS port — guest-libmvos (current)** | **PLAYABLE — dual-image emulator; single-player runs (menu → realm → units, war, save/load), cutscenes with audio, 0 unimplemented traps; see [porting/guest-libmvos.md](porting/guest-libmvos.md)** |
-| **macOS port — next** | Auto `R_386_COPY` singleton sync (linker) → abort/Fatal policy → province-view perf → breadth. Full list: `../task_fifo.md`; QA: `../user-test.md`. |
+| **macOS port — next** | Multi-hour stress harness → multiplayer; then modernisation (decouple sim from render). Full list: `../task_fifo.md`; QA: `../user-test.md`. |
+| **RE findings audit** | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Findings + the provenance convention for future reads: `../task_fifo.md` (Done). |
 | Everything else | mapped only (see overview) |
