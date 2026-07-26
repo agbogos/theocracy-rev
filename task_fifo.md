@@ -13,7 +13,7 @@ first, modernisation after**.
    watchdog armed, so a fault hours in is diagnosable from the log alone. Build
    the harness, then the user drives.
 
-2. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
+2. **Multiplayer** — transport done (G19); the netgame flow itself is untested.
 
    **Two-instance test: PASSED (2026-07-26), but for a reason that will not
    survive the work.** Two `theoc` processes ran concurrently on one Mac with no
@@ -47,11 +47,13 @@ first, modernisation after**.
    stock behaviour and proves the transport (real bind, real `EADDRINUSE`, guest
    correctly Fatals). Two clients both reach Realm Shell, 0 faults, 0 unimplemented.
 
-   Remaining, in order: →
-   host mode to boot `server` instead of `theocracy.real` (headless: skip
-   video/audio/MPEG bring-up) → `[network] enable=1` in `mvos.cfg` → test as
-   server + 2 clients over loopback. The unknown is the netgame flow itself
-   (`NetGame_AssignTeams`, the team-info packet, lockstep sync), not the transport.
+   **Remaining, in order:** host mode to boot `server` instead of `theocracy.real`
+   (headless: skip video/audio/MPEG bring-up) → `[network] enable=1` in `mvos.cfg`
+   → bring up server + 2 clients over loopback. The unknown is the netgame flow
+   itself (`NetGame_AssignTeams`, the team-info packet, lockstep sync), not the
+   transport. The packet format is already decoded — see
+   `docs/subsystems/multiplayer-and-factions.md` — so a malformed exchange is
+   diagnosable rather than opaque.
 
 ## Modernisation (deferred — after playability)
 
