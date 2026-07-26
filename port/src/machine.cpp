@@ -203,6 +203,7 @@ uint32_t Machine::call(uint32_t addr, const std::vector<uint32_t>& args,
     if (e != UC_ERR_OK && !stop_requested_) {
         last_fault_eip_ = reg(UC_X86_REG_EIP);
         last_fault_esp_ = reg(UC_X86_REG_ESP);
+        last_fault_ebp_ = reg(UC_X86_REG_EBP);
         last_fault_stack_n_ = 0;
         for (int i = 0; i < 16; ++i) {
             try {

@@ -130,6 +130,10 @@ public:
     uint32_t last_fault_addr() const { return last_fault_addr_; }
     uint32_t last_fault_eip() const { return last_fault_eip_; }
     uint32_t last_fault_esp() const { return last_fault_esp_; }
+    // EBP at the moment of the fault, so the caller can walk the g++ 2.95 frame
+    // chain. Without it a fault only yields raw stack words, and picking a
+    // "return address" out of those by eye is guesswork.
+    uint32_t last_fault_ebp() const { return last_fault_ebp_; }
     // Up to 16 words from the guest stack at the last fault (valid if faulted).
     const uint32_t* last_fault_stack(int* n) const {
         if (n) *n = last_fault_stack_n_;
@@ -162,6 +166,7 @@ private:
     uint32_t last_fault_addr_ = 0;
     uint32_t last_fault_eip_ = 0;
     uint32_t last_fault_esp_ = 0;
+    uint32_t last_fault_ebp_ = 0;
     uint32_t last_fault_stack_[16]{};
     int last_fault_stack_n_ = 0;
 };

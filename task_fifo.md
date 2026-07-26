@@ -72,20 +72,20 @@ first, modernisation after**.
    *text* rather than the small square button to its left (~`466,361`). Transport
    results (connect/accept) are automated; lobby results were not.
 
-   **Map selection crash — ROOT-CAUSED.** Lobby settings → map selection dies at
-   `eip=0`. The fault's return address decodes to `push "data/map/netgame"` +
-   `CALL 0x0804f924`, a PLT stub `jmp *[0x08597ce4]`, whose `.rel.plt` symbol is
-   **`__7cDirentPCc`** (`cDirent::cDirent(const char*)`) — and that GOT slot is
-   **0**. libmvos exports only the other overload (`__7cDirentRC11cDirentname`),
-   so it belongs to the HLE side, but `guestlink`'s `R_386_JMP_SLOT` case is
-   `m.w32(P, S)` with no check, so **an unresolved symbol silently writes 0**.
-   Two fixes, the first mattering more than this bug:
-   1. **Never write a zero GOT slot** — point unresolved `JMP_SLOT`/`GLOB_DAT` at
-      a trap so a missing import names itself instead of faulting at `eip=0`
-      (same lesson as G19's silent sockaddr rejection).
-   2. Implement `cDirent::cDirent(const char*)` and libmvos's imported
-      `opendir`/`readdir`/`chdir` — also unimplemented, and the next wall.
-   The maps themselves are present (10 in `data/game/data/map/netgame/`). After that: actually starting a match, where
+   **Map selection crash — partially traced.** Lobby settings → map selection
+   dies at `eip=0`. Solid: the dialog is `FUN_082bcb30`, it enumerates
+   `data/map/netgame`, and its `printf("owl")` marker (just before
+   `cDirectory::Open`) never appears — so it dies before opening the directory.
+   `cDirent::cDirent(const char*)` and `cDirectory::Open` are on the HLE boundary
+   and unimplemented, as are libmvos's imported `opendir`/`readdir`/`chdir`, so
+   the directory surface is missing and needed regardless. Maps are present (10
+   in `data/game/data/map/netgame/`).
+   **A first attempt mis-diagnosed this** as a zero GOT slot from a "silent
+   linker gap": the call site was read out of `[ESP+0x18]` (a stack slot six
+   words deep) and the GOT value was read from the file on disk, never from guest
+   memory — and `resolve()`'s existing unresolved-UND warning fires in no run.
+   Faults now print an **EBP-chain backtrace** with `game`/`mvos+` labels instead
+   of raw stack words, so a reproduction should name the real call chain.
    `NetGame_AssignTeams` and lockstep sync come in — the packet format is already
    decoded (`docs/subsystems/multiplayer-and-factions.md`), so a malformed
    exchange is diagnosable rather than opaque.

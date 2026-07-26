@@ -886,42 +886,38 @@ and it faulted as a fetch at `eip=0`. Implemented `strrchr` **and** `strchr`;
 both must return a *guest* pointer into the string, not a host one. Both clients
 are back to **0 unimplemented**.
 
-### The map-selection crash — root-caused: an unresolved PLT slot
+### The map-selection crash — partially traced, and one wrong turn
 
 Opening **lobby settings → map selection** crashes with
-`UC_ERR_FETCH_UNMAPPED at eip=0`. Traced end to end:
+`UC_ERV_FETCH_UNMAPPED at eip=0` (a call through a null pointer).
 
-1. The fault's return address is `0x082bd6e7`. Decoding the bytes before it gives
-   `push 0x084c3b73` (= the string **`"data/map/netgame"`**) then
-   `CALL 0x0804f924`.
-2. `0x0804f924` is a **PLT stub**: `jmp *[0x08597ce4]`.
-3. `.rel.plt` maps GOT `0x08597ce4` to **`__7cDirentPCc`** —
-   `cDirent::cDirent(const char *)`.
-4. That GOT slot is **0**, so the PLT jumps to zero. That is the `eip=0`.
+**What is solid:** the map dialog is `FUN_082bcb30`. It enumerates
+`data/map/netgame` for `*.map`, reads a `0x14`-byte header per file (magic
+`'M','P'`, version >= `0x34`), keeps maps with 2-8 players, and loads a `.pic`
+preview. The maps are present -- ten of them in `data/game/data/map/netgame/`.
+Its `printf("owl\n")` marker, immediately before `cDirectory::Open`, **never
+appears in any log**, so it dies early in that dialog, before the directory is
+opened. `cDirent::cDirent(const char*)` and `cDirectory::Open` are both on the
+HLE boundary (the game imports them; libmvos exports only a *different* cDirent
+overload, `__7cDirentRC11cDirentname`), and libmvos additionally imports
+`opendir`/`readdir`/`chdir` -- **none of which are implemented**. So the
+directory surface is certainly missing and certainly needed.
 
-The map dialog (`FUN_082bcb30`) enumerates `data/map/netgame` for `*.map`, reads a
-`0x14`-byte header per file (magic `'M','P'`, version ≥ `0x34`), keeps maps with
-2–8 players, and loads a `.pic` preview. **The maps are present** — ten of them in
-`data/game/data/map/netgame/`. It never gets that far: its `printf("owl\n")`
-marker, immediately before `cDirectory::Open`, never appears in any log.
+> **Wrong turn, recorded deliberately (2026-07-26).** An earlier version of this
+> section claimed the crash was a zero GOT slot for `__7cDirentPCc` and blamed a
+> "silent linker gap". That was wrong twice over. The call site was taken from
+> `[ESP+0x18]` -- a stack slot six words deep in the fault dump -- and treated as
+> *the* return address; the actual return slot held a stack pointer. And the
+> "GOT is 0" claim was never measured: it was read off the **file on disk**, not
+> guest memory. `guestlink`'s `resolve()` already warns on unresolved strong UND
+> and **no such warning appears in any run**, so every import does bind. Lesson:
+> a fault dump of raw stack words invites exactly this kind of confident
+> misreading, which is why fault reporting now walks the EBP chain instead.
 
-**Why the slot is zero — a silent linker gap.** The game imports
-`__7cDirentPCc`, but libmvos exports only a *different overload*,
-`__7cDirentRC11cDirentname`. So the symbol belongs on the HLE side, yet it is not
-trapped either: `guestlink`'s `R_386_JMP_SLOT` case is `m.w32(P, S)` with no
-check, so **an unresolved symbol silently writes 0 to the GOT**. Calling it jumps
-to 0 instead of hitting a `TODO` trap — which is why the trap report kept saying
-0 unimplemented while the game died on a missing import.
-
-That makes this two fixes, and the first matters more than this bug:
-
-- **Never write a zero GOT slot.** Point unresolved `JMP_SLOT`/`GLOB_DAT` entries
-  at a trap (or a loud stub) so a missing import reports itself by name instead of
-  faulting at `eip=0`. This is the same lesson as the silent sockaddr rejection in
-  G19 — a silent zero turns a one-line diagnosis into an address hunt.
-- **Implement the directory surface**: `cDirent::cDirent(const char*)` plus
-  libmvos's imported `opendir`/`readdir`/`chdir`, which are also unimplemented and
-  would be the very next wall once the ctor resolves.
+**Instrument added.** `Machine` captures EBP at fault time and faults now print a
+labelled guest backtrace (`game 0x08...` / `mvos+0x...`) rather than 16 raw stack
+words. Reproducing the crash with this build should name the real call chain in
+one run.
 
 ## Build / run
 

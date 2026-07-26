@@ -30,6 +30,34 @@ static const char* kFlagNames[] = {
 constexpr uint32_t kMvosOpenSubsystems  = 0x94f20;
 constexpr uint32_t kMvosCloseSubsystems = 0x950e0;
 
+
+// Walk the g++ 2.95 EBP frame chain and print a labelled guest backtrace.
+// Faults previously dumped 16 raw stack words and left you to guess which one
+// was a return address -- a guess that sent one investigation down a completely
+// wrong path (a stack slot 6 words deep read as the call site). Frame walking
+// gives the actual chain, with each address tagged for the Ghidra DB it belongs
+// to: `game 0x08...` for theocracy.real, `mvos+0x...` for libmvos file offsets.
+static void print_guest_backtrace(Machine& m) {
+    auto label = [&](uint32_t a) {
+        char b[64];
+        if (a >= guestlink::MVOS_BASE && a < guestlink::MVOS_BASE + 0x00200000)
+            std::snprintf(b, sizeof b, "mvos+%#x", a - guestlink::MVOS_BASE);
+        else
+            std::snprintf(b, sizeof b, "game %#010x", a);
+        return std::string(b);
+    };
+    uint32_t ebp = m.last_fault_ebp();
+    std::fprintf(stderr, "  guest backtrace (EBP chain from %#x):\n", ebp);
+    if (!ebp) { std::fprintf(stderr, "    (no frame pointer)\n"); return; }
+    for (int i = 0; i < 24 && ebp; ++i) {
+        uint32_t ret = 0, next = 0;
+        try { ret = m.r32(ebp + 4); next = m.r32(ebp); } catch (...) { break; }
+        if (ret) std::fprintf(stderr, "    #%-2d %s\n", i, label(ret).c_str());
+        if (next <= ebp) break;          // frame pointers must ascend
+        ebp = next;
+    }
+}
+
 static uint32_t run_ctors(Machine& m, uint32_t addr, uint32_t nwords, const char* tag) {
     std::vector<uint32_t> ctors;
     for (uint32_t i = 0; i < nwords; ++i) {
@@ -306,8 +334,10 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "Start FAULTED: %s\n", e.what());
             int n = 0;
             const uint32_t* st = m.last_fault_stack(&n);
-            std::fprintf(stderr, "  fault EIP=%#x ESP=%#x access=%#x\n",
-                         m.last_fault_eip(), m.last_fault_esp(), m.last_fault_addr());
+            std::fprintf(stderr, "  fault EIP=%#x ESP=%#x EBP=%#x access=%#x\n",
+                         m.last_fault_eip(), m.last_fault_esp(), m.last_fault_ebp(),
+                         m.last_fault_addr());
+            print_guest_backtrace(m);
             for (int k = 0; k < std::min(n, 16); ++k)
                 std::fprintf(stderr, "    [ESP+%02x] %#010x\n", 4 * k, st[k]);
         }
