@@ -9,7 +9,7 @@ A faction/realm. `new(0x84)` (132 bytes), one per slot in `cGameSession::tribes[
 | `0x00` | `u8` | `id` | Tribe index (0–10). Set by `cTribe_SetId`. |
 | `0x01` | `u8 [7]` | `_resv0` | ctor zeroes `+1..+4`; `+1..+7` not yet identified. |
 | `0x08` | `i32 [11]` | `relations` | Diplomacy state toward each tribe. `0`=unknown (`cTribe_IsKnown` = `!=0`), `5`=allied (`cTribe_IsAllied`), `1`/`3`=other states (inferred neutral/war). Diplomacy valid only among tribes **0–5** (`cTribe_CheckValidTribe`). |
-| `0x34` | `i32 [5]` | `resource` | Five per-tribe resource/mana pools. Init `g_TribeResourceInit` (`0x84c85f1`); `cTribe_AddResource(amt, idx)` adds & clamps to `g_TribeResourceMax` (`0x84c85f5`). |
+| `0x34` | `i32 [5]` | `resource` | Five per-tribe resource/mana pools. Init `g_TribeResourceInit` (`0x84c85f1`); `cTribe_AddResource(amt, idx)` adds & clamps to `g_TribeResourceMax` (`0x84c85f5`). Both globals are **scalars**, not per-resource tables — all five pools share one starting value and one cap. |
 | `0x48` | `ptr` | `controller` | Per-tribe object (AI/orders/command state); allocated elsewhere, freed+nulled by `cTribe_FreeController`. Sub-objects at `controller+0x2c/+0x30/+0x50`. |
 | `0x4c` | `ptr` | `template` | Static tribe definition = `DAT_08645240 + id*0x10`. **Decoded: 4× `int32`** (see roster below). |
 | `0x50` | `u8` | `flag0` | zeroed in ctor |

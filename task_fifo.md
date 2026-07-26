@@ -7,88 +7,17 @@ results. Order below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-1. **Re-verify RE findings against the binaries (Ghidra no-return damage)**
-
-   > **STEP 0 IS THE USER'S — ASK FOR IT FIRST, IT BLOCKS EVERYTHING ELSE.**
-   > Ghidra is driven manually (MCP shows one binary at a time; the user
-   > switches files and runs scripts). Do not start the audit until this is
-   > confirmed done, or you will be re-reading the same damaged decompilation.
-
-   **Step 0 — user runs, in Ghidra, for BOTH DBs (`libmvos.so.0.9`, then
-   `theocracy.real`):**
-   1. Open the DB, run `tools/ghidra/FixBogusNoReturn.java` (Script Manager →
-      category *Repair*).
-   2. Then *Analysis → Auto Analyze* (or right-click → *Re-create Function* on
-      anything still wrong), so truncated bodies get re-walked.
-   3. Report back roughly how many functions the script un-flagged per DB, and
-      leave libmvos as the loaded file.
-
-   **Why.** Ghidra's "Non-Returning Functions – Discovered" analyzer misreads
-   g++ 2.95 tail-call thunks (tiny body ending in `JMP`) as never-returning, and
-   wrongly flagged ordinary ctors, setters and list ops (`tHNode`,
-   `cDimension::Set`, `cVObject::Refresh`, `cList::UnLinkList`, `cNode::UnLink`,
-   `__builtin_new`, …). Every *caller* is then truncated at the first such call.
-   The failure mode is silent: a plausible, complete-looking decompilation that
-   is simply missing everything after the first thunk.
-
-   > **Correction (2026-07-26).** The evidence originally cited here — `0x9e6cc`
-   > reporting "no function at address" while sitting mid-`PushKeyInput` — was a
-   > **tool artifact, not damage**: the Ghidra MCP's `get_function_by_address`
-   > matches *entry points only*, so any mid-body address reports "no function"
-   > (mid-`main` does the same). The damage was nonetheless real and is now
-   > repaired: the user's `FixBogusNoReturn.java` run un-flagged **495** functions
-   > in libmvos and **277** in `theocracy.real`. Post-repair, decompiles flow
-   > correctly through the former truncation points.
-   >
-   > **Residue to expect.** Clearing the flags did not re-merge function
-   > *boundaries*: several functions are still split, with a duplicate `FUN_*`
-   > entry at the old truncation point (`main` @`0xa51e0` reports a 48-byte body
-   > vs its real `0xfc`; `OpenSubsystems` @`0xa4f20` reports 15 bytes). This is
-   > cosmetic — the decompiler follows the fall-through and yields the whole
-   > function — but it makes reported *body extents* unreliable, and it is how a
-   > cited address ends up on a fragment instead of an entry (see the
-   > `LoadDevicePlugins` correction below).
-
-   **Motivation.** G16 and G17 were both *"we had the ABI contract wrong"*, not
-   typos — the same shape bad decompilation produces. Worth checking how much
-   else is built on truncated reads.
-
-   **Scope — audit doc claims, NOT the binaries.** A blanket re-review is
-   unfalsifiable. `docs/` cites specific addresses; that is a finite, greppable
-   worklist (`grep -oE '(mvos\+)?0x[0-9a-f]{4,8}' docs/**/*.md`) of a few dozen
-   entries. Re-decompile each and check the claim still holds.
-
-   **Prioritise by provenance and by what the runtime already proves:**
-   - *Trustworthy, skip* — mechanically derived facts: the 232-symbol trap
-     boundary, the 79 `R_386_COPY` entries, anything out of `tools/elf_facts.py`
-     / `data/*.tsv`. Straight from the ELF, no analyzer involved.
-   - *Low risk* — hot paths. 215/215 ctors clean, 0 unimplemented traps, a full
-     QA pass and 20 soak cycles mean a wrong layout there would already fault.
-   - *High risk, do these first* — cold paths the emulator never exercises:
-     multiplayer/sockets, save/load edges, error paths, and struct fields we
-     read but rarely hit. A wrong layout there sits in the docs waiting.
-
-   **Method.** Cross-check load-bearing claims against **disassembly**, not just
-   the decompiler — raw instructions are immune to this entire bug class. That
-   is what makes G17 solid (`AfterSwapBuffer` was read as instructions); G16 was
-   decompiler-only but is empirically nailed (hang reproduced, fix killed it).
-
-   **Deliverable.** Correct any wrong doc claims, and mark **provenance** on the
-   ones checked — runtime-verified vs decompilation-only — so future just-in-time
-   checks are possible without another big-bang audit. Ghidra address convention:
-   Ghidra addr = mvos offset + `0x10000`; game base `0x08048000`.
-
-2. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
+1. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
    path; a real multi-hour session is a human test. Needs a harness first:
    rate-limited logging (no gigabytes), periodic resource snapshots, and the
    watchdog armed, so a fault hours in is diagnosable from the log alone. Build
    the harness, then the user drives.
 
-3. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
+2. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
 
 ## Modernisation (deferred — after playability)
 
-4. **Decouple sim from render (frame-tied engine)** — the engine steps
+3. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -101,14 +30,63 @@ results. Order below is **playability first, modernisation after**.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-5. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+4. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-6. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
 ## Done
+
+- **RE-findings audit vs. the repaired DBs (2026-07-26)** — `FixBogusNoReturn.java`
+  un-flagged **495** functions in libmvos and **277** in `theocracy.real`; both
+  re-analysed, then every address `docs/` cites was re-checked. **5 wrong claims
+  found and fixed, 1 open question closed, 0 wrong claims in the port itself.**
+
+  | Doc | Was | Actually |
+  |---|---|---|
+  | `application-bootstrap`, `macos-hle-emulator` | main file `0x851e0` | **`0x951e0`** (off by the image base) |
+  | `vvc_x-backend` | `LoadDevicePlugins` `0xa49a0` | **`0xa4990`** (the address `OpenSubsystems` calls) |
+  | `platform-audio-threads` | ctor ends `cThread::Launch(this)` | **`Launch(this + 4)`** — `cThread` is a secondary base at `+4` |
+  | `simulation-step` | province sub-object `+0x103a1` | **`+0x40e84`** — an `int *` index misread as a byte offset |
+  | `guest-libmvos` (G16) | `PushKeyInput` `mvos+0x8e670` | **`0x8e690`** |
+
+  Closed: `cSystemMemory::Alloc` evicts **oldest-first** and never reads
+  `priority` (+0x18) — resolves `memory-and-containers.md` / `open_questions` #17.
+  Also spotted: `Alloc` credits each eviction's size to the budget **twice**
+  (engine bug, cold path, left alone).
+
+  **Verified clean, no changes needed:** the whole multiplayer/faction surface
+  (`GameSession_Construct` 11 slots, `NetGame_InitBattle` `+0x2c=1` /
+  `scenarioID=-1`, `NetGame_AssignTeams`, the console gating, and
+  `g_LocalFactionTable` having **no write xrefs at all** — which is what the
+  "human is always faction 0 in SP" claim rests on); all of `cTribe` (layout,
+  the relations-init ladder, `InitTribeRoster`); `cThread`/`cTask` fork+execlp;
+  libmvos `main`'s 10-step boot sequence; `cMemBlock`/`cList`/`cString` layouts.
+
+  **Two premises of the audit item itself were wrong** and are worth remembering:
+  - The cited evidence of live damage (`0x9e6cc` → "no function at address") was
+    a **tool artifact** — the MCP's `get_function_by_address` matches entry
+    points only, so any mid-body address reports this (mid-`main` does too).
+  - Clearing the flags did **not** re-merge function *boundaries*. Split
+    functions persist with a duplicate `FUN_*` at the old truncation point
+    (`main` reports a 48-byte body vs its real `0xfc`). Harmless for decompiling
+    — the decompiler follows the fall-through — but **reported body extents are
+    unreliable**, and it is exactly how `LoadDevicePlugins` got cited on a
+    fragment rather than its entry.
+
+  **Provenance convention going forward.** Two failure modes produced every error
+  above, so check for both when lifting an address or offset out of a decompile:
+  1. **Pointer-arithmetic offsets.** An offset read off a decompiled `TYPE *`
+     parameter is scaled by `sizeof(TYPE)`. `param_1 + 0x103a1` on an `int *` is
+     byte `+0x40e84`. Offsets via `*(byte *)((int)p + N)` are already bytes.
+  2. **Fragment addresses.** Confirm a cited entry has real **callers**
+     (`get_xrefs_to`); a fragment shows only `.eh_frame` DATA refs.
+
+  Load-bearing claims here were cross-checked against **disassembly**, which is
+  immune to both. Hot paths (boot, render, input, the allocator) additionally
+  carry runtime proof and were not re-derived.
 
 - **Cursor ghost trails fixed (G17)** — `cSprite` runs a two-slot (double-buffer)
   background save/restore, but our `OpenDisplay` points every VVC GD slot at one
@@ -180,7 +158,7 @@ results. Order below is **playability first, modernisation after**.
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #4 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #3 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and
@@ -229,7 +207,7 @@ results. Order below is **playability first, modernisation after**.
 - `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).
 - Keyboard: letters/digits/arrows/modifiers/F-keys/enter/space/backspace; `[` `]`
   not in the original eKey table (won't-fix).
-- Audio can stutter in province view (tied to frame cost — see #4).
+- Audio can stutter in province view (tied to frame cost — see #3).
 - Timer: `redirect_guest` from present (nested `uc_emu_start` crashes Unicorn).
   Sound preferred when its slice is due.
 

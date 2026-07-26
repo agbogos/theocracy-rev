@@ -8,7 +8,7 @@ Consolidated list of remaining threads, deduped from the per-subsystem docs. Rou
 3. **`TriggerProvinceEvent → FUN_081d6570`** — what the periodic per-province event actually does (unrest / miracle / random event).
 4. **Entity structs / layouts:**
    - Unit / `cMan` struct (accessors `FUN_082cd2a0` / `FUN_082cc030`).
-   - Province struct — fields around owner `+0x40aae` and `+0x103a1`; record size / stride.
+   - Province struct — fields around owner `+0x40aae` and `+0x40e84` (was `+0x103a1`; corrected 2026-07-26, see [simulation-step.md](subsystems/simulation-step.md)); record size / stride.
    - `ManIndexArray` / `BuildingIndexArray` registries (from `SetupGame`).
 5. **Order / command queue** — `g_World+0x83c` (`FUN_081a2060` / `081a1fa0` / `081a2180`). The input / replay / MP-sync channel format.
 
