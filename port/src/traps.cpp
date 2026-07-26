@@ -1329,6 +1329,10 @@ void TrapLayer::register_builtins() {
         uint32_t h = arg(m, esp, 0);
         if (h) mpeg_.erase(h);
         movie_playing_ = false;
+        // Back to pixel-exact for the UI. This is the reliable end-of-movie hook:
+        // every exit path reaches it, including a keypress skip (SMPEG_status goes
+        // STOPPED, External_PlayAnim leaves its loop, and it deletes the stream).
+        video_.set_crisp(true);
         if (key_mailbox_) { m.w32(key_mailbox_, 0); m.w32(key_mailbox_ + 4, 0); }
         return 0;
     };
@@ -1480,6 +1484,12 @@ void TrapLayer::register_builtins() {
         // Present so the user sees the cutscene (play loop may not call
         // SwapBuffers between frames).
         if (video_.is_open()) {
+            // Video wants the fractional fit, not the integer one: the movie mode is
+            // 640×480, where flooring 3.85x to 3.00x would throw away 39% of the
+            // image area — and this is already-resampled video, so the pixel-exact
+            // scale buys nothing. Restored to crisp in SMPEG_delete. No-op after
+            // the first frame of a cutscene.
+            video_.set_crisp(false);
             uint32_t nbytes = video_.fb_bytes();
             if (nbytes > GUEST_FB_SIZE) nbytes = GUEST_FB_SIZE;
             m.read(GUEST_FB_BASE, video_.fb(), nbytes);

@@ -631,8 +631,35 @@ Two subtleties worth keeping:
   It is also a straight win (800×600 renders at 1600×1200 windowed, and
   2940×1846 at 3.08× fullscreen on a 14" panel). `THEOC_NO_HIDPI=1` reverts.
 
-The `[video]` line reports px vs pt, scale and bar widths, so a scaling problem
-is answerable from the log rather than only on screen.
+The `[video]` line reports px vs pt, scale, filtering mode and bar widths, so a
+scaling problem is answerable from the log rather than only on screen.
+
+### Crisp UI, smooth video
+
+Fullscreen was slightly blurry because a fractional scale (3.08× on a 2940×1846
+panel) resamples every pixel. The fix is **integer scale + nearest**, which makes
+each guest pixel an exact N×N block — the default now, not an option. Nearest
+matters even at an exact 2× (windowed on Retina): bilinear samples at ±0.25 of a
+texel there and still blends.
+
+But the right answer differs by content, because the guest runs two modes:
+
+| Mode | Fractional fit | Integer | Cost of integer |
+|------|----------------|---------|-----------------|
+| 800×600 (game UI) | 2461×1846 @3.08× | **2400×1800 @3.00×** | ~5% of image area |
+| 640×480 (movies) | 2461×1846 @3.85× | 1920×1440 @3.00× | **39% of image area** |
+
+So the UI is **crisp** (integer + nearest) and cutscenes are **smooth**
+(fractional fit + linear): flooring 3.85× would throw away nearly 40% of the
+picture, and a cutscene is video that `fit_frame`'s bilinear pass has already
+resampled, so pixel-exactness buys it nothing.
+
+`Video::set_crisp()` switches both settings together and is a no-op when already
+in the requested state. The movie present path asks for smooth on every frame
+(cheap, idempotent); **`SMPEG_delete` restores crisp** — the reliable end-of-movie
+hook, since every exit path reaches it, including a keypress skip. Verified by the
+transitions in the log: 3.00× crisp → 3.85× smooth per cutscene → 3.00× crisp,
+and 800×600 settling at 2400×1800 with 270/23 px bars.
 
 ### Movie aspect-fit
 

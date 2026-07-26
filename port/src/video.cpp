@@ -46,11 +46,12 @@ bool Video::open(int w, int h, int depth_code) {
 
         // The guest is 4:3 and modern panels are not, so the logical-size letterbox
         // leaves pillarbox bars — deliberate; stretching would distort the art.
-        // Scale sampling: with a non-integer factor (800×600 → a Retina panel is
-        // ~3.1×) nearest makes pixels unevenly sized, which reads as shimmer on
-        // the UI. The hint is consumed when a texture is created, and fullscreen is
-        // now reachable by hotkey from any start mode, so set it unconditionally.
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+        // Default sampling is nearest, which pairs with the integer scale factor
+        // applied below: together they make every guest pixel an exact NxN block.
+        // Note this matters even at an exact 2x (windowed on Retina) — bilinear
+        // samples at ±0.25 of a texel there and still blends. set_crisp(false)
+        // switches to linear per-texture for cutscenes.
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
         // ALLOW_HIGHDPI: without it macOS hands SDL the window's *point* size
         // (e.g. 1470×923 on a Retina panel), we render there, and the OS upscales
@@ -117,6 +118,11 @@ bool Video::open(int w, int h, int depth_code) {
     w_ = w;
     h_ = h;
     depth_ = depth_code;
+    // Re-apply the presentation policy: the texture is new, and the renderer's
+    // integer-scale setting has to be re-asserted against the new logical size.
+    SDL_RenderSetIntegerScale((SDL_Renderer*)ren_, crisp_ ? SDL_TRUE : SDL_FALSE);
+    SDL_SetTextureScaleMode((SDL_Texture*)tex_,
+                            crisp_ ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
     fb_.assign((size_t)w * (size_t)h, 0);
     log_geometry(depth_code);
     present();
@@ -133,19 +139,32 @@ void Video::log_geometry(int depth_code) {
     SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);  // pixels
     SDL_GetWindowSize((SDL_Window*)win_, &pw, &ph);            // points
     if (!fullscreen_) {
-        std::printf("  [video] window %dx%d (%dx%d px, hidpi %s) depth-code %d"
+        std::printf("  [video] window %dx%d (%dx%d px, hidpi %s, %s) depth-code %d"
                     " (RGB565 framebuffer)\n",
-                    w_, h_, ow, oh, (ow > pw ? "on" : "off"), depth_code);
+                    w_, h_, ow, oh, (ow > pw ? "on" : "off"),
+                    crisp_ ? "crisp" : "smooth", depth_code);
         return;
     }
-    double s = (ow && oh) ? ((double)ow / w_ < (double)oh / h_ ? (double)ow / w_
-                                                              : (double)oh / h_)
-                          : 1.0;
+    double s = (ow && oh) ? std::min((double)ow / w_, (double)oh / h_) : 1.0;
+    // Match SDL: integer scale floors the factor, so report what is actually drawn.
+    if (crisp_) s = std::max(1.0, std::floor(s));
     int vw = (int)(w_ * s), vh = (int)(h_ * s);
     std::printf("  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
-                " scaled %.2fx -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
-                ow, oh, pw, ph, (ow > pw ? "on" : "off"), w_, h_, s, vw, vh,
+                " scaled %.2fx %s -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
+                ow, oh, pw, ph, (ow > pw ? "on" : "off"), w_, h_, s,
+                crisp_ ? "crisp/integer+nearest" : "smooth/fit+linear", vw, vh,
                 (ow - vw) / 2, (oh - vh) / 2, depth_code);
+}
+
+void Video::set_crisp(bool on) {
+    if (on == crisp_) return;
+    crisp_ = on;
+    if (!ren_) return;
+    SDL_RenderSetIntegerScale((SDL_Renderer*)ren_, on ? SDL_TRUE : SDL_FALSE);
+    if (tex_)
+        SDL_SetTextureScaleMode((SDL_Texture*)tex_,
+                                on ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
+    log_geometry(depth_);
 }
 
 bool Video::toggle_fullscreen() {

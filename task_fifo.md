@@ -249,6 +249,16 @@ first, modernisation after**.
     in G16. `Alt` itself still forwards, so the qualifier byte stays honest.
     Key repeats are ignored. Self-drivers can't trip it — their synthetic events
     never set `.mod`.
+  - **Crisp UI, smooth video** (default, not an option). The UI presents at an
+    **integer** scale with **nearest** sampling, so each guest pixel is an exact
+    N×N block — 800×600 lands at 2400×1800 (3.00×) on a 2940×1846 panel, costing
+    ~5% of image area versus the 3.08× fit and removing all blur. Nearest matters
+    even at an exact 2× windowed: bilinear samples at ±0.25 of a texel and still
+    blends. **Cutscenes are the exception** and present smooth (fractional fit +
+    linear): the movie mode is 640×480, where flooring 3.85× to 3.00× would throw
+    away **39%** of the picture, and it is video the aspect-fit already resampled.
+    `Video::set_crisp()` flips both settings; the movie present asks for smooth,
+    `SMPEG_delete` restores crisp (every exit path, including a key skip, hits it).
   - **HiDPI is on for BOTH modes** (`SDL_WINDOW_ALLOW_HIGHDPI`). Without it
     macOS reports the window's *point* size, we render there, and the OS upscales
     again to the panel — two resamples. With it the renderer output is the real

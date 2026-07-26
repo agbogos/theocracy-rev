@@ -35,6 +35,20 @@ public:
     // scale changes). Returns false if SDL refused, leaving the mode as it was.
     bool toggle_fullscreen();
 
+    // Presentation filtering. **Crisp (the default)** = integer scale factor +
+    // nearest sampling, so every guest pixel becomes an exact NxN block and the UI
+    // is pixel-perfect. **Smooth** = fractional fit + linear, which fills more of
+    // the screen at the cost of resampling.
+    //
+    // Crisp is right for the game: at 800x600 the integer floor costs ~5% of the
+    // image area (3.00x vs 3.08x on a 2940x1846 panel) and removes all blur.
+    // Smooth is right for cutscenes: the movie mode is 640x480, where the floor is
+    // 3.00x against a 3.85x fit — a 39% area loss — and the content is video that
+    // our bilinear aspect-fit has already resampled, so pixel-exactness buys
+    // nothing. No-op when already in the requested state.
+    void set_crisp(bool on);
+    bool is_crisp() const { return crisp_; }
+
     // Keep the window on screen for `seconds`, presenting/pumping, so a human
     // (or a demo run) can see it. Returns early if the window is closed.
     void keep_open_for(int seconds);
@@ -69,6 +83,7 @@ private:
     void* tex_ = nullptr;   // SDL_Texture*
     int w_ = 0, h_ = 0, depth_ = 0;
     bool fullscreen_ = false;   // what we actually got, per SDL_GetWindowFlags
+    bool crisp_ = true;         // integer scale + nearest (see set_crisp)
     std::vector<uint16_t> fb_;
     EventHook event_hook_;
 };
