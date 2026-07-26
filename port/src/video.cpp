@@ -52,8 +52,27 @@ bool Video::open(int w, int h, int depth_code) {
         // logical size == window size.
         if (want_fs) SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
+        // ALLOW_HIGHDPI: without it macOS hands SDL the window's *point* size
+        // (e.g. 1470×923 on a Retina panel), we render there, and the OS upscales
+        // again to the physical pixels — two resamples and a soft image. With it,
+        // the renderer's output is the real backing store (~2× those points), so
+        // the guest's 800×600 is scaled once, straight to native.
+        //
+        // Deliberately fullscreen-only. Windowed is the verified baseline and the
+        // fallback path, and HiDPI is where SDL's point-vs-pixel mouse mapping gets
+        // fiddly — no reason to put that risk on the mode that isn't upscaling.
+        // THEOC_NO_HIDPI=1 reverts (same escape-hatch convention as
+        // THEOC_LEGACY_SPRITE / THEOC_LEGACY_KEYMB).
+        static const bool no_hidpi = [] {
+            const char* e = std::getenv("THEOC_NO_HIDPI");
+            return e && *e && std::strcmp(e, "0") != 0;
+        }();
+
         Uint32 flags = SDL_WINDOW_SHOWN;
-        if (want_fs) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+        if (want_fs) {
+            flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+            if (!no_hidpi) flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+        }
         SDL_Window* win = SDL_CreateWindow(
             "Theocracy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags);
         if (!win && want_fs) {
@@ -102,15 +121,20 @@ bool Video::open(int w, int h, int depth_code) {
         // Report the actual letterbox so a "why are there bars" question is
         // answerable from the log alone (and so a wrong scale is visible here
         // rather than only on screen).
-        int ow = 0, oh = 0;
-        SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);
+        int ow = 0, oh = 0, pw = 0, ph = 0;
+        SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);  // pixels
+        SDL_GetWindowSize((SDL_Window*)win_, &pw, &ph);            // points
         double s = (ow && oh) ? ((double)ow / w < (double)oh / h ? (double)ow / w
                                                                 : (double)oh / h)
                               : 1.0;
         int vw = (int)(w * s), vh = (int)(h * s);
-        std::printf("  [video] FULLSCREEN %dx%d, guest %dx%d scaled %.2fx -> %dx%d"
-                    " (pillarbox %d px, letterbox %d px) depth-code %d\n",
-                    ow, oh, w, h, s, vw, vh, (ow - vw) / 2, (oh - vh) / 2, depth_code);
+        // Reporting points and pixels separately makes the HiDPI state obvious:
+        // equal means we are NOT on the backing store and the image is being
+        // resampled twice.
+        std::printf("  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
+                    " scaled %.2fx -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
+                    ow, oh, pw, ph, (ow > pw ? "on" : "off"), w, h, s, vw, vh,
+                    (ow - vw) / 2, (oh - vh) / 2, depth_code);
     } else {
         std::printf("  [video] window %dx%d depth-code %d (RGB565 framebuffer)\n",
                     w, h, depth_code);
