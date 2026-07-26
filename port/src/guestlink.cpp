@@ -320,6 +320,36 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
     apply(game, 0, game_idx, F_ABS | F_GOT);
     std::printf("  relocs applied (counted entries): %u\n", R.relocs_applied);
 
+    // Integrity check: a GOT/PLT slot left at 0 means a call through it jumps to
+    // address 0 and faults with EIP=0 and no frame pointer -- one of the least
+    // diagnosable failures possible, and easy to mistake for a null vtable or a
+    // smashed stack. resolve() only warns for STRONG undefined symbols, so weak
+    // ones (and anything that slipped through the idx build) would land here
+    // silently. Scan both images and name every zero slot.
+    {
+        uint32_t zero = 0;
+        auto scan = [&](const elf32::Image& img, uint32_t bias, const char* tag) {
+            for (const auto& r : img.relocs()) {
+                if (r.type != elf32::R_386_JMP_SLOT && r.type != elf32::R_386_GLOB_DAT)
+                    continue;
+                if (r.sym >= img.dynsyms().size()) continue;
+                uint32_t P = r.offset + bias;
+                uint32_t v = 0;
+                try { v = m.r32(P); } catch (...) { continue; }
+                if (v) continue;
+                const std::string& n = img.dynsyms()[r.sym].name;
+                if (n.empty()) continue;
+                std::fprintf(stderr,
+                             "  [link] ZERO GOT slot: %s '%s' -> calls through it "
+                             "will fault at eip=0\n", tag, n.c_str());
+                zero++;
+            }
+        };
+        scan(game, 0, "game");
+        scan(mvos, MVOS_BASE, "mvos");
+        std::printf("  zero GOT/PLT slots after linking: %u\n", zero);
+    }
+
     // 8. Bookkeeping ----------------------------------------------------------
     R.init_app  = abs_sym(game, 0, "Init__12cApplication");
     R.start_app = abs_sym(game, 0, "Start__12cApplicationiPPc");

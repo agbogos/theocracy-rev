@@ -293,6 +293,7 @@ int main(int argc, char** argv) {
         // Optional guest-code profiler: drive the UI into the slow view and read
         // the rolling top-N dumps (THEOC_PROFILE=1). Enabled just before Start so
         // boot/ctors aren't in the sample.
+        if (std::getenv("THEOC_TRACE")) m.enable_block_trace();
         if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
         else if (std::getenv("THEOC_FPS")) m.enable_block_counter();
 
@@ -338,6 +339,22 @@ int main(int argc, char** argv) {
                          m.last_fault_eip(), m.last_fault_esp(), m.last_fault_ebp(),
                          m.last_fault_addr());
             print_guest_backtrace(m);
+            if (m.trace_depth()) {
+                // Most-recent-last: the final entries are the path into the fault.
+                std::fprintf(stderr, "  last %d basic blocks (THEOC_TRACE):\n",
+                             m.trace_depth());
+                int start = m.trace_depth() < 32 ? 0 : 0;
+                for (int i = start; i < m.trace_depth(); ++i) {
+                    uint32_t a = m.trace_at(i);
+                    if (a >= guestlink::MVOS_BASE && a < guestlink::MVOS_BASE + 0x200000)
+                        std::fprintf(stderr, "    mvos+%#x\n", a - guestlink::MVOS_BASE);
+                    else
+                        std::fprintf(stderr, "    game %#010x\n", a);
+                }
+            } else {
+                std::fprintf(stderr, "  (re-run with THEOC_TRACE=1 for a block trace"
+                                     " -- essential when EBP is 0)\n");
+            }
             for (int k = 0; k < std::min(n, 16); ++k)
                 std::fprintf(stderr, "    [ESP+%02x] %#010x\n", 4 * k, st[k]);
         }

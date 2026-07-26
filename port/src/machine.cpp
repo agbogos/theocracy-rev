@@ -96,6 +96,21 @@ void Machine::count_hook(uc_engine*, uint64_t addr, uint32_t, void* user) {
     self->last_block_.store((uint32_t)addr, std::memory_order_relaxed);
 }
 
+void Machine::trace_hook(uc_engine*, uint64_t addr, uint32_t, void* user) {
+    auto* self = static_cast<Machine*>(user);
+    uint32_t a = (uint32_t)addr;
+    self->trace_[self->trace_i_ & 31] = a;
+    self->trace_i_++;
+    if (self->trace_n_ < 32) self->trace_n_++;
+}
+
+void Machine::enable_block_trace() {
+    uc_hook h;
+    uc_check(uc_hook_add(uc_, &h, UC_HOOK_BLOCK, (void*)&Machine::trace_hook,
+                         this, 1, 0),
+             "uc_hook_add(trace)");
+}
+
 void Machine::enable_block_counter() {
     if (profiling_) return;                      // block_hook already counts
     uc_hook h;

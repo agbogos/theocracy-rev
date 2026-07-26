@@ -117,6 +117,20 @@ public:
     // per-second throughput without the full profiler histogram. No-op if
     // profiling is already on (block_hook counts too). Read via exec_blocks().
     void enable_block_counter();
+    // THEOC_TRACE=1: keep a ring of the last basic blocks entered, dumped on a
+    // fault. When a null call lands at eip=0 the frame pointer is often 0 too
+    // (nothing has pushed one yet), which makes an EBP walk useless -- this is
+    // the only thing that then shows how control got there.
+    void enable_block_trace();
+    int  trace_depth() const { return trace_n_; }
+    // i-th OLDEST entry. The ring wraps, so once it is full the chronological
+    // start is the write cursor, not index 0 -- printing raw indices would
+    // scramble the very ordering the trace exists to show.
+    uint32_t trace_at(int i) const {
+        int base = (trace_n_ < 32) ? 0 : trace_i_;
+        return trace_[(base + i) & 31];
+    }
+    static void trace_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     uint64_t exec_blocks() const { return blocks_.load(std::memory_order_relaxed); }
 
     // Last guest basic-block address executed (0 if the block counter is off).
@@ -167,6 +181,8 @@ private:
     uint32_t last_fault_eip_ = 0;
     uint32_t last_fault_esp_ = 0;
     uint32_t last_fault_ebp_ = 0;
+    uint32_t trace_[32]{};
+    int      trace_i_ = 0, trace_n_ = 0;
     uint32_t last_fault_stack_[16]{};
     int last_fault_stack_n_ = 0;
 };
