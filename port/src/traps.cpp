@@ -1,4 +1,5 @@
 #include "traps.hpp"
+#include <cmath>
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #endif
@@ -370,6 +371,82 @@ void TrapLayer::soak_tick() {
                          soak_cycle_, mins);
             soak_done_ = true;
         }
+    }
+}
+
+// ---- render-bug harness -----------------------------------------------------
+// THEOC_CLICKS="x,y;x,y"  click a path (paced, waiting between clicks)
+// THEOC_MOUSE_SWEEP=1     then drag the pointer across the screen
+// THEOC_SHOT_EVERY=N      save every Nth frame to THEOC_SHOT_DIR as BMP
+// Built for the cursor-trail bug: trails only show across consecutive frames
+// with a moving pointer, which no amount of log reading will reveal.
+void TrapLayer::render_probe_tick() {
+    static const char* clicks_env = std::getenv("THEOC_CLICKS");
+    static const bool  sweep      = std::getenv("THEOC_MOUSE_SWEEP") != nullptr;
+    static const int   shot_every = [] {
+        const char* e = std::getenv("THEOC_SHOT_EVERY");
+        return e ? std::atoi(e) : 0;
+    }();
+    static const char* shot_dir = [] {
+        const char* e = std::getenv("THEOC_SHOT_DIR");
+        return e ? e : ".";
+    }();
+    if (!clicks_env && !sweep && !shot_every) return;
+
+    using clock = std::chrono::steady_clock;
+    static auto t0 = clock::now();
+    double t = std::chrono::duration<double>(clock::now() - t0).count();
+    if (t < 3.0) return;                       // let the first screen settle
+
+    // --- click path
+    static std::vector<std::pair<int,int>> path = [] {
+        std::vector<std::pair<int,int>> v;
+        if (const char* e = std::getenv("THEOC_CLICKS")) {
+            int x, y; const char* p = e;
+            while (*p) {
+                if (std::sscanf(p, "%d,%d", &x, &y) == 2) v.push_back({x, y});
+                const char* semi = std::strchr(p, ';');
+                if (!semi) break;
+                p = semi + 1;
+            }
+        }
+        return v;
+    }();
+    static size_t click_i = 0;
+    static auto last_click_done = clock::now();
+    if (click_i < path.size()) {
+        if (std::chrono::duration<double>(clock::now() - last_click_done).count() < 2.0)
+            return;                            // settle between clicks
+        if (soak_click_step(path[click_i].first, path[click_i].second)) {
+            std::fprintf(stderr, "  [probe] clicked %d,%d (win %dx%d screen %#x)\n",
+                         path[click_i].first, path[click_i].second,
+                         video_.width(), video_.height(), active_screen());
+            soak_click_phase_ = 0;
+            soak_click_frames_ = 0;
+            click_i++;
+            last_click_done = clock::now();
+        }
+        return;
+    }
+
+    // --- pointer sweep: a few px per frame, so a failed restore leaves a track
+    static int sweep_frame = 0;
+    if (sweep) {
+        int W = video_.width(), H = video_.height();
+        int x = 60 + (sweep_frame * 7) % (W > 160 ? W - 120 : 1);
+        int y = H / 2 + (int)(40 * std::sin(sweep_frame * 0.15));
+        mouse_x_ = x; mouse_y_ = y;
+        update_intuition_pointer(x, y, 0);
+        push_intuition_move(x, y);
+        sweep_frame++;
+    }
+
+    // --- frame capture
+    static int shot_frame = 0, shot_n = 0;
+    if (shot_every && (shot_frame++ % shot_every) == 0 && shot_n < 40) {
+        char path_buf[512];
+        std::snprintf(path_buf, sizeof path_buf, "%s/frame_%03d.bmp", shot_dir, shot_n);
+        if (video_.save_bmp(path_buf)) shot_n++;
     }
 }
 
@@ -2710,6 +2787,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             start_watchdog(m); // THEOC_WATCHDOG: arms on the first frame
             auto_keys_tick();
             soak_tick();       // THEOC_SOAK: load/unload cycle driver
+            render_probe_tick();  // THEOC_CLICKS/SWEEP/SHOT: render-bug harness
             fps_tick(m);       // THEOC_FPS: per-second frame/throughput report
 
             // Click-hand frame advance (also done by TimerProc when timer runs).
@@ -2865,6 +2943,45 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
     //   MouseRefresh → MoveTo(sprite), BeforeSwapBuffer (paint cSprite on LFB),
     //   VVC present (us), AfterSwapBuffer (restore under-cursor for next frame).
     patch_jmp(0x85e20, "HLE_SwapBuffers", "SwapBuffers__4cVVC");
+    // cSprite::AfterSwapBuffer (mvos+0x8b690) — make it single-buffer correct.
+    //
+    // cSprite keeps TWO saved-background slots, one per buffer:
+    //   BeforeSwapBuffer: SaveBg(this, gd, this+0x24); paint at that rect
+    //   AfterSwapBuffer:  swap slots {+0x24..+0x38} <-> {+0x0c..+0x20},
+    //                     then RestoreBg(this, gd, this+0x24)
+    // i.e. it restores the *other* buffer's background, which is right when
+    // front and back really are different memory: each buffer's save is taken
+    // while that buffer is clean.
+    //
+    // Our OpenDisplay points every VVC GD slot at one cGD_LFB16 — a single
+    // buffer — which breaks that invariant. SaveBg then runs over a buffer that
+    // still carries the previous frame's cursor (it is not erased until later
+    // in the same frame), captures those pixels into the backup, and re-stamps
+    // them every frame after. On a screen that repaints fully each frame the
+    // repaint hides it; on static ones (Credits, Load Game) the pointer smears
+    // its whole path across the background.
+    //
+    // Single-buffer correct is save -> paint -> present -> restore the SAME
+    // rect, so the buffer is clean again before the next SaveBg. That is this
+    // function minus the slot swap. Patch: jump the swap block, and NOP the
+    // three stores after it that would otherwise write uninitialised regs.
+    //   0x8b69c  swap begins            -> JMP 0x8b6e7 (load VVC, call RestoreBg)
+    //   0x8b6ec..0x8b6f4  MOV [EBX+0x10/0x14/0x18], EDI/ESI/ECX  -> NOP
+    {
+        uint32_t swap_at = mvos_base + 0x8b69c;
+        uint32_t resume  = mvos_base + 0x8b6e7;
+        int32_t rel = (int32_t)(resume - (swap_at + 5));
+        uint8_t jmp[5] = {0xE9, (uint8_t)rel, (uint8_t)(rel >> 8),
+                          (uint8_t)(rel >> 16), (uint8_t)(rel >> 24)};
+        uint8_t nops[9];
+        std::memset(nops, 0x90, sizeof nops);
+        if (!std::getenv("THEOC_LEGACY_SPRITE")) {
+            m.write(swap_at, jmp, sizeof jmp);
+            m.write(mvos_base + 0x8b6ec, nops, sizeof nops);
+            std::printf("  [HLE] cSprite::AfterSwapBuffer -> single-buffer restore "
+                        "(no slot swap; THEOC_LEGACY_SPRITE=1 to revert)\n");
+        }
+    }
     // SDL already injects Intuition ring events; skip PushMouseInput so we do
     // not double-feed type 1/4 from the VMouse ring. MouseRefresh still MoveTo's.
     {

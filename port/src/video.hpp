@@ -32,6 +32,10 @@ public:
     using EventHook = std::function<void(const SDL_Event&)>;
     void set_event_hook(EventHook h) { event_hook_ = std::move(h); }
 
+    // Dump the current framebuffer to a BMP (debug: inspecting render bugs
+    // like cursor trails, where you need to compare consecutive frames).
+    bool save_bmp(const char* path);
+
     bool is_open() const { return win_ != nullptr; }
     int width() const { return w_; }
     int height() const { return h_; }

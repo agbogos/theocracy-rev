@@ -7,14 +7,11 @@ results. Order below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-1. **Cursor ghost trails** — on some screens (Credits, Load Game) the software
-   cursor leaves behind copies of itself. Cosmetic only, no gameplay effect.
-   G14 (`cIntuition` corruption) **noticeably reduced but did not eliminate** it,
-   so there is a genuine second cause: likely those screens don't full-repaint
-   each frame, so the HLE present path never restores what the sprite overdrew
-   (the real `SwapBuffers` Before/AfterSwapBuffer pair does that). Next step is
-   to save/restore the sprite's background rect around present, or force a full
-   repaint on those screens.
+1. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
+   path; a real multi-hour session is a human test. Needs a harness first:
+   rate-limited logging (no gigabytes), periodic resource snapshots, and the
+   watchdog armed, so a fault hours in is diagnosable from the log alone. Build
+   the harness, then the user drives.
 
 2. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
 
@@ -41,6 +38,16 @@ results. Order below is **playability first, modernisation after**.
    used instead).
 
 ## Done
+
+- **Cursor ghost trails fixed (G17)** — `cSprite` runs a two-slot (double-buffer)
+  background save/restore, but our `OpenDisplay` points every VVC GD slot at one
+  `cGD_LFB16`. On a single buffer `SaveBg` captures the previous frame's cursor
+  and re-stamps it forever; static screens accumulate the whole pointer path.
+  Patched `AfterSwapBuffer` (`mvos+0x8b69c`) to drop the slot swap = the
+  single-buffer form (save → paint → present → restore the same rect).
+  `THEOC_LEGACY_SPRITE=1` reverts. Verified by screenshot on Credits + Load Game,
+  province unaffected, 3-cycle soak unchanged. New render-bug harness:
+  `THEOC_CLICKS`, `THEOC_MOUSE_SWEEP`, `THEOC_SHOT_EVERY`/`THEOC_SHOT_DIR`.
 
 - **Long-session soak PASSED (2026-07-25)** — `THEOC_SOAK=20 THEOC_SOAK_PLAY=20`
   drove 20 full load/unload cycles (menu → Prophecy → OK → province → map → exit

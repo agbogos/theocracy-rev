@@ -559,6 +559,49 @@ whole movie into RAM up front (the intro is 1192 frames + 1.1M audio samples), s
 cutscene, on screens a keypress already skips. Fixing it would mean lazy or
 threaded decode in `mpeg.cpp`, with A/V-sync risk, for no gameplay gain.
 
+## G17 — cursor ghost trails: a double-buffer sprite on a single buffer (done)
+
+On static screens (Credits, Load Game) the pointer smeared its whole path into
+the background. G14 reduced it (that was `cIntuition` corruption) but a second
+cause survived.
+
+`cSprite` keeps **two** saved-background slots, one per buffer:
+
+```c
+BeforeSwapBuffer: SaveBg(this, gd, this+0x24); paint at that rect
+AfterSwapBuffer:  swap {+0x24..+0x38} <-> {+0x0c..+0x20};
+                  RestoreBg(this, gd, this+0x24)
+```
+
+It restores the *other* buffer's background — correct when front and back are
+different memory, because each buffer's `SaveBg` is taken while that buffer is
+clean.
+
+Our `OpenDisplay` points **every** VVC GD slot at one `cGD_LFB16`. On a single
+buffer that invariant breaks: `SaveBg` runs over a buffer that still carries the
+previous frame's cursor (not erased until later in the same frame), captures
+those pixels into the backup, and re-stamps them every frame thereafter. Screens
+that fully repaint hide it; static ones accumulate the whole path.
+
+Single-buffer correct is save → paint → present → restore **the same rect**, so
+the buffer is clean before the next `SaveBg`. That is `AfterSwapBuffer` minus the
+slot swap, patched in memory at `mvos+0x8b69c` (jump the swap block) plus 9 bytes
+of NOP at `mvos+0x8b6ec` (stores that would otherwise write uninitialised regs).
+`THEOC_LEGACY_SPRITE=1` reverts.
+
+Verified by screenshot on Credits and Load Game (trail gone, single cursor),
+province view unaffected, and a 3-cycle soak with heap/ESP identical to the
+pre-fix baseline.
+
+### Render-bug harness
+
+A visual bug needs frames, not logs. Added `THEOC_CLICKS="x,y;x,y"` (drive a
+click path), `THEOC_MOUSE_SWEEP=1` (drag the pointer so a failed restore leaves
+a track) and `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` (dump frames via
+`Video::save_bmp`). Menu button coordinates come from `data/menu/menu.cfg`
+(`credits 20 450` → click ~65,460; the offset from the cfg entry to a hit is
+about +45,+10).
+
 ## Build / run
 
 ```sh

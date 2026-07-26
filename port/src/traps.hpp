@@ -145,6 +145,9 @@ private:
     // repeatedly, snapshotting resource use at the same point each cycle.
     // THEOC_SOAK_PLAY=sec controls the province dwell (default 20).
     void soak_tick();
+    // THEOC_CLICKS / THEOC_MOUSE_SWEEP / THEOC_SHOT_EVERY: drive to a screen,
+    // sweep the pointer and capture frames (render-bug harness).
+    void render_probe_tick();
     bool soak_click_step(int x, int y);
     void soak_snapshot(const char* tag);
     uint32_t active_screen() const;

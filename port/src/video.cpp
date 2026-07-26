@@ -71,6 +71,16 @@ bool Video::open(int w, int h, int depth_code) {
     return true;
 }
 
+bool Video::save_bmp(const char* path) {
+    if (fb_.empty()) return false;
+    SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+        fb_.data(), w_, h_, 16, w_ * 2, 0xF800, 0x07E0, 0x001F, 0);
+    if (!surf) return false;
+    bool ok = SDL_SaveBMP(surf, path) == 0;
+    SDL_FreeSurface(surf);
+    return ok;
+}
+
 void Video::present() {
     if (!win_ || !tex_) return;
     // Pitch must match the guest LFB (w × 2 for RGB565). A stale smaller pitch
