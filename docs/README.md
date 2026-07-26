@@ -34,7 +34,7 @@ All RE-confirmed, and the reason the project is tractable at all:
 | `data/cd/linux/` | the game binaries — `theocracy.real`, `libmvos.so.0.9`, the `_x` device plugins, `server`, `inst.linux`. Not in git |
 | `data/game/` | the extracted CD data tree (`tools/phls_extract.py` output). Not in git, except the hand-authored `mvos.cfg` |
 | `data/*.tsv`, `data/mvos_api.json` | generated symbol/reloc reference tables — regenerate with `sh tools/regen_api.sh`, don't hand-edit |
-| `data/commit-log.md` | the whole commit history flattened (`tools/dump_commit_log.py`) |
+| `data/commit-log.md` | the whole commit history flattened. Untracked — generate it with `python3 tools/dump_commit_log.py` |
 | `docs/` | this knowledge base |
 | `port/` | the emulator host (C++17 + Unicorn 2 + SDL2 + libav) — see [porting/host-architecture.md](porting/host-architecture.md) |
 | `tools/` | reusable scripts: demangler, extractor, crypto, API inventory, Ghidra scripts |
@@ -122,7 +122,7 @@ accurate and still cited; the *approach* is not current.
 - Findings are written back into the Ghidra DB as decompiler comments / renames as we go, and mirrored here. Don't leave a durable result only in a commit message.
 - Naming: `c…` class, `s…` on-disk/wire struct, `t…<T>` template instantiation, `_Linux`/`_X` = platform backend.
 - Symbols in the Ghidra DBs are still mangled (GNU v2 — Ghidra can't demangle it): use `tools/gnuv2_demangle.py` or `data/mvos_exports.tsv`.
-- `data/commit-log.md` is the whole commit history flattened into one file (`python3 tools/dump_commit_log.py`) — useful because a lot of this project's findings were first written as commit messages.
+- A lot of this project's findings were first written as commit messages. `python3 tools/dump_commit_log.py` flattens the whole history into `data/commit-log.md` so it can be read as one narrative and audited for anything that never reached a doc. The output is untracked — regenerate it, don't commit it.
 
 ## Status
 

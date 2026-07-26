@@ -13,6 +13,9 @@
 /data/game/*
 !/data/game/mvos.cfg
 
+# Regenerable from git history itself — `python3 tools/dump_commit_log.py`.
+/data/commit-log.md
+
 # ── Build artifacts ───────────────────────────────────────────────────────
 /port/build/
 build/

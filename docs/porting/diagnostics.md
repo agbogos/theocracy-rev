@@ -6,8 +6,9 @@ knobs at all, and the debugging method the whole set exists to serve.
 
 Everything here was read out of `port/src/` (`traps.cpp`, `main.cpp`,
 `machine.cpp`, `video.cpp`, `guestlink.cpp`, `blit.cpp`, `mvos.cpp`) and
-cross-checked against the commit history in `data/commit-log.md`. Defaults and
-units are taken from the code, not from prose. Nothing in this document was
+cross-checked against the commit history (`python3 tools/dump_commit_log.py`
+→ `data/commit-log.md`, which is untracked and regenerated on demand). Defaults
+and units are taken from the code, not from prose. Nothing in this document was
 verified by running the game — it needs a display and the copyrighted data tree.
 
 ---
@@ -257,5 +258,6 @@ report as an 83ms `[slow]` section and bury the real ones.
   heap, G16 watchdog and cutscene skip, G17 render probe, G18 fullscreen, G19
   sockets, G20 server) that these instruments were built during.
 - `task_fifo.md`, "Notes" — the running list these tables consolidate.
-- `data/commit-log.md` — the commit for each instrument states the problem that
+- `data/commit-log.md` (generate with `tools/dump_commit_log.py`) — the commit
+  for each instrument states the problem that
   forced it into existence.
