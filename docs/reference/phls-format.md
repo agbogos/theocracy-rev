@@ -68,9 +68,15 @@ Two independent layers sit *inside* extracted files:
    must **not** be XORed. This is the heavy `cTextFile::OpenR/ReadLine`+`sscanf`
    path M1 saw — the game decrypts on read. Tooling: `tools/theocracy_crypt.py`
    (module + CLI; `phls_extract.py --decrypt` decrypts on extract). Original
-   recovered C++ (`XorBuff`): `tools/crypt/TheocracyEncDec.cpp`. **M2 port:** the
-   faithful path keeps the data as-shipped (encrypted) and ports `XorBuff` into
-   the HLE `cTextFile` read path, so binary `cFile` reads stay untouched.
+   recovered C++ (`XorBuff`): `tools/crypt/TheocracyEncDec.cpp`.
+
+   **The port does not decrypt anything.** The superseded pure-HLE layer did port
+   `XorBuff` into a native `cTextFile` (`port/src/mvos.cpp`, no longer linked);
+   under [guest-libmvos](../porting/guest-libmvos.md) the engine's *real*
+   `cTextFile` runs as guest code and decrypts on read, exactly as it did in 2000.
+   The host only serves bytes. So the canonical tree must stay **as-shipped
+   (encrypted)** — a pre-decrypted tree would be XORed a second time by the game
+   and parse as garbage.
 2. **Raw image format** — `.raw` assets start with `mhwanh` = the engine's
    `sRawPicHeader` (see [overview.md](../overview.md) imaging section). Plaintext;
    decode when the bitmap loaders are implemented.
@@ -80,5 +86,12 @@ Two independent layers sit *inside* extracted files:
 The `theocracy` launcher runs the game with CWD `~/.theocracy`, containing a
 `data` symlink (→ the extracted tree) and a copied `mvos.cfg`. So our HLE
 filesystem root should expose `./data/…` (→ `data/game/data`) and `./mvos.cfg`.
-**`mvos.cfg` is not in the packs** — `inst.linux` installs it; source still TODO
-(reconstruct from the `EnvSystem` keys the boot reads, or RE `inst.linux`).
+**`mvos.cfg` is not in the packs** — `inst.linux` installs it. **Resolved**
+(open question #28): rather than reversing the installer, we ship a hand-authored
+minimal `data/game/mvos.cfg`, reconstructed from the `EnvSystem` keys the boot
+actually reads — `[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`,
+`[sound] card`, `[network] enable`. It is tracked in git via a `.gitignore`
+carve-out, since the rest of `data/game` is extracted content. Note `[vmachine]
+fullscreen` is **inert** under the current port: the engine's fullscreen path ran
+through the X11 plugin's `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which the
+SDL backend replaced wholesale — use `THEOC_FULLSCREEN=1` instead.

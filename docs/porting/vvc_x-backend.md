@@ -50,7 +50,15 @@ On init the driver allocates a **shared-memory `XImage`** (`XShmCreateImage`+`sh
 
 **Bottom line:** the graphics/input path is standard X11 + MIT-SHM and should run on modern Linux essentially unchanged. No SVGAlib, no root, no raw hardware. (The earlier "SVGAlib is the scary part" was only true of a *different* backend; the shipped `vvc_x` sidesteps it.)
 
-## Two porting paths
+## Two porting paths (historical — neither is what happened)
+
+> Recorded as the decision point it was. The project took a **third** option that
+> only exists because the engine itself runs emulated: libmvos's `dlopen`/`dlsym`
+> are HLE'd to hand back synthetic device objects, and `OpenDisplay` /
+> `SwapBuffers` are trapped to a native SDL RGB565 backend — so the plugin family
+> below is neither run nor reimplemented, it is *replaced at the seam*. The two
+> options here still describe what a native-Linux revival would face.
+
 1. **Run the real `vvc_x` as-is (weekend-scale):** provide a 32-bit userland — `libX11`, `libXext` (MIT-SHM), `libXxf86vm`, plus the era's `libstdc++`/`libg++` bundled with the game — run under X (native/XWayland), use **windowed** mode to dodge XF86VidMode. Likely the fastest route to first pixels.
 2. **Thin SDL2 backend (clean/64-bit, weeks-scale):** reimplement the ~8 `XDriver_*` functions + 4 `cGD_X*::Refresh` overrides. `GetVMemAddr` → return a `malloc`'d buffer; `Refresh(rect)` → `SDL_UpdateTexture`+`SDL_RenderCopy`+present; feed SDL input to the same `cKeyboard`/`cMouse`/`cPointer` entry points listed above. Everything else (the engine) is reused unchanged.
 

@@ -269,94 +269,32 @@ first, modernisation after**.
 
 ## Notes
 
-- **Host objects planted in guest space must come from `TrapLayer::guest_alloc`.**
-  A hardcoded arena address is a delayed corruption bug, not an unused hole (see
-  G14) — and now that `free()` really recycles, it would be reused sooner.
-  Dedicated regions outside the arena (`SINGLETON_BASE`, `GUEST_FB_BASE`,
-  `STUB_CODE`) are the other safe home.
-- **`THEOC_WATCHDOG=secs`** — reports a stall and, decisively, whether the guest
-  is still executing (spinning, with the EIP) or wedged host-side (with the last
-  trap). First thing to reach for on any "it froze".
-- `THEOC_SLOWLOG=ms` (default 250) — report any host-side section that blocks the
-  emulation thread longer than the threshold. The watchdog says *that* we are
-  stuck host-side; this says *which handler*. The frame-cap sleep is discounted.
-- `THEOC_WATCHDOG_SAMPLE=<path>` — on a host-side stall, capture a native stack
-  (`sample`) of exactly that moment; aggregate profiles can't isolate one.
-- `THEOC_SOAK=cycles` / `THEOC_SOAK_PLAY=sec` — drive load/unload cycles
-  unattended (menu → Prophecy → OK → province → map → exit → confirm → menu),
-  with a per-cycle resource snapshot. Steps wait on the active `cScreen*`
-  (`Intuition+0x24`) changing, not on wall-clock, so a slow load delays the next
-  step instead of desyncing every click after it; each step has a deadline and
-  fails loudly. Clicks are paced aim/press/release 3 frames apart — at 12fps a
-  same-frame press is never observed by the game.
-- `THEOC_REPORT_CLICKS=1` — log every click as `x,y` + window size + active
-  screen, to lift coordinates for a new driver script.
-- `THEOC_AUTO_KEYS=1` — taps SPACE every 6s via the real SDL path (skips
-  cutscenes; unattended coverage for the keyboard input path).
-- **Movies are aspect-fitted** into the guest's 640×480 movie mode: the two shipped
-  shapes are 480×360 (4:3 → fills exactly) and 608×300 (~2.03:1 → 640×316 with
-  82px letterbox bars). Frames are decoded at native size and scaled per frame
-  (bilinear, `MpegMovie::fit_frame`). Note `cDisplay`'s W/H are the **movie's**
-  dimensions, not the destination's — its *pitch* is the mode's. See G18 in
-  `docs/porting/guest-libmvos.md`.
-- `THEOC_SHOT_EVERY` now also captures **during cutscenes** (they present from
-  `SMPEG_playvideoframe`, not the normal frame path, so the harness used to be
-  blind exactly where video bugs live). Capture only — no click/sweep, which would
-  skip the cutscene being photographed.
-- Known, accepted: `SMPEG_new` decodes a whole movie up front (~0.9s for the
-  intro) and `SMPEG_delete` frees it (~0.4s), so ~1.35s brackets a cutscene.
-  Not worth lazy/threaded decode — once per cutscene, and skippable.
-- `THEOC_LEGACY_KEYMB=1` — never fill the cutscene-skip key mailbox (intros
-  unskippable); A/B switch for input-path hangs.
-- `THEOC_HEAP_TEST=1` — run the guest allocator's self-test standalone and exit.
-- **`THEOC_FULLSCREEN=1`** — borderless fullscreen at the desktop resolution
-  (`SDL_WINDOW_FULLSCREEN_DESKTOP`, never an exclusive mode switch). The guest
-  keeps painting its own mode and `SDL_RenderSetLogicalSize` scales it, so 4:3 is
-  preserved with **pillarbox** bars — no stretching. Falls back to windowed if
-  fullscreen creation fails. The `[video]` line reports the real geometry
-  (output size, scale factor, bar widths) so a scaling problem is visible in the
-  log, not just on screen. Guest-side coordinates are untouched: the framebuffer,
-  the `cGD` blit traps, `save_bmp` and the mouse positions the guest sees all stay
-  in 640×480 / 800×600 space. Note `mvos.cfg`'s `[vmachine] fullscreen` is
-  **inert** — the engine's fullscreen path ran through the X11 plugin's
-  `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which we replaced wholesale.
-  - **`Alt+Enter` toggles fullscreen at runtime** — on macOS that is **⌥Return**
-    (SDL maps Option to `KMOD_ALT`; Command is `KMOD_GUI`). Deliberately not F11,
-    which the game itself uses. The `Return` is **swallowed** so the guest never
-    sees it — eKey `0x48` is a live game key and would confirm whatever dialog is
-    focused; its release is swallowed too, because an unpaired release into the
-    `Intuition+0x3c` key matrix is the stale-key-state class that wedged the menu
-    in G16. `Alt` itself still forwards, so the qualifier byte stays honest.
-    Key repeats are ignored. Self-drivers can't trip it — their synthetic events
-    never set `.mod`.
-  - **Crisp UI, smooth video** (default, not an option). The UI presents at an
-    **integer** scale with **nearest** sampling, so each guest pixel is an exact
-    N×N block — 800×600 lands at 2400×1800 (3.00×) on a 2940×1846 panel, costing
-    ~5% of image area versus the 3.08× fit and removing all blur. Nearest matters
-    even at an exact 2× windowed: bilinear samples at ±0.25 of a texel and still
-    blends. **Cutscenes are the exception** and present smooth (fractional fit +
-    linear): the movie mode is 640×480, where flooring 3.85× to 3.00× would throw
-    away **39%** of the picture, and it is video the aspect-fit already resampled.
-    `Video::set_crisp()` flips both settings; the movie present asks for smooth,
-    `SMPEG_delete` restores crisp (every exit path, including a key skip, hits it).
-  - **HiDPI is on for BOTH modes** (`SDL_WINDOW_ALLOW_HIGHDPI`). Without it
-    macOS reports the window's *point* size, we render there, and the OS upscales
-    again to the panel — two resamples. With it the renderer output is the real
-    backing store, so the guest image is scaled once: measured 2940×1846 px
-    (1470×923 pt), 800×600 at 3.08×, 239 px bars. The `[video]` line prints px,
-    pt and `hidpi on/off`, so "equal px and pt" is the tell that it is off.
-    **`THEOC_NO_HIDPI=1`** reverts. It covers windowed too (800×600 renders at
-    1600×1200) — not just a free sharpness win but *required*: `ALLOW_HIGHDPI` is
-    creation-time-only and `SDL_SetWindowFullscreen` cannot add it later, so a
-    window built without it would make `Alt+Enter` land in a blurrier fullscreen
-    than `THEOC_FULLSCREEN=1` gives.
-- `THEOC_START_SEC` default 600; `0` = unlimited (covers long intros / real play).
-- `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).
-- Keyboard: letters/digits/arrows/modifiers/F-keys/enter/space/backspace; `[` `]`
-  not in the original eKey table (won't-fix).
-- Audio can stutter in province view (tied to frame cost — see #3).
-- Timer: `redirect_guest` from present (nested `uc_emu_start` crashes Unicorn).
-  Sound preferred when its slice is due.
+The `THEOC_*` knobs used to be listed here. They now live in
+**`docs/porting/diagnostics.md`** — all 35 of them, with defaults and units taken
+from the source, plus a "which instrument for which symptom" routing table. Two
+lists is how one goes stale, so this section keeps only what is a *decision*
+rather than a mechanism:
+
+- **Host objects planted in guest space must come from `TrapLayer::guest_alloc`**,
+  or live in a dedicated region outside the arena (`GUEST_FB_BASE`, `STUB_CODE`,
+  `LIBC_DATA`, `SCRATCH`). A hardcoded arena address is a delayed corruption bug,
+  not an unused hole (G14) — and now that `free()` really recycles, it would be
+  reused sooner. This and the rest of the host's invariants:
+  `docs/porting/host-architecture.md`.
+- **Accepted, not a bug:** `SMPEG_new` decodes a whole movie up front (~0.9s for
+  the intro) and `SMPEG_delete` frees it (~0.4s), so ~1.35s brackets a cutscene.
+  Not worth lazy or threaded decode — once per cutscene, on a screen a keypress
+  already skips.
+- **Won't-fix:** keyboard coverage is letters/digits/arrows/modifiers/F-keys/
+  enter/space/backspace. `[` and `]` are absent from the original libmvos eKey
+  table, and nothing in the game depends on them.
+- **Known:** audio can stutter during the ~1s province-load compute spike (the
+  emulator is genuinely busy and rarely yields). Steady state is clean — see
+  item #3 and `docs/porting/frame-timing.md`.
+
+Where the rest went: presentation (fullscreen, `Alt+Enter`, crisp-UI/smooth-video,
+HiDPI, movie aspect-fit) is G18 in `docs/porting/guest-libmvos.md`; the timer and
+sound green-run splices are in `docs/porting/host-architecture.md`.
 
 ## Quick run
 

@@ -26,7 +26,19 @@ Classic OSS, opened on the device path passed in (`/dev/dsp` string @ `0xbd95f`)
 
 Game-side usage (from `cApplication::Start`): a `cSoundServer` with **16 `cSoundServerChannel`s** on top of the card. `Sample_Size[]` table indexes format → bytes/sample.
 
-**Port note:** mixer thread is MVOS-internal → fully native in the HLE build; expose a pull-callback (SDL audio) instead of the push loop. Honor the format/rate fallback order only if game code queries the resulting format (check `GetSoundFormat` users).
+**Port note — superseded by what was actually built.** The pure-HLE plan was to
+replace this mixer with native code and expose a pull-callback. Under
+[guest-libmvos](../porting/guest-libmvos.md) the engine's *own* mixer runs, as
+guest code: `/dev/dsp` is HLE'd onto SDL audio, and because the host is
+single-threaded (nested `uc_emu_start` crashes Unicorn) the mixer cannot have a
+host thread. It is **green-run** instead — `cSoundCard_Linux::Main` is patched to
+mix one-shot, and a slice is spliced into the running emulation via
+`redirect_guest` whenever the audio queue drains below its target. The
+consequence, and the reason that queue target is a tuning knob rather than an
+implementation detail, is in [frame-timing.md](../porting/frame-timing.md) (Bug 3:
+the mixer was originally serviced only at present, which coupled audio to the
+frame rate). The format/rate negotiation above still happens for real — it is the
+guest's own code doing it.
 
 ## Threads — `cThread` (ctor @ `0xa5860`, `Launch` @ `0xa58c0`)
 

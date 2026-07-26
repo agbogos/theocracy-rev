@@ -93,7 +93,11 @@ The API recreates AmigaOS concepts on Linux: `cIntuition`+`cScreen`/`ActivateScr
 - **Port — PLAYABLE (guest-libmvos):** both `theocracy.real` and real `libmvos.so` run under Unicorn; only the OS/library boundary is HLE'd. Single-player is playable end-to-end. See [porting/guest-libmvos.md](porting/guest-libmvos.md). (The earlier pure-HLE native-replace plan in [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) is superseded but remains the best ABI-contract/boot writeup.)
 
 ## Open questions / next steps
-- Confirm `cGD` base vs. `_LFB*` backend dispatch (vtable layout).
-- Map `cApplication` bootstrap: init → main loop → shutdown.
-- Identify the primary `c…`↔`s…` (runtime object ↔ on-disk format) pairings for asset loaders.
-- `cHeap_Compatibility`/`cHeapBlock`: second allocator path — relation to `cSystemMemory`?
+
+Tracked in one place — **[open_questions.md](open_questions.md)** — with stable IDs
+and a closed table. This file deliberately keeps no second list; the four items
+that used to sit here have since split three ways: the `cApplication` bootstrap
+is **done** (see above), the `cGD` backend dispatch and the `c…`↔`s…` asset-loader
+pairings are still open as **#13** and **#16**, and the
+`cHeap_Compatibility`/`cHeapBlock` relation to `cSystemMemory` remains an open
+thread in [memory-and-containers.md](subsystems/memory-and-containers.md).

@@ -760,6 +760,34 @@ default exemption, two clients both boot to Realm Shell, 0 faults, 0 unimplement
 
 Single-player is unaffected: the lock path is the only socket use on that route.
 
+### Follow-up: errno translation is not a socket-call concern
+
+Divergence #3 was first wired into the socket calls only — `socket`, `bind`,
+`connect`, `accept`, `send`, `recv`. That turned out to be the wrong boundary.
+**`cIPCO_TCPIP` polls its socket with plain `read()`/`write()`, not
+`recv()`/`send()`**, so the steady-state path landed in the generic *file* traps
+and passed the host errno through untranslated.
+
+The consequence is a good example of a bug that hides in plain sight because the
+game still works. libmvos switches on errno values `4..22` and drops anything
+outside that window into its generic "unknown error" state, `5`. Linux `EAGAIN`
+is `11`, inside the window, and maps to state `3`, which the dedicated server
+accepts silently. BSD `EAGAIN` is `35` — off the end of the switch. And every
+accepted connection is non-blocking (`cIPCServer_TCPIP::Listen` does
+`fcntl(fd, F_SETFL, 0x800)` on it), so **"no packet yet" is the steady state, not
+an edge case**: each idle poll of each connected player logged `Error(n): 5`,
+thousands a minute, while the game itself played fine. The misreported path was
+the idle one.
+
+`to_linux_errno()` already existed with the right mapping; it was only the wiring
+that was partial. `read`/`write`/`open`/`remove` now route through it too, and
+the bad-fd paths set `EBADF` rather than returning `-1` over whatever errno
+happened to be stale.
+
+Generalisable: **a translation layer belongs at the boundary the guest actually
+crosses, not at the calls that are named after it.** The guest chooses `read` or
+`recv` on a socket for its own reasons.
+
 ## G20 — headless dedicated server (`THEOC_SERVER=1`) (done)
 
 The shipped `data/cd/linux/server` (47 KB, stripped, links `libmvos.so` + libc)

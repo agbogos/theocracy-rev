@@ -84,7 +84,7 @@ From the dynamic imports:
 
 1. **`.so` load** → `_init` runs global ctors → subsystem static state built (video mode info, input config, palette, env, audio).
 2. **libmvos `main()`** (Ghidra `0xa51e0`) calls the game's exported `Init__12cApplication` → the nine requirement flags are set (Theocracy: all).
-3. **libmvos `main()`** opens each required subsystem (dlopen device plugins → `VVC`/`VKeyboard`/`VMouse`/`VPointer` globals, sound card + server, timer/SIGALRM, Intuition, network), then calls the game's `Start__12cApplicationiPPc` — the whole game runs inside that call. *(Order to be confirmed by decompiling `main`.)* Video mode itself is set later, from game code, via `cVVC::OpenDisplay(mode)`.
+3. **libmvos `main()`** opens each required subsystem (dlopen device plugins → `VVC`/`VKeyboard`/`VMouse`/`VPointer` globals, sound card + server, timer/SIGALRM, Intuition, network), then calls the game's `Start__12cApplicationiPPc` — the whole game runs inside that call. Video mode itself is set later, from game code, via `cVVC::OpenDisplay(mode)`.
 4. **Frame loop** (in game binary) pumps events → updates → paints the back buffer → flips. Timer SIGALRM triggers periodic repaints unless `NoTimerInterruptPaintFlag` is set.
 5. Shutdown reverses it (`.dtors`, subsystem Close).
 
