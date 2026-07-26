@@ -14,7 +14,7 @@ Consolidated list of remaining threads, deduped from the per-subsystem docs. Rou
 
 ## Multiplayer & determinism
 6. **Confirm lockstep end-to-end** — `cMsgSender@g_World+0x5c8` send side vs. the IPC **receive** side consuming tick-sync messages.
-7. **Netgame team-info packet** consumed by `NetGame_AssignTeams` (players → faction slots, commander / mana assignment).
+7. ~~**Netgame team-info packet** consumed by `NetGame_AssignTeams`~~ **RESOLVED (2026-07-26)** — `int32 playerCount`, then per player a `u8 playerId` followed by 7-byte records (`int16` type / `int16` amount / `int16 ?` / `u8` flag) ending on type `0xffff`; first 5 records are the mana pools, the rest are units. Full layout + the playerId→tribe mapping: [multiplayer-and-factions.md](subsystems/multiplayer-and-factions.md).
 8. **Faction roster template** `DAT_08645240` (11 × 0x10) — name / color / type / AI per faction.
 9. **Realm-select UI** that writes `g_LocalFactionTable` (multiplayer only).
 
