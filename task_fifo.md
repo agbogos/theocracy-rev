@@ -2,8 +2,8 @@
 
 Tracking only. Not a design doc. Remaining items, top = next. Playable
 single-player baseline is reached and the manual QA pass is complete; see
-`docs/porting/guest-libmvos.md` for what landed and `user-test.md` for the QA
-results. Order below is **playability first, modernisation after**.
+`docs/porting/guest-libmvos.md` for what landed. Order below is **playability
+first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
@@ -146,7 +146,7 @@ results. Order below is **playability first, modernisation after**.
   block, `__builtin_vec_delete` frees. Province went from a 50.1 MB leaked
   frontier to **28.6 MB live / 28.7 MB frontier**. `THEOC_HEAP_TEST=1` soaks the
   allocator standalone (no overlapping blocks; 465 fragments coalesce back to 1).
-- **Manual QA pass complete (2026-07-24)** — `user-test.md` fully exercised:
+- **Manual QA pass complete (2026-07-24)** — the whole sheet exercised by hand:
   boot/intros with A/V, menu, single-player setup, realm, units, diplomacy,
   save/load with text entry, keyboard coverage, clean exit. Playable end-to-end.
   Closed by that pass: **full UI-surface coverage** (remaining screens all

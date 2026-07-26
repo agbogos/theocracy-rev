@@ -2,7 +2,7 @@
 
 Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linux binaries: `libmvos.so` engine + game executable + device plugins. **Project goal: run Theocracy natively on modern macOS (Apple Silicon).**
 
-**Current architecture — [porting/guest-libmvos.md](porting/guest-libmvos.md) (playable):** map **both** `theocracy.real` and the real `libmvos.so` under Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl / sockets / SMPEG). Single-player is playable (menu → realm → units, war, save/load, cutscenes with audio). The earlier *pure-HLE native-replace* plan ([porting/macos-hle-emulator.md](porting/macos-hle-emulator.md), M1/M2) is **superseded** — it hit an unbounded GUI-reimplementation wall; kept as historical record + a source of RE'd layouts. Working docs live at repo root: `../task_fifo.md` (remaining work) and `../user-test.md` (manual QA pass).
+**Current architecture — [porting/guest-libmvos.md](porting/guest-libmvos.md) (playable):** map **both** `theocracy.real` and the real `libmvos.so` under Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl / sockets / SMPEG). Single-player is playable (menu → realm → units, war, save/load, cutscenes with audio). The earlier *pure-HLE native-replace* plan ([porting/macos-hle-emulator.md](porting/macos-hle-emulator.md), M1/M2) is **superseded** — it hit an unbounded GUI-reimplementation wall; kept as historical record + a source of RE'd layouts. Remaining work: `../task_fifo.md`.
 
 ## Index
 - [overview.md](overview.md) — binary facts, distribution inventory, heritage note, full class/subsystem map
@@ -58,6 +58,6 @@ Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linu
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp`; see [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted; see banners in [m1-loader.md](porting/m1-loader.md) / [m2-core.md](porting/m2-core.md) |
 | **macOS port — guest-libmvos (current)** | **PLAYABLE — dual-image emulator; single-player runs (menu → realm → units, war, save/load), cutscenes with audio, 0 unimplemented traps; see [porting/guest-libmvos.md](porting/guest-libmvos.md)** |
-| **macOS port — next** | Multi-hour stress harness → multiplayer; then modernisation (decouple sim from render). Full list: `../task_fifo.md`; QA: `../user-test.md`. |
+| **macOS port — next** | Multi-hour stress harness → multiplayer; then modernisation (decouple sim from render). Full list: `../task_fifo.md`. |
 | **RE findings audit** | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Findings + the provenance convention for future reads: `../task_fifo.md` (Done). |
 | Everything else | mapped only (see overview) |
