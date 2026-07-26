@@ -2287,7 +2287,7 @@ void TrapLayer::register_builtins() {
         // O_CREAT etc. ignored for bring-up unless needed.
         int hfd = ::open(host.c_str(), hflags);
         if (hfd < 0) hfd = ::open(path.c_str(), hflags);
-        if (hfd < 0) { set_errno(m, errno); return (uint32_t)-1; }
+        if (hfd < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         int gfd = next_fd_++;
         fds_[gfd] = HostFile{nullptr, hfd, false, false, false};
         return (uint32_t)gfd;
@@ -2302,19 +2302,26 @@ void TrapLayer::register_builtins() {
         return 0;
     };
 
+    // read() is not only for files: cIPCO_TCPIP::Read/Write poll the *socket*
+    // through plain read/write, not recv/send, so these two traps are on the
+    // hot path of every netgame frame and must translate errno exactly like the
+    // socket traps do. libmvos switches on errno 4..22 and maps anything outside
+    // that window to its generic "unknown error" state (5); a non-blocking read
+    // with no data pending is the common case, so leaking BSD EAGAIN=35 instead
+    // of Linux 11 turned "no data yet" into a hard error on every poll.
     t["read"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         int gfd = (int)arg(m, esp, 0);
         uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
         auto it = fds_.find(gfd);
-        if (it == fds_.end()) return (uint32_t)-1;
+        if (it == fds_.end()) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         if (it->second.stub) {
             if (n) { std::vector<uint8_t> z(n, 0); m.write(buf, z.data(), n); }
             return n;                             // pretend device has data
         }
-        if (it->second.host_fd < 0) return (uint32_t)-1;
+        if (it->second.host_fd < 0) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         std::vector<uint8_t> b(n);
         ssize_t got = ::read(it->second.host_fd, b.data(), n);
-        if (got < 0) { set_errno(m, errno); return (uint32_t)-1; }
+        if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         if (got) m.write(buf, b.data(), (uint32_t)got);
         return (uint32_t)got;
     };
@@ -2329,7 +2336,7 @@ void TrapLayer::register_builtins() {
             return n;
         }
         auto it = fds_.find(gfd);
-        if (it == fds_.end()) return (uint32_t)-1;
+        if (it == fds_.end()) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         if (it->second.audio) {
             std::vector<uint8_t> b(n);
             if (n) m.read(buf, b.data(), n);
@@ -2341,11 +2348,11 @@ void TrapLayer::register_builtins() {
             return n;
         }
         if (it->second.stub) return n;
-        if (it->second.host_fd < 0) return (uint32_t)-1;
+        if (it->second.host_fd < 0) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         std::vector<uint8_t> b(n);
         if (n) m.read(buf, b.data(), n);
         ssize_t w = ::write(it->second.host_fd, b.data(), n);
-        if (w < 0) { set_errno(m, errno); return (uint32_t)-1; }
+        if (w < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         return (uint32_t)w;
     };
 
@@ -2354,7 +2361,7 @@ void TrapLayer::register_builtins() {
         std::string host = resolve_path(path);
         if (::unlink(host.c_str()) == 0) return 0;
         if (::unlink(path.c_str()) == 0) return 0;
-        set_errno(m, errno);
+        set_errno(m, to_linux_errno(errno));
         return (uint32_t)-1;
     };
 
