@@ -492,7 +492,7 @@ The keyboard driver's "next event" method — `[VKeyboard+0x84][+0x0c](sret, thi
 
 Two guest consumers read it, and they care about different fields:
 
-- `cIntuition::PushKeyInput` (`mvos+0x8e670`) drains it into the Intuition ring,
+- `cIntuition::PushKeyInput` (`mvos+0x8e690`) drains it into the Intuition ring,
   and **re-polls while `flags & 1` *before* testing `keycode == 0`**.
 - `External_PlayAnim`'s play loop (`mvos+0xa1850`) breaks on
   `keycode == 1 && (char)flags >= 0`, bypassing the Intuition ring — this is the

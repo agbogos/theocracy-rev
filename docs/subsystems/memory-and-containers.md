@@ -9,8 +9,12 @@ Core primitives every other subsystem builds on. Addresses are in `libmvos.so`.
 - Ctor @ `0x8b090`. Fields: `+0x04` `tList<cMemBlock>` (all live blocks), `+0x1c` total budget = **`0x2000000` (32 MB)**, `+0x20` remaining.
 - **Alloc** (`0x8b2b0`, `cSystemMemory::Alloc(cMemBlock&)`):
   - If the request fits the remaining budget: `operator new[]` the buffer, store it in the block, push the block on the list, decrement remaining.
-  - If it doesn't fit: walk the block list and **evict the first UNLOCKED block** (`delete[]` its buffer, unlink it, return its size to the budget), then retry.
+  - If it doesn't fit: evict **oldest-first** — walk from the tail sentinel backwards and drop the first UNLOCKED block (`delete[]` its buffer, unlink it, credit its size back), then retry.
   - If nothing is evictable → `Fatal("Out of memory (mvos limit)")`. (A hard `new` failure → `Fatal("Out of memory")`.)
+
+**Eviction order — resolved (audit 2026-07-26, decompilation).** Insertion pushes at the **head** (`*(this+4) = block`). The evict walk starts at `*(this+0x14)` — the tail sentinel's `prev` (`tList` sits at `+0x04`, and a `cList` is head node `+0x00` / tail node `+0x0c`, so the tail sentinel lands at `+0x10` and its `prev` at `+0x14`) — and follows `prev` backwards. Newest-at-head + walk-from-tail = **oldest-first eviction**, and `priority` (`+0x18`) is **never read**. So the field is vestigial as far as `Alloc` is concerned; it is set to `0x7f` by the ctor and no eviction path consults it.
+
+> **Engine bug spotted in passing.** Each eviction credits the freed size to the budget **twice** — once via `*(this+0x20)` at the top of the loop, then again via the global `SystemMemory+0x20` after the `__builtin_delete` (the inlined `Free`). With `this == SystemMemory` (always, it is a singleton) that over-credits `remaining` by one block per eviction. Cold path — only reachable under budget pressure, which the 32 MB budget makes rare — and harmless to us since the guest heap is ours, but do not "fix" it in any reimplementation without checking what depends on the slack.
 - **FlushAll / FlushAllUnlocked** (`0x8b0c0` / `0x8b170`): bulk-evict blocks.
 
 Effectively a game-asset cache: load-on-demand, pin what you're using (Lock), and let the rest be reclaimed under memory pressure by priority.
@@ -54,6 +58,6 @@ Ctor `cString(const char*)` @ `0x93fd0`. `cString : tMemBlock<char> → cMemBloc
 - Decompiler artifact: constructors that inline `Alloc`+`Lock` (both call the `noreturn` `Fatal`) get mis-flattened so the happy path looks like it always aborts. Read those as "assert-then-continue", not "always Fatal".
 
 ## Open threads
-- Confirm `priority` (`+0x18`) role in eviction ordering — does Alloc evict lowest-priority or just first-unlocked? (Current read: first-unlocked in list order.)
+- ~~Confirm `priority` (`+0x18`) role in eviction ordering~~ **RESOLVED (2026-07-26)** — `Alloc` evicts **oldest-first** and never reads `priority`; see the eviction-order note above.
 - `cHeap_Compatibility` / `cHeapBlock` — a second allocator path (compatibility heap). How does it relate to `cSystemMemory`?
 - `cMemBlockPTR` semantics: does it auto-lock on construct / unlock on destruct (RAII pin)?

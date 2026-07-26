@@ -4,7 +4,7 @@ How the engine comes alive, and what it sits on. All addresses in `libmvos.so`.
 
 ## The split: framework here, main loop in the game binary
 
-`cApplication` in libmvos is a **framework base class**. The game's run loop lives in the game executable, but — **correction to the earlier read** — the orchestrator does not: **`main()` itself is exported by libmvos** (file `0x851e0` / Ghidra `0xa51e0`, 0xfc bytes; the game binary *imports* `main` and its `main@0x804fb44` is just a PLT thunk). AmigaOS-style inversion: the framework owns startup, the app provides `Init`/`Start` callbacks. libmvos provides:
+`cApplication` in libmvos is a **framework base class**. The game's run loop lives in the game executable, but — **correction to the earlier read** — the orchestrator does not: **`main()` itself is exported by libmvos** (file `0x951e0` / Ghidra `0xa51e0`, 0xfc bytes; the game binary *imports* `main` and its `main@0x804fb44` is just a PLT thunk). AmigaOS-style inversion: the framework owns startup, the app provides `Init`/`Start` callbacks. libmvos provides:
 
 - The **requirement contract** — static flags declaring which subsystems an app needs (set directly by the game's exported `Init__12cApplication`, which assigns all nine `= 1`; the `XxxRequired()` setters exist but Theocracy's `Init` writes the globals directly).
 - The **subsystem singletons + their Open/Close entry points**, driven by `main()` after `Init()`.

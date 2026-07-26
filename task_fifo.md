@@ -29,9 +29,25 @@ results. Order below is **playability first, modernisation after**.
    `cDimension::Set`, `cVObject::Refresh`, `cList::UnLinkList`, `cNode::UnLink`,
    `__builtin_new`, …). Every *caller* is then truncated at the first such call.
    The failure mode is silent: a plausible, complete-looking decompilation that
-   is simply missing everything after the first thunk. Known still live in the
-   libmvos DB as of 2026-07-26 — `0x9e6cc` reported "no function at address"
-   despite sitting mid-`cIntuition::PushKeyInput`.
+   is simply missing everything after the first thunk.
+
+   > **Correction (2026-07-26).** The evidence originally cited here — `0x9e6cc`
+   > reporting "no function at address" while sitting mid-`PushKeyInput` — was a
+   > **tool artifact, not damage**: the Ghidra MCP's `get_function_by_address`
+   > matches *entry points only*, so any mid-body address reports "no function"
+   > (mid-`main` does the same). The damage was nonetheless real and is now
+   > repaired: the user's `FixBogusNoReturn.java` run un-flagged **495** functions
+   > in libmvos and **277** in `theocracy.real`. Post-repair, decompiles flow
+   > correctly through the former truncation points.
+   >
+   > **Residue to expect.** Clearing the flags did not re-merge function
+   > *boundaries*: several functions are still split, with a duplicate `FUN_*`
+   > entry at the old truncation point (`main` @`0xa51e0` reports a 48-byte body
+   > vs its real `0xfc`; `OpenSubsystems` @`0xa4f20` reports 15 bytes). This is
+   > cosmetic — the decompiler follows the fall-through and yields the whole
+   > function — but it makes reported *body extents* unreliable, and it is how a
+   > cited address ends up on a fragment instead of an entry (see the
+   > `LoadDevicePlugins` correction below).
 
    **Motivation.** G16 and G17 were both *"we had the ABI contract wrong"*, not
    typos — the same shape bad decompilation produces. Worth checking how much

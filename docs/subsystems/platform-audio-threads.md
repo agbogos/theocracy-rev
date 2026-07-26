@@ -9,8 +9,20 @@ Classic OSS, opened on the device path passed in (`/dev/dsp` string @ `0xbd95f`)
 1. `open(path, O_WRONLY)`; failure → warning, card disabled (`fd = -1`).
 2. `ioctl(fd, 0xc004500a /* SNDCTL_DSP_SETFRAGMENT */, ...)`; failure → `perror("Unable to set fragment")`, close, disabled.
 3. Capability negotiation, best-first: `SetStereo(true)` → else mono (mono *must* work or `Fatal`); `SetSoundFormat(4)` (16-bit) → fallback format 1 (8-bit); `SetFrequency(22050)` → fallback `11025`.
-4. Ring/back buffer sized `rate/10` samples (100 ms) × channels × sample size; allocated via `__builtin_vec_new`.
-5. Inherits `cSoundCard_SoftwareMix` (all mixing in software; `cSoundChannel_SoftwareMix` per voice) **and `cThread`** — ctor ends with `cThread::Launch(this)`: the mixer runs on its own thread, writing mixed blocks to the fd.
+4. **Two** buffers, both via `__builtin_vec_new`:
+   - `+0x4c` — ring/back buffer, `rate/10` samples (100 ms) × channels × sample size (`Sample_Size[fmt]`, 1 or 2; anything else → `Fatal("Illegal format")`). Sample count is cached at `+0x50`, rate at `+0x40`.
+   - `+0x34` — the software-**mix accumulation** buffer, `rate/10` × channels × **4** (32-bit headroom per sample). Any previous one is `__builtin_delete`d first. Alongside it: `+0x39` = `Sample_Size[fmt]`, `+0x3a` = channels, `+0x38` = 0.
+5. Inherits `cSoundCard_SoftwareMix` (all mixing in software; `cSoundChannel_SoftwareMix` per voice) **and `cThread`** — ctor ends with **`cThread::Launch(this + 4)`**: the mixer runs on its own thread, writing mixed blocks to the fd.
+
+> **ABI correction (audit 2026-07-26).** This doc previously said the ctor ends
+> with `cThread::Launch(this)`. It is **`Launch(this + 4)`** — `cThread` is a
+> *secondary* base at offset `+4`, which is why the ctor writes the `cThread`
+> vtable to `cSoundCard+0x08` (= `+0x04` within the `cThread` subobject, matching
+> `cThread`'s own ctor). The guarding `if (this == 0) p = 0` is the g++ 2.95
+> pointer-adjust idiom for that base cast. Consequence for anyone reading thread
+> state off a `cSoundCard_Linux`: pipe fds are at `+0x0c`/`+0x10`, running flag at
+> `+0x14`, `pthread_t` at `+0x18` (each `+4` from the `cThread`-relative offsets
+> below).
 
 Game-side usage (from `cApplication::Start`): a `cSoundServer` with **16 `cSoundServerChannel`s** on top of the card. `Sample_Size[]` table indexes format → bytes/sample.
 

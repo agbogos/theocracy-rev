@@ -83,7 +83,15 @@ So the engine side (libmvos, via `cLibrary`) is: `dlopen("vvc_x…") → dlsym("
 2. Patch the depth check in `SetVideoMode` to accept depth 24 + add a 16→32 bpp conversion in `Refresh`.
 3. In an SDL2 shim, this disappears — you own the framebuffer and convert 16-bit → the texture format yourself.
 
-## Engine-side loader (confirmed — `LoadDevicePlugins`, libmvos `0xa49a0`)
+## Engine-side loader (confirmed — `LoadDevicePlugins`, libmvos `0xa4990`)
+
+> **Address corrected (audit 2026-07-26).** This doc previously cited `0xa49a0`.
+> The true entry is **`0xa4990`** (file `0x94990`): it is the address
+> `OpenSubsystems` actually calls (`0xa4f73`), and it begins with the
+> "already loaded?" guard `CMP [0xd6b80],0 / JNZ`. `0xa49a0` is only a
+> fragment start — no callers, a single `.eh_frame` DATA xref. The Ghidra DB
+> had the label on the wrong address too; fixed (`LoadDevicePlugins` /
+> `LoadDevicePlugins_cont`).
 The engine loads each device family the same way, gated by the `cApplication::Required` flags:
 
 ```c
