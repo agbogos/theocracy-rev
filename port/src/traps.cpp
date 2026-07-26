@@ -2359,36 +2359,62 @@ void TrapLayer::register_builtins() {
     };
 
     // Minimal stat for existence checks. __xstat(ver, path, statbuf).
+    // __xstat(ver, path, buf) — glibc's stat() wrapper.
+    //
+    // THE BUFFER SIZE IS LOAD-BEARING. Linux/i386 `struct stat` (_STAT_VER_LINUX)
+    // is exactly **88 bytes**, and callers put it on the stack. This used to write
+    // 96 zeroed bytes with a guessed layout, so it ran 8 bytes past the end of the
+    // caller's local and zeroed the saved EBP and return address sitting there.
+    // The victim was cDirent::cDirent (mvos+0x4c030), which calls __xstat twice:
+    // it completed normally and then `ret`-ed to 0 with EBP popped as 0 — a fault
+    // at eip=0 with no frame pointer, several frames away from the actual damage.
+    // Only the netgame map dialog constructs a cDirent, which is why nothing else
+    // ever tripped it.
+    //
+    // Layout (i386, glibc 2.x, 64-bit dev/rdev, 32-bit ino/off):
+    //   +0x00 dev(8)  +0x08 pad(2/2)  +0x0c ino(4)   +0x10 mode(4)  +0x14 nlink(4)
+    //   +0x18 uid(4)  +0x1c gid(4)    +0x20 rdev(8)  +0x28 pad(2/2) +0x2c size(4)
+    //   +0x30 blksize(4)  +0x34 blocks(4)
+    //   +0x38 atim(8) +0x40 mtim(8)   +0x48 ctim(8)  +0x50 unused(8)   = 88
     t["__xstat"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         std::string path = m.cstr(arg(m, esp, 1));
         uint32_t sbuf = arg(m, esp, 2);
-        if (path.rfind("/dev/", 0) == 0) {
-            // Fake a char device stat (zeroed buffer is enough for most checks).
-            if (sbuf) { std::vector<uint8_t> z(64, 0); m.write(sbuf, z.data(), 64); }
-            return 0;
-        }
-        std::string host = resolve_path(path);
+        constexpr uint32_t kLinuxStatSize = 88;
+
         struct stat st{};
-        if (::stat(host.c_str(), &st) != 0 && ::stat(path.c_str(), &st) != 0) {
-            set_errno(m, errno);
-            return (uint32_t)-1;
+        bool ok;
+        if (path.rfind("/dev/", 0) == 0) {
+            std::memset(&st, 0, sizeof st);
+            st.st_mode = S_IFCHR | 0666;   // faked char device
+            ok = true;
+        } else {
+            std::string host = resolve_path(path);
+            ok = (::stat(host.c_str(), &st) == 0) || (::stat(path.c_str(), &st) == 0);
         }
-        // Linux i386 stat is not macOS stat — zero and fill a few portable fields
-        // by approximate offsets is risky. For existence-only, zeroed success is OK
-        // for many callers; fill st_mode/st_size at common Linux offsets if needed.
-        // Linux i386 struct stat: st_mode @ 0x04? Actually varies. Write size at
-        // several candidate offsets and mode as S_IFREG.
-        std::vector<uint8_t> z(96, 0);
-        uint32_t mode = (uint32_t)(S_IFREG | 0644);
-        uint32_t sz = (uint32_t)st.st_size;
-        // glibc2 i386 stat: st_mode at 4? Wait — use raw layout from linux:
-        // Actually for i386 kernel stat: st_dev 0, st_ino 4, st_mode 8, ...
-        // glibc uses xstat and may use different layout. Zero + return 0 is
-        // enough when code only checks return value; if it reads st_size we may
-        // need to refine. Put mode@16 size@20 as a common guess for old glibc.
-        std::memcpy(z.data() + 16, &mode, 4);
-        std::memcpy(z.data() + 20, &sz, 4);
-        if (sbuf) m.write(sbuf, z.data(), (uint32_t)z.size());
+        if (!ok) { set_errno(m, 2 /*ENOENT*/); return (uint32_t)-1; }
+        if (!sbuf) return 0;
+
+        uint8_t z[kLinuxStatSize];
+        std::memset(z, 0, sizeof z);
+        auto put32 = [&](uint32_t off, uint32_t v) { std::memcpy(z + off, &v, 4); };
+        auto put64 = [&](uint32_t off, uint64_t v) { std::memcpy(z + off, &v, 8); };
+        put64(0x00, (uint64_t)st.st_dev);
+        put32(0x0c, (uint32_t)st.st_ino);
+        // S_IFMT bits agree between Linux and BSD, so the mode passes through --
+        // and passing the REAL mode matters: the old code hardcoded S_IFREG, which
+        // would have reported every directory as a regular file.
+        put32(0x10, (uint32_t)st.st_mode);
+        put32(0x14, (uint32_t)st.st_nlink);
+        put32(0x18, (uint32_t)st.st_uid);
+        put32(0x1c, (uint32_t)st.st_gid);
+        put64(0x20, (uint64_t)st.st_rdev);
+        put32(0x2c, (uint32_t)st.st_size);
+        put32(0x30, (uint32_t)st.st_blksize);
+        put32(0x34, (uint32_t)st.st_blocks);
+        put32(0x38, (uint32_t)st.st_atime);
+        put32(0x40, (uint32_t)st.st_mtime);
+        put32(0x48, (uint32_t)st.st_ctime);
+        m.write(sbuf, z, kLinuxStatSize);
         return 0;
     };
 

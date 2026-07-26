@@ -72,23 +72,19 @@ first, modernisation after**.
    *text* rather than the small square button to its left (~`466,361`). Transport
    results (connect/accept) are automated; lobby results were not.
 
-   **Map selection crash — partially traced.** Lobby settings → map selection
-   dies at `eip=0`. Solid: the dialog is `FUN_082bcb30`, it enumerates
-   `data/map/netgame`, and its `printf("owl")` marker (just before
-   `cDirectory::Open`) never appears — so it dies before opening the directory.
-   `cDirent::cDirent(const char*)` and `cDirectory::Open` are on the HLE boundary
-   and unimplemented, as are libmvos's imported `opendir`/`readdir`/`chdir`, so
-   the directory surface is missing and needed regardless. Maps are present (10
-   in `data/game/data/map/netgame/`).
-   **A first attempt mis-diagnosed this** as a zero GOT slot from a "silent
-   linker gap": the call site was read out of `[ESP+0x18]` (a stack slot six
-   words deep) and the GOT value was read from the file on disk, never from guest
-   memory — and `resolve()`'s existing unresolved-UND warning fires in no run.
-   Faults now print an **EBP-chain backtrace** with `game`/`mvos+` labels instead
-   of raw stack words, so a reproduction should name the real call chain.
-   `NetGame_AssignTeams` and lockstep sync come in — the packet format is already
-   decoded (`docs/subsystems/multiplayer-and-factions.md`), so a malformed
-   exchange is diagnosable rather than opaque.
+   **Map selection crash: FIXED.** Our `__xstat` wrote **96** bytes into an
+   **88**-byte Linux/i386 `struct stat`, running 8 bytes past the caller's stack
+   local and zeroing the saved EBP + return address. `cDirent::cDirent`
+   (`mvos+0x4c030`, calls `__xstat` twice) therefore `ret`-ed to 0 — a fault at
+   `eip=0` several frames from the damage. Only the netgame map dialog builds a
+   `cDirent`, so single-player never hit it. Now writes the real 88-byte layout,
+   with the **real** `st_mode` (the old code hardcoded `S_IFREG`, which would have
+   called every directory a file) and `st_size` at its correct `+0x2c`.
+   Found via two new instruments after three failed inferences: a **zero-GOT scan**
+   (reported 0, killing the GOT theory) and **`THEOC_TRACE=1`**, a 32-block ring
+   dumped on fault — which showed `mvos+0x4c1e8` was an *epilogue*, not a call.
+   Rule of thumb learned: `eip=0` with `EBP=0` means a **smashed frame**, not a
+   null call.
 
 ## Modernisation (deferred — after playability)
 

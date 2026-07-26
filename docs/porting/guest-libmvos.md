@@ -886,43 +886,61 @@ and it faulted as a fetch at `eip=0`. Implemented `strrchr` **and** `strchr`;
 both must return a *guest* pointer into the string, not a host one. Both clients
 are back to **0 unimplemented**.
 
-### The map-selection crash — partially traced, and one wrong turn
+### The map-selection crash — FIXED: `__xstat` overflowed the caller's stack
 
-Opening **lobby settings → map selection** crashes with
-`UC_ERV_FETCH_UNMAPPED at eip=0` (a call through a null pointer).
+**Root cause: our `__xstat` wrote 96 bytes into an 88-byte `struct stat`.**
 
-**What is solid:** the map dialog is `FUN_082bcb30`. It enumerates
-`data/map/netgame` for `*.map`, reads a `0x14`-byte header per file (magic
-`'M','P'`, version >= `0x34`), keeps maps with 2-8 players, and loads a `.pic`
-preview. The maps are present -- ten of them in `data/game/data/map/netgame/`.
-Its `printf("owl\n")` marker, immediately before `cDirectory::Open`, **never
-appears in any log**, so it dies early in that dialog, before the directory is
-opened. libmvos **does** export both `__7cDirentPCc` (`0x4c030`) and
-`Open__10cDirectory` (`0x4bab0`), so those run as real guest code -- but that
-code calls **`opendir`/`readdir`/`chdir`**, which libmvos imports and which were
-**not implemented**. That is the genuinely missing piece, and it is now filled in
-(Linux/i386 `struct dirent`: `d_name` at offset **11**, `DT_*` values agree
-between Linux and BSD so `d_type` passes through; `chdir` is accepted and ignored
-because every guest path already goes through `resolve_path`).
+Linux/i386 `struct stat` (`_STAT_VER_LINUX`) is exactly **88 bytes**, and callers
+put it on the stack. Our implementation wrote **96** zeroed bytes with an admittedly
+guessed layout, so it ran 8 bytes past the caller's local and zeroed the **saved
+EBP and return address** sitting immediately after it.
 
-> **Wrong turn, recorded deliberately (2026-07-26).** An earlier version of this
-> section claimed the crash was a zero GOT slot for `__7cDirentPCc` and blamed a
-> "silent linker gap". That was wrong three times over. The call site was taken from
-> `[ESP+0x18]` -- a stack slot six words deep in the fault dump -- and treated as
-> *the* return address; the actual return slot held a stack pointer. And the
-> "GOT is 0" claim was never measured: it was read off the **file on disk**, not
-> guest memory. `guestlink`'s `resolve()` already warns on unresolved strong UND
-> and **no such warning appears in any run**, so every import does bind. Lesson:
-> And the supporting claim that libmvos exported "only a different overload" came
-> from reading a **truncated grep** -- it exports `__7cDirentPCc` perfectly well.
-> Lesson: a fault dump of raw stack words invites exactly this kind of confident
-> misreading, which is why fault reporting now walks the EBP chain instead; and a
-> grep that gets cut off is not evidence of absence.
+The victim was `cDirent::cDirent(const char*)` (`mvos+0x4c030`), which calls
+`__xstat` twice. It completed normally and then `ret`-ed to **0**, popping `EBP` as
+**0** — a fault at `eip=0` with no frame pointer, several frames from the real
+damage. Only the netgame map dialog constructs a `cDirent`, which is why three
+years of single-player never tripped it.
 
-**Instrument added.** `Machine` captures EBP at fault time and faults now print a
-labelled guest backtrace (`game 0x08...` / `mvos+0x...`) rather than 16 raw stack
-words. Reproducing the crash with this build should name the real call chain in
-one run.
+Fixed by writing the real layout, 88 bytes exactly:
+
+```
++0x00 dev(8)  +0x0c ino(4)  +0x10 mode(4)  +0x14 nlink(4) +0x18 uid  +0x1c gid
++0x20 rdev(8) +0x2c size(4) +0x30 blksize  +0x34 blocks   +0x38/40/48 a/m/ctime
+```
+
+Two details beyond the size: `S_IFMT` bits agree between Linux and BSD so the mode
+passes through unchanged, and passing the **real** mode matters — the old code
+hardcoded `S_IFREG`, which would have reported every directory as a regular file
+and broken the enumeration even after the overflow was gone. `st_size` also moved
+from a guessed `+0x14` to its real `+0x2c`.
+
+### How it was found — three failed inferences, then two instruments
+
+Worth recording, because the reasoning failures were the expensive part:
+
+1. **A stack slot read as a return address.** `0x082bd6e7` was taken from
+   `[ESP+0x18]`, six words into the fault dump, and treated as the call site.
+2. **An unmeasured GOT value.** "The slot is 0" was read from the **file on disk**,
+   never guest memory.
+3. **A truncated grep** taken as proof libmvos lacked `__7cDirentPCc`. It exports
+   it fine (`0x4c030`).
+
+Each was stated with more confidence than the evidence carried. What actually
+solved it was building instruments and reading the result:
+
+- **Zero-GOT scan** (every `JMP_SLOT`/`GLOB_DAT` after linking) — reported **0**,
+  killing hypothesis 2 outright. Kept, because a zero slot is otherwise nearly
+  undiagnosable.
+- **EBP-chain backtrace** on fault — printed "no frame pointer", which was itself
+  the clue: at `eip=0` nothing has pushed a frame, so the corruption is *upstream*.
+- **`THEOC_TRACE=1` block ring** (last 32 basic blocks, `game`/`mvos+` labelled) —
+  showed `mvos+0x4c082 … 0x4c1e8` with trap slots `0x19` and `0x71` in between.
+  Decoding `0x4c1e8` revealed it was the **epilogue**, not a call site: the
+  function returned to 0. Slot `0x71` decoded as `strrchr` (confirming the slot
+  math) and slot `0x19` as **`__xstat`** — called twice, which named the culprit.
+
+The lesson generalises: a fault at `eip=0` with `EBP=0` is a *smashed frame*, not a
+null call — look for who wrote past a buffer, not for an unresolved symbol.
 
 ## Build / run
 
