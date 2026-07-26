@@ -602,6 +602,80 @@ a track) and `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` (dump frames via
 (`credits 20 450` → click ~65,460; the offset from the cfg entry to a hit is
 about +45,+10).
 
+## G18 — presentation: fullscreen, and movie aspect-fit (done)
+
+Two display-layer items, both in host code only — no guest patching.
+
+### Fullscreen (`THEOC_FULLSCREEN=1`, `Alt+Enter`)
+
+Borderless fullscreen at the desktop resolution (`SDL_WINDOW_FULLSCREEN_DESKTOP`,
+never an exclusive mode switch — the guest paints its own mode and logical-size
+scaling does the rest). 4:3 is preserved with **pillarbox** bars. `Alt+Enter`
+(**⌥Return** on macOS — SDL maps Option to `KMOD_ALT`) toggles at runtime; not
+F11, which the game uses.
+
+Most of it was already in place: `SDL_RenderSetLogicalSize` was being called on
+every mode open, which both letterboxes the image and makes SDL hand back mouse
+coordinates already mapped into guest space — so there is no coordinate mapping
+here, and nothing downstream of the framebuffer changed. Verified by clicking a
+known button in all four combinations (windowed/fullscreen × HiDPI on/off) and
+confirming the logged `x,y` stays in 800×600 space.
+
+Two subtleties worth keeping:
+- **`SDL_SetWindowSize` must not run while fullscreen** on a guest mode switch —
+  it fights the fullscreen state instead of rescaling, and that transition is
+  where G5b's pitch tear lived.
+- **`ALLOW_HIGHDPI` is creation-time only.** `SDL_SetWindowFullscreen` cannot add
+  it later, so it is set for *both* modes: a window built windowed-without-it
+  would make `Alt+Enter` land in a blurrier fullscreen than the env var gives.
+  It is also a straight win (800×600 renders at 1600×1200 windowed, and
+  2940×1846 at 3.08× fullscreen on a 14" panel). `THEOC_NO_HIDPI=1` reverts.
+
+The `[video]` line reports px vs pt, scale and bar widths, so a scaling problem
+is answerable from the log rather than only on screen.
+
+### Movie aspect-fit
+
+The shipped movies are exactly two shapes — **480×360** (4:3: `ubi_logo`, the 9
+scenario briefings, the 7 tutorials) and **608×300** (~2.03:1: `intro`, `logo`,
+`end` and the rest of the main cutscenes) — while the guest opens a single
+**640×480** mode for all of them. `SMPEG_playvideoframe` blitted each frame 1:1
+at the **top-left** and cropped, so every movie left a differently-shaped margin
+of whatever the previous screen had drawn there.
+
+**The trap that made it look like a clamp bug.** The old code clamped the copy to
+`cDisplay`'s W/H — but the game constructs `cDisplay` with the **movie's**
+dimensions (`608x300`, `480x360`) while setting its **pitch** to the *mode's*
+(`1280` = 640×2). So `dw`/`dh` describe the *source*, not the destination, and
+`copy_w > dw` could never fire. The real destination extent is the video mode,
+and it is only safe to assume that when the target address is the presented
+framebuffer (`GUEST_FB_BASE`) — for any other `Address` the surface size is
+unknown, so the code degrades to the old 1:1 copy rather than risking an overrun.
+
+**Fix.** Scale to fill the destination on its tighter axis, centre it, and black
+the bars — bilinear, RGB565 in and out, in `MpegMovie::fit_frame`. Geometry and
+the bar clear are cached and recomputed only when the destination changes, so the
+per-frame cost is just the scale. Hand-rolled rather than swscale: the frames are
+already RGB565 so there is nothing for swscale's format machinery to do, and a
+cached `SwsContext` would add a lifetime to manage across the movie map.
+
+```
+[mpeg] fit 480x360 -> 640x480 at +0,+0  in 640x480 (exact fit 0 px)
+[mpeg] fit 608x300 -> 640x316 at +0,+82 in 640x480 (letterbox 82 px)
+```
+
+Verified by measuring captured frames, not by eye alone: the 4:3 movie has **no**
+fully-black rows (it fills 640×480 exactly — both are 4:3), and the widescreen
+one has black rows `0–81` and `398–479`, i.e. 82 / 316 / 82, symmetric. No
+`[slow]` sections, cutscene audio unchanged, 0 unimplemented.
+
+**Harness gap closed.** Frame capture (`THEOC_SHOT_EVERY`) only ran from the
+normal frame path, but cutscenes present from `SMPEG_playvideoframe` — so the
+render harness was blind over exactly the frames a video bug appears in. Split
+`shot_tick()` out of `render_probe_tick()` and drive it from both. Capture only:
+the click/sweep drivers must *not* run during a cutscene, where a synthesized
+click would skip the thing being photographed.
+
 ## Build / run
 
 ```sh

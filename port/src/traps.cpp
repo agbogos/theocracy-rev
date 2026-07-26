@@ -441,9 +441,27 @@ void TrapLayer::render_probe_tick() {
         sweep_frame++;
     }
 
-    // --- frame capture
+    shot_tick();
+}
+
+// THEOC_SHOT_EVERY=N — save every Nth presented frame to THEOC_SHOT_DIR.
+// Split out of render_probe_tick so cutscenes can be captured too: they present
+// from SMPEG_playvideoframe, not the normal frame path, so the harness used to
+// have a blind spot over exactly the frames a video-scaling bug shows up in.
+// Deliberately capture-only — the click/sweep drivers must NOT run during a
+// cutscene, where a synthesized click would skip the thing being photographed.
+void TrapLayer::shot_tick() {
+    static const int shot_every = [] {
+        const char* e = std::getenv("THEOC_SHOT_EVERY");
+        return e ? std::atoi(e) : 0;
+    }();
+    static const char* shot_dir = [] {
+        const char* e = std::getenv("THEOC_SHOT_DIR");
+        return e ? e : ".";
+    }();
+    if (!shot_every) return;
     static int shot_frame = 0, shot_n = 0;
-    if (shot_every && (shot_frame++ % shot_every) == 0 && shot_n < 40) {
+    if ((shot_frame++ % shot_every) == 0 && shot_n < 40) {
         char path_buf[512];
         std::snprintf(path_buf, sizeof path_buf, "%s/frame_%03d.bmp", shot_dir, shot_n);
         if (video_.save_bmp(path_buf)) shot_n++;
@@ -1395,15 +1413,48 @@ void TrapLayer::register_builtins() {
             dh = (uint16_t)mov->height;
         }
         const auto& fr = mov->frames[mov->frame_i++];
-        int copy_w = mov->width;
-        int copy_h = mov->height;
-        if (dw && copy_w > dw) copy_w = dw;
-        if (dh && copy_h > dh) copy_h = dh;
-        if (pitch < copy_w * 2) pitch = (uint16_t)(copy_w * 2);
-        for (int y = 0; y < copy_h; ++y) {
-            m.write(dst + (uint32_t)y * pitch,
-                    fr.data() + (size_t)y * (size_t)mov->width,
-                    (uint32_t)copy_w * 2);
+
+        // Aspect-fit into the destination instead of the old top-left 1:1 copy.
+        //
+        // The target is the VIDEO MODE, not cDisplay's W/H. The game constructs
+        // cDisplay with the *movie's* dimensions (verified: 608x300 and 480x360)
+        // while setting its pitch to the mode's (1280 = 640*2) — so dw/dh describe
+        // the source, and the old `copy_w > dw` clamp could never fire. The frame
+        // landed top-left and everything around it kept the previous screen's
+        // pixels, which is the "all over the place" symptom: the two shipped
+        // shapes (4:3 480x360, 2.03:1 608x300) each left a different stale margin.
+        //
+        // Only trust the mode when we are painting the presented framebuffer, whose
+        // extent we know. For any other Address the surface size is unknown and
+        // cDisplay's own W/H is the sole hint, so fitting to it degrades to the
+        // previous 1:1 behaviour rather than risking a write past the end.
+        int target_w, target_h;
+        if (dst == GUEST_FB_BASE && video_.is_open()) {
+            target_w = video_.width();
+            target_h = video_.height();
+            pitch = (uint16_t)(target_w * 2);  // authoritative stride for the FB
+        } else {
+            target_w = dw ? dw : mov->width;
+            target_h = dh ? dh : mov->height;
+            if (pitch < target_w * 2) pitch = (uint16_t)(target_w * 2);
+        }
+
+        if (const uint16_t* fitted = mov->fit_frame(fr, target_w, target_h)) {
+            // Whole target every frame, bars included, so no stale pixels survive.
+            for (int y = 0; y < target_h; ++y) {
+                m.write(dst + (uint32_t)y * pitch,
+                        fitted + (size_t)y * (size_t)target_w,
+                        (uint32_t)target_w * 2);
+            }
+        } else {
+            // Degenerate geometry — fall back to the raw top-left copy.
+            int copy_w = std::min(mov->width, target_w);
+            int copy_h = std::min(mov->height, target_h);
+            for (int y = 0; y < copy_h; ++y) {
+                m.write(dst + (uint32_t)y * pitch,
+                        fr.data() + (size_t)y * (size_t)mov->width,
+                        (uint32_t)copy_w * 2);
+            }
         }
         // Feed this frame's audio into the host mixer. Video is paced to fps
         // (the hold loop above sleeps in real time), so pushing one frame's
@@ -1435,6 +1486,7 @@ void TrapLayer::register_builtins() {
             video_.present();
             present_seq_.fetch_add(1, std::memory_order_relaxed);
             start_watchdog(m); // cutscenes present here, not via SwapBuffers
+            shot_tick();       // ...so frame capture has to be driven here too
             auto_keys_tick();  // may skip this cutscene
         }
         if (mov->frame_i >= mov->frames.size()) {

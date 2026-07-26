@@ -1,4 +1,6 @@
 #include "mpeg.hpp"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -14,6 +16,107 @@ extern "C" {
 // Host mixer format (TrapLayer SDL device): interleaved stereo S16 @ 22050 Hz.
 static constexpr int kOutRate = 22050;
 static constexpr int kOutChannels = 2;
+
+// ---- aspect-fit scaler -------------------------------------------------------
+// Bilinear, RGB565 in and out, hand-rolled rather than swscale: the frames are
+// already RGB565 so there is nothing for swscale's format machinery to do, and a
+// cached SwsContext per movie would add a lifetime to manage across the movie map
+// for a scale this cheap (≤640×480 at ≤24fps, integer inner loop).
+//
+// Weights are 0..256 fixed point. Sampling uses pixel centres — (i+0.5)*src/dst
+// − 0.5 — so the image is not shifted half a pixel toward the origin, which is
+// visible as a soft edge on one side at these modest ratios.
+namespace {
+
+inline void unpack565(uint16_t p, int& r, int& g, int& b) {
+    r = (p >> 11) & 0x1f;
+    g = (p >> 5) & 0x3f;
+    b = p & 0x1f;
+}
+
+// One axis of the sample map: for each destination index, the two source indices
+// to blend and the weight of the second.
+void build_axis(int src, int dst, std::vector<int32_t>& i0,
+                std::vector<int32_t>& i1, std::vector<int32_t>& w) {
+    i0.resize(dst);
+    i1.resize(dst);
+    w.resize(dst);
+    for (int i = 0; i < dst; ++i) {
+        double s = (dst > 1) ? (i + 0.5) * (double)src / dst - 0.5 : 0.0;
+        int a = (int)std::floor(s);
+        double f = s - a;
+        if (a < 0) { a = 0; f = 0.0; }
+        if (a > src - 1) { a = src - 1; f = 0.0; }
+        int b = a + 1;
+        if (b > src - 1) { b = src - 1; }
+        i0[i] = a;
+        i1[i] = b;
+        w[i] = (int32_t)(f * 256.0 + 0.5);
+    }
+}
+
+}  // namespace
+
+const uint16_t* MpegMovie::fit_frame(const std::vector<uint16_t>& fr,
+                                     int dst_w, int dst_h) {
+    if (width <= 0 || height <= 0 || dst_w <= 0 || dst_h <= 0) return nullptr;
+    if (fr.size() < (size_t)width * (size_t)height) return nullptr;
+
+    if (dst_w != fit_w || dst_h != fit_h) {
+        fit_w = dst_w;
+        fit_h = dst_h;
+        // Fill the tighter axis, preserve aspect, centre the rest.
+        double s = std::min((double)dst_w / width, (double)dst_h / height);
+        inner_w = std::min(dst_w, std::max(1, (int)(width * s + 0.5)));
+        inner_h = std::min(dst_h, std::max(1, (int)(height * s + 0.5)));
+        inner_x = (dst_w - inner_w) / 2;
+        inner_y = (dst_h - inner_h) / 2;
+        // Zeroing here is what blacks the bars. The inner rect is rewritten every
+        // frame and the bars never are, so this is the only clear needed — and it
+        // must happen on every geometry change, or a previous movie's bars survive.
+        fit.assign((size_t)dst_w * (size_t)dst_h, 0);
+        build_axis(width, inner_w, map_x0, map_x1, map_wx);
+        std::printf("  [mpeg] fit %dx%d -> %dx%d at +%d,+%d in %dx%d"
+                    " (%s %d px)\n",
+                    width, height, inner_w, inner_h, inner_x, inner_y, dst_w, dst_h,
+                    inner_h < dst_h ? "letterbox" : (inner_w < dst_w ? "pillarbox"
+                                                                     : "exact fit"),
+                    inner_h < dst_h ? (dst_h - inner_h) / 2 : (dst_w - inner_w) / 2);
+    }
+
+    const uint16_t* src = fr.data();
+    for (int y = 0; y < inner_h; ++y) {
+        double sy = (inner_h > 1) ? (y + 0.5) * (double)height / inner_h - 0.5 : 0.0;
+        int ya = (int)std::floor(sy);
+        double fy = sy - ya;
+        if (ya < 0) { ya = 0; fy = 0.0; }
+        if (ya > height - 1) { ya = height - 1; fy = 0.0; }
+        int yb = std::min(ya + 1, height - 1);
+        const int32_t wy = (int32_t)(fy * 256.0 + 0.5);
+        const uint16_t* row_a = src + (size_t)ya * width;
+        const uint16_t* row_b = src + (size_t)yb * width;
+        uint16_t* out = fit.data() + (size_t)(inner_y + y) * fit_w + inner_x;
+        for (int x = 0; x < inner_w; ++x) {
+            const int32_t xa = map_x0[x], xb = map_x1[x], wx = map_wx[x];
+            int r00, g00, b00, r01, g01, b01, r10, g10, b10, r11, g11, b11;
+            unpack565(row_a[xa], r00, g00, b00);
+            unpack565(row_a[xb], r01, g01, b01);
+            unpack565(row_b[xa], r10, g10, b10);
+            unpack565(row_b[xb], r11, g11, b11);
+            const int rt = (r00 * (256 - wx) + r01 * wx) >> 8;
+            const int gt = (g00 * (256 - wx) + g01 * wx) >> 8;
+            const int bt = (b00 * (256 - wx) + b01 * wx) >> 8;
+            const int rb = (r10 * (256 - wx) + r11 * wx) >> 8;
+            const int gb = (g10 * (256 - wx) + g11 * wx) >> 8;
+            const int bb = (b10 * (256 - wx) + b11 * wx) >> 8;
+            const int r = (rt * (256 - wy) + rb * wy) >> 8;
+            const int g = (gt * (256 - wy) + gb * wy) >> 8;
+            const int b = (bt * (256 - wy) + bb * wy) >> 8;
+            out[x] = (uint16_t)(((r & 0x1f) << 11) | ((g & 0x3f) << 5) | (b & 0x1f));
+        }
+    }
+    return fit.data();
+}
 
 bool MpegStore::load(uint32_t handle, const std::string& host_path) {
     MpegMovie mov;

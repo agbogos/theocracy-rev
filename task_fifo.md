@@ -197,6 +197,16 @@ results. Order below is **playability first, modernisation after**.
   screen, to lift coordinates for a new driver script.
 - `THEOC_AUTO_KEYS=1` — taps SPACE every 6s via the real SDL path (skips
   cutscenes; unattended coverage for the keyboard input path).
+- **Movies are aspect-fitted** into the guest's 640×480 movie mode: the two shipped
+  shapes are 480×360 (4:3 → fills exactly) and 608×300 (~2.03:1 → 640×316 with
+  82px letterbox bars). Frames are decoded at native size and scaled per frame
+  (bilinear, `MpegMovie::fit_frame`). Note `cDisplay`'s W/H are the **movie's**
+  dimensions, not the destination's — its *pitch* is the mode's. See G18 in
+  `docs/porting/guest-libmvos.md`.
+- `THEOC_SHOT_EVERY` now also captures **during cutscenes** (they present from
+  `SMPEG_playvideoframe`, not the normal frame path, so the harness used to be
+  blind exactly where video bugs live). Capture only — no click/sweep, which would
+  skip the cutscene being photographed.
 - Known, accepted: `SMPEG_new` decodes a whole movie up front (~0.9s for the
   intro) and `SMPEG_delete` frees it (~0.4s), so ~1.35s brackets a cutscene.
   Not worth lazy/threaded decode — once per cutscene, and skippable.

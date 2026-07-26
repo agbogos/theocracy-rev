@@ -148,6 +148,9 @@ private:
     // THEOC_CLICKS / THEOC_MOUSE_SWEEP / THEOC_SHOT_EVERY: drive to a screen,
     // sweep the pointer and capture frames (render-bug harness).
     void render_probe_tick();
+    // Frame capture only (THEOC_SHOT_EVERY). Separate from render_probe_tick so
+    // the cutscene present path can drive it without also driving click/sweep.
+    void shot_tick();
     bool soak_click_step(int x, int y);
     void soak_snapshot(const char* tag);
     uint32_t active_screen() const;
