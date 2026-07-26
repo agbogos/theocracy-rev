@@ -47,8 +47,18 @@ first, modernisation after**.
    stock behaviour and proves the transport (real bind, real `EADDRINUSE`, guest
    correctly Fatals). Two clients both reach Realm Shell, 0 faults, 0 unimplemented.
 
-   **Remaining, in order:** host mode to boot `server` instead of `theocracy.real`
-   (headless: skip video/audio/MPEG bring-up) → `[network] enable=1` in `mvos.cfg`
+   **Headless server: DONE (G20).** `THEOC_SERVER=1` boots the shipped
+   `data/cd/linux/server` under the same host/linker/HLE — 26 undefined symbols,
+   all already implemented. Headless is *derived*: the game copy-relocs all nine
+   `_12cApplication.*` flags, `server` carries only `Network`, so no
+   `_12cApplication.Video` symbol ⇒ no display bring-up. Boot path is now resolved
+   by name (`guestlink::abs_sym`) instead of hardcoded game addresses. It really
+   listens — `lsof` shows `TCP *:5042 (LISTEN)` and external clients are accepted.
+   **Server port 5042 ≠ the game's 5043 lock**, so no collision. Fixed en route: a
+   dropped peer killed the host with SIGPIPE, because libmvos `main`'s
+   `signal(SIGPIPE, SIG_IGN)` was hitting a stub.
+
+   **Remaining, in order:** `[network] enable=1` in `mvos.cfg`
    → bring up server + 2 clients over loopback. The unknown is the netgame flow
    itself (`NetGame_AssignTeams`, the team-info packet, lockstep sync), not the
    transport. The packet format is already decoded — see

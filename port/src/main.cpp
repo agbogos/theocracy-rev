@@ -16,11 +16,14 @@
 
 using namespace guestmap;
 
+// The nine cApplication requirement flags. Resolved BY NAME from whichever
+// executable we booted, not hardcoded: `theocracy.real` and `server` are
+// different images with different .bss, and the server only carries one of them.
+// Missing symbol -> address 0 -> that subsystem is simply not requestable.
 struct Flag { const char* name; uint32_t addr; };
-static const Flag kFlags[] = {
-    {"Sound",     0x085983cc}, {"Video",   0x085986ec}, {"Mouse",   0x08598b90},
-    {"Keyboard",  0x0859847c}, {"Redbook", 0x08598c60}, {"Network", 0x0859848d},
-    {"Pointer",   0x0859849c}, {"Timer",   0x08598080}, {"Intuition", 0x085986dc},
+static const char* kFlagNames[] = {
+    "Sound", "Video", "Mouse", "Keyboard", "Redbook",
+    "Network", "Pointer", "Timer", "Intuition",
 };
 
 // libmvos file VAs (ET_DYN base 0) — see docs + main disassembly.
@@ -70,19 +73,47 @@ static uint32_t run_ctors(Machine& m, uint32_t addr, uint32_t nwords, const char
 }
 
 int main(int argc, char** argv) {
-    std::string game_path = "data/cd/linux/theocracy.real";
+    // THEOC_SERVER=1 boots the shipped dedicated server (`server`, 47 KB, links
+    // libmvos + libc) instead of the game. Same host, same linker, same HLE — the
+    // server is just another executable that libmvos's main() drives, and running
+    // the original binary means the netgame wire protocol never has to be
+    // reimplemented. readme.linux says in-game server spawn was broken on the
+    // original Linux release too, so a separate process is the intended topology.
+    const bool want_server = std::getenv("THEOC_SERVER") != nullptr;
+    std::string game_path = want_server ? "data/cd/linux/server"
+                                        : "data/cd/linux/theocracy.real";
     std::string mvos_path = "data/cd/linux/libmvos.so.0.9";
     if (argc > 1) game_path = argv[1];
     if (argc > 2) mvos_path = argv[2];
 
     std::printf("=== Theocracy guest-libmvos host ===\n");
-    std::printf("game: %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
+    std::printf("exe:  %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
 
     elf32::Image game(game_path);
     elf32::Image mvos(mvos_path);
     Machine m;
 
     guestlink::LinkResult L = guestlink::link(m, game, mvos);
+
+    // Resolve the requirement flags out of the executable we actually loaded.
+    std::vector<Flag> flags;
+    for (const char* n : kFlagNames)
+        flags.push_back({n, guestlink::abs_sym(game, 0,
+                                               std::string("_12cApplication.") + n)});
+    auto flag_addr = [&](const char* n) -> uint32_t {
+        for (auto& f : flags) if (std::strcmp(f.name, n) == 0) return f.addr;
+        return 0;
+    };
+    auto game_sym = [&](const char* n) { return guestlink::abs_sym(game, 0, n); };
+
+    // Headless is derived, not declared: an executable that does not even carry
+    // the Video requirement flag can never ask for a display. The game copy-relocs
+    // all nine flags; `server` carries only Network. So the same boot path serves
+    // both, and we skip video/input/blit bring-up when it cannot be wanted.
+    const bool headless = flag_addr("Video") == 0;
+    if (headless)
+        std::printf("  [headless] no _12cApplication.Video in this image — "
+                    "skipping video/input/blit bring-up\n");
 
     m.map(STACK_TOP - STACK_SIZE, STACK_SIZE, UC_PROT_READ | UC_PROT_WRITE);
     m.map(HEAP_BASE, HEAP_SIZE, UC_PROT_READ | UC_PROT_WRITE);
@@ -97,7 +128,7 @@ int main(int argc, char** argv) {
         return L.traps->heap_selftest() ? 0 : 1;
     }
 
-    if (L.traps)
+    if (L.traps && !headless)
         L.traps->install_plugins_and_video(m, guestlink::MVOS_BASE);
 
     // libmvos DT_INIT + .ctors, then game .ctors --------------------------------
@@ -129,14 +160,16 @@ int main(int argc, char** argv) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "mvos.cfg loader FAULTED: %s\n", e.what());
         }
-        std::printf("  EnvSystem head after cfg = %#x\n", m.r32(0x08598370));
+        if (uint32_t es = game_sym("EnvSystem"))
+            std::printf("  EnvSystem head after cfg = %#x\n", m.r32(es));
     }
 
     if (L.game_ctors) run_ctors(m, L.game_ctors, L.game_ctors_n, "game");
 
     // Init ----------------------------------------------------------------------
-    uint8_t before[9];
-    for (int i = 0; i < 9; ++i) m.read(kFlags[i].addr, &before[i], 1);
+    std::vector<uint8_t> before(flags.size(), 0);
+    for (size_t i = 0; i < flags.size(); ++i)
+        if (flags[i].addr) m.read(flags[i].addr, &before[i], 1);
 
     bool init_ok = false;
     if (L.init_app) {
@@ -151,9 +184,13 @@ int main(int argc, char** argv) {
     }
 
     std::printf("\n=== cApplication subsystem flags (pre-Init -> post-Init) ===\n");
-    for (int i = 0; i < 9; ++i) {
-        uint8_t v; m.read(kFlags[i].addr, &v, 1);
-        std::printf("  %-10s @ %#010x : %u -> %u%s\n", kFlags[i].name, kFlags[i].addr,
+    for (size_t i = 0; i < flags.size(); ++i) {
+        if (!flags[i].addr) {
+            std::printf("  %-10s : not in this image\n", flags[i].name);
+            continue;
+        }
+        uint8_t v; m.read(flags[i].addr, &v, 1);
+        std::printf("  %-10s @ %#010x : %u -> %u%s\n", flags[i].name, flags[i].addr,
                     before[i], v, (before[i] != v) ? "   <- set by Init" : "");
     }
 
@@ -185,19 +222,19 @@ int main(int argc, char** argv) {
         // / VCD / SystemMemory / IPCSystem / LocaleDataBase) are R_386_COPY globals
         // with linker-shared storage, so OpenSubsystems already published them into
         // the game copy — no mvos→game sync needed. Log them to confirm.
-        for (auto [n, g] : {std::pair<const char*, uint32_t>
-                 {"VVC", 0x08598cec}, {"VKeyboard", 0x08598b58}, {"VMouse", 0x08598c3c},
-                 {"Intuition", 0x08598454}, {"SoundCard", 0x08598d0c}, {"VCD", 0x085984ac},
-                 {"SystemMemory", 0x08598404}, {"IPCSystem", 0x08598338},
-                 {"LocaleDataBase", 0x08598c4c}})
-            std::printf("  %s (game) = %#x\n", n, m.r32(g));
+        for (const char* n : {"VVC", "VKeyboard", "VMouse", "Intuition", "SoundCard",
+                              "VCD", "SystemMemory", "IPCSystem", "LocaleDataBase"})
+            if (uint32_t g = game_sym(n))
+                std::printf("  %s (exe) = %#x\n", n, m.r32(g));
 
         // Mirror libmvos main: if Intuition required, construct cIntuition
         // (sizeof 0xb4) and publish the global pointer. Start reads
         // Intuition+0x24 (active screen) — null Intuition → fault @+0x24.
         uint8_t need_i = 0;
-        m.read(0x085986dc, &need_i, 1);
-        if (need_i && m.r32(0x08598454) == 0 && L.traps) {
+        const uint32_t intu_flag = flag_addr("Intuition");
+        const uint32_t intu_glob = game_sym("Intuition");
+        if (intu_flag) m.read(intu_flag, &need_i, 1);
+        if (need_i && intu_glob && m.r32(intu_glob) == 0 && L.traps) {
             // sizeof(cIntuition) = 0xb4, reserved from the guest allocator.
             // This used to be a hardcoded HEAP_BASE+0xf00000 "carve from high
             // heap" — but that address is inside the bump arena and unreserved,
@@ -217,7 +254,7 @@ int main(int argc, char** argv) {
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "cIntuition ctor FAULTED: %s\n", e.what());
             }
-            m.w32(0x08598454, obj);   // shared COPY storage → libmvos sees it too
+            m.w32(intu_glob, obj);   // shared COPY storage → libmvos sees it too
             std::printf("  Intuition = %#x\n", obj);
         }
     }
@@ -234,7 +271,7 @@ int main(int argc, char** argv) {
         // Native overrides for the hot LFB16 software rasterizer (province view
         // was CPU-bound emulating these pixel loops). THEOC_NATIVE_BLIT=0 falls
         // back to the emulated libmvos originals for A/B comparison.
-        install_native_blit(m, guestlink::MVOS_BASE);
+        if (!headless) install_native_blit(m, guestlink::MVOS_BASE);
 
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";

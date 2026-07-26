@@ -760,6 +760,66 @@ default exemption, two clients both boot to Realm Shell, 0 faults, 0 unimplement
 
 Single-player is unaffected: the lock path is the only socket use on that route.
 
+## G20 — headless dedicated server (`THEOC_SERVER=1`) (done)
+
+The shipped `data/cd/linux/server` (47 KB, stripped, links `libmvos.so` + libc)
+now boots under the same host, linker and HLE as the game. Running the original
+server binary means **the netgame wire protocol never has to be reimplemented** —
+both ends stay original code.
+
+It needed almost nothing new. Its entire external surface is **26 undefined
+symbols**, every one already implemented: `main` (from libmvos, same as the game),
+`CopyMem`/`Fatal`/`VM_GetCDRomName` from libmvos, and libc/pthread bits we had.
+It exports its own `Init__12cApplication` / `Start__12cApplicationiPPc`, exactly
+like the game — libmvos owns `main()` either way.
+
+### Headless is derived, not declared
+
+The game copy-relocs all nine `_12cApplication.*` requirement flags; **`server`
+carries only `Network`**. So "is this headless" is answerable statically, before
+any guest code runs: if the executable has no `_12cApplication.Video` symbol, it
+can never ask for a display. That gates plugin/video bring-up and the native blit
+overrides, and `Init` then confirms it at runtime:
+
+```
+Network    @ 0x0805400c : 0 -> 1   <- set by Init
+Sound / Video / Mouse / ... : not in this image
+```
+
+This required de-hardcoding the boot path: `main.cpp` had the nine flag addresses
+and the singleton globals as literal game addresses (`0x08598xxx`), which are
+meaningless in a different executable. They are now resolved **by name** via
+`guestlink::abs_sym`, absent symbols simply skipping. Worth noting as a
+correctness check: for `theocracy.real` the name lookup reproduces all nine
+previously-hardcoded addresses exactly.
+
+### Result — a real listening server
+
+```
+[net] socket(type=1) -> guest fd 3
+[net] bind(:5042) ok
+Theocracy server
+[net] accept -> guest fd 4 from 127.0.0.1:61789
+```
+
+`lsof` confirms it from outside the emulator — `theoc … TCP *:5042 (LISTEN)` — and
+external clients connect and are accepted with correct peer addresses. **The
+server's port is 5042, distinct from the game's 5043 single-instance lock**, so
+the two do not collide. 0 unimplemented, 2.2 MB guest heap.
+
+### SIGPIPE — a bug the fake sockets were hiding
+
+The first live test exited **141** (`128+13`) the moment a test client dropped:
+writing to a socket whose peer has gone raised SIGPIPE and killed the host.
+
+libmvos's `main()` ignores SIGPIPE as its *first* act, precisely because the IPC
+layer depends on it — but `signal` was in a bulk stub list returning 0, so the
+**host** kept the default disposition. Harmless while sockets were fake; fatal the
+moment a real peer disconnected. `signal` now honours `SIGPIPE`/`SIG_IGN` for
+real, and sockets additionally carry `SO_NOSIGPIPE` (the BSD equivalent of the
+per-send `MSG_NOSIGNAL` Linux code uses) so a write returns `EPIPE` instead.
+Verified with three abrupt client disconnects: exit 0, all three accepted.
+
 ## Build / run
 
 ```sh

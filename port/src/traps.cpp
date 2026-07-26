@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <csignal>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -1262,6 +1263,12 @@ void TrapLayer::register_builtins() {
         // sessions, and BSD's TIME_WAIT would otherwise refuse for ~a minute.
         int on = 1;
         ::setsockopt(hfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+        // SO_NOSIGPIPE: writing to a socket whose peer has gone must return EPIPE,
+        // not raise SIGPIPE and kill the host. Linux code says MSG_NOSIGNAL per
+        // send(); BSD sets it once on the fd. Belt and braces with the global
+        // SIGPIPE ignore in the `signal` handler — this one also covers the case
+        // where guest code never asked.
+        ::setsockopt(hfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
         int gfd = adopt_host_fd(hfd);
         std::printf("  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
         return (uint32_t)gfd;
@@ -1589,6 +1596,24 @@ void TrapLayer::register_builtins() {
                            "sigemptyset", "sigaddset", "signal", "kill", "waitpid",
                            "fork", "execlp"})
         t[nm] = [](Machine&, uint32_t) -> uint32_t { return 0; };
+
+    // signal() was in that stub list, which was harmless only while sockets were
+    // fake. libmvos main()'s FIRST act is signal(SIGPIPE, SIG_IGN) — the IPC layer
+    // depends on it — and swallowing that meant the HOST kept the default
+    // disposition. The moment a real peer disconnected mid-write the whole process
+    // died with SIGPIPE (observed: server exited 141 = 128+13 when a test client
+    // dropped). Honour the dispositions the guest actually asks for.
+    t["signal"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        int sig = (int)arg(m, esp, 0);
+        uint32_t h = arg(m, esp, 1);       // 0 = SIG_DFL, 1 = SIG_IGN, else handler
+        if (sig == 13 /*SIGPIPE on both Linux and BSD*/ && h == 1) {
+            ::signal(SIGPIPE, SIG_IGN);
+            std::printf("  [net] SIGPIPE ignored (guest requested)\n");
+        }
+        // Other signals stay stubbed: the guest's SIGALRM timer is delivered by
+        // our own scheduler, not by real host signals.
+        return 0;
+    };
 
     // setitimer(ITIMER_REAL) — guest cLinuxTimer. Host polls and calls
     // TimerSystem::Proc (normally SIGALRM → _TimerFunction).
