@@ -2532,6 +2532,34 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
             std::printf("  [input] mouse btn mask=%u→%u at %d,%d (Intuition pipe)\n",
                         prev, mouse_buttons_, mouse_x_, mouse_y_);
     } else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
+        // Alt+Enter (⌥Return on macOS — SDL maps Option to KMOD_ALT) toggles
+        // fullscreen. Handled here, ahead of every guest write below, and the
+        // Return is SWALLOWED: eKey 0x48 is a live game key, so leaking it would
+        // confirm whatever dialog is focused while the window changes under it.
+        //
+        // The matching release is swallowed too. Forwarding a release for a key the
+        // guest never saw pressed is the stale-key-state class that wedged the menu
+        // in G16, and the key matrix at Intuition+0x3c is exactly that kind of
+        // sticky state. Alt itself keeps forwarding normally (eKey 0x3b/0x3c), so
+        // the qualifier byte stays honest.
+        //
+        // Repeats ignored: holding the combo would otherwise thrash the mode.
+        // Not F11 — the game uses it. The synthetic AUTO_KEYS/soak events never set
+        // .mod, so no self-driver can trip this.
+        if (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+            e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER) {
+            if (e.type == SDL_KEYDOWN && (e.key.keysym.mod & KMOD_ALT) && !e.key.repeat) {
+                fs_toggle_swallow_ = true;
+                std::printf("  [video] Alt+Enter → %s\n",
+                            video_.is_fullscreen() ? "windowed" : "fullscreen");
+                video_.toggle_fullscreen();
+                return;
+            }
+            if (e.type == SDL_KEYUP && fs_toggle_swallow_) {
+                fs_toggle_swallow_ = false;
+                return;
+            }
+        }
         // eKeyCode is *not* a PC scancode. Table is KeyTableConvert in
         // libmvos_keyboard_x (XKeysym → dense enum). ProcessInputs drains
         // Intuition ring types 8 (down) / 0x10 (up); cVOEditRow only reacts

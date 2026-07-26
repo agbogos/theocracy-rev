@@ -168,6 +168,9 @@ private:
     // True while an SMPEG cutscene is on screen: gates the key mailbox below,
     // so it is only ever non-empty during a movie.
     bool movie_playing_ = false;
+    // Alt+Enter consumed a Return-down; swallow its release too so the guest key
+    // matrix never sees an unpaired release (the G16 stale-key-state class).
+    bool fs_toggle_swallow_ = false;
     // 8-byte guest mailbox {int keycode; int flags} drained by the VKeyboard
     // driver-table slot +0x0c stub. Host posts a key-down here; the cutscene
     // loop in External_PlayAnim polls that slot to decide whether to skip.

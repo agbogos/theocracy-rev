@@ -47,10 +47,10 @@ bool Video::open(int w, int h, int depth_code) {
         // The guest is 4:3 and modern panels are not, so the logical-size letterbox
         // leaves pillarbox bars — deliberate; stretching would distort the art.
         // Scale sampling: with a non-integer factor (800×600 → a Retina panel is
-        // ~3.2×) nearest makes pixels unevenly sized, which reads as shimmer on
-        // the UI. Linear is the better default, and is a no-op windowed where
-        // logical size == window size.
-        if (want_fs) SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+        // ~3.1×) nearest makes pixels unevenly sized, which reads as shimmer on
+        // the UI. The hint is consumed when a texture is created, and fullscreen is
+        // now reachable by hotkey from any start mode, so set it unconditionally.
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
         // ALLOW_HIGHDPI: without it macOS hands SDL the window's *point* size
         // (e.g. 1470×923 on a Retina panel), we render there, and the OS upscales
@@ -58,21 +58,21 @@ bool Video::open(int w, int h, int depth_code) {
         // the renderer's output is the real backing store (~2× those points), so
         // the guest's 800×600 is scaled once, straight to native.
         //
-        // Deliberately fullscreen-only. Windowed is the verified baseline and the
-        // fallback path, and HiDPI is where SDL's point-vs-pixel mouse mapping gets
-        // fiddly — no reason to put that risk on the mode that isn't upscaling.
-        // THEOC_NO_HIDPI=1 reverts (same escape-hatch convention as
-        // THEOC_LEGACY_SPRITE / THEOC_LEGACY_KEYMB).
+        // Applied to BOTH modes, unlike the first cut. This is a creation-time-only
+        // flag — SDL_SetWindowFullscreen cannot add it later — so if the window were
+        // built windowed-without-HiDPI, Alt+Enter would land in a *blurrier*
+        // fullscreen than THEOC_FULLSCREEN=1 gives, which is a latent bug report.
+        // Windowed gains a little sharpness on Retina from it too (it renders at the
+        // backing store rather than at point size). THEOC_NO_HIDPI=1 reverts, same
+        // escape-hatch convention as THEOC_LEGACY_SPRITE / THEOC_LEGACY_KEYMB.
         static const bool no_hidpi = [] {
             const char* e = std::getenv("THEOC_NO_HIDPI");
             return e && *e && std::strcmp(e, "0") != 0;
         }();
 
         Uint32 flags = SDL_WINDOW_SHOWN;
-        if (want_fs) {
-            flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-            if (!no_hidpi) flags |= SDL_WINDOW_ALLOW_HIGHDPI;
-        }
+        if (!no_hidpi) flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+        if (want_fs)   flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         SDL_Window* win = SDL_CreateWindow(
             "Theocracy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags);
         if (!win && want_fs) {
@@ -80,7 +80,8 @@ bool Video::open(int w, int h, int depth_code) {
             std::fprintf(stderr, "  [video] fullscreen failed (%s) — falling back to windowed\n",
                          SDL_GetError());
             win = SDL_CreateWindow("Theocracy", SDL_WINDOWPOS_CENTERED,
-                                   SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_SHOWN);
+                                   SDL_WINDOWPOS_CENTERED, w, h,
+                                   flags & ~(Uint32)SDL_WINDOW_FULLSCREEN_DESKTOP);
         }
         if (!win) {
             std::fprintf(stderr, "  [video] SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -117,28 +118,56 @@ bool Video::open(int w, int h, int depth_code) {
     h_ = h;
     depth_ = depth_code;
     fb_.assign((size_t)w * (size_t)h, 0);
-    if (fullscreen_) {
-        // Report the actual letterbox so a "why are there bars" question is
-        // answerable from the log alone (and so a wrong scale is visible here
-        // rather than only on screen).
-        int ow = 0, oh = 0, pw = 0, ph = 0;
-        SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);  // pixels
-        SDL_GetWindowSize((SDL_Window*)win_, &pw, &ph);            // points
-        double s = (ow && oh) ? ((double)ow / w < (double)oh / h ? (double)ow / w
-                                                                : (double)oh / h)
-                              : 1.0;
-        int vw = (int)(w * s), vh = (int)(h * s);
-        // Reporting points and pixels separately makes the HiDPI state obvious:
-        // equal means we are NOT on the backing store and the image is being
-        // resampled twice.
-        std::printf("  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
-                    " scaled %.2fx -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
-                    ow, oh, pw, ph, (ow > pw ? "on" : "off"), w, h, s, vw, vh,
-                    (ow - vw) / 2, (oh - vh) / 2, depth_code);
-    } else {
-        std::printf("  [video] window %dx%d depth-code %d (RGB565 framebuffer)\n",
-                    w, h, depth_code);
+    log_geometry(depth_code);
+    present();
+    return true;
+}
+
+void Video::log_geometry(int depth_code) {
+    if (!win_ || !ren_) return;
+    // Report the actual letterbox so a "why are there bars" question is answerable
+    // from the log alone, and so a wrong scale shows up here rather than only on
+    // screen. Points vs pixels also makes the HiDPI state obvious: equal means we
+    // are NOT on the backing store and the image is being resampled twice.
+    int ow = 0, oh = 0, pw = 0, ph = 0;
+    SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);  // pixels
+    SDL_GetWindowSize((SDL_Window*)win_, &pw, &ph);            // points
+    if (!fullscreen_) {
+        std::printf("  [video] window %dx%d (%dx%d px, hidpi %s) depth-code %d"
+                    " (RGB565 framebuffer)\n",
+                    w_, h_, ow, oh, (ow > pw ? "on" : "off"), depth_code);
+        return;
     }
+    double s = (ow && oh) ? ((double)ow / w_ < (double)oh / h_ ? (double)ow / w_
+                                                              : (double)oh / h_)
+                          : 1.0;
+    int vw = (int)(w_ * s), vh = (int)(h_ * s);
+    std::printf("  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
+                " scaled %.2fx -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
+                ow, oh, pw, ph, (ow > pw ? "on" : "off"), w_, h_, s, vw, vh,
+                (ow - vw) / 2, (oh - vh) / 2, depth_code);
+}
+
+bool Video::toggle_fullscreen() {
+    if (!win_ || !ren_) return false;
+    bool want = !fullscreen_;
+    if (SDL_SetWindowFullscreen((SDL_Window*)win_,
+                                want ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+        std::fprintf(stderr, "  [video] fullscreen toggle failed: %s\n", SDL_GetError());
+        return false;
+    }
+    fullscreen_ = (SDL_GetWindowFlags((SDL_Window*)win_) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+    if (!fullscreen_) {
+        // Coming back from fullscreen the window keeps whatever size it had before,
+        // which need not match the guest mode (movies are 640×480, the menu 800×600
+        // and a toggle can happen in either). Restore it explicitly so windowed is
+        // always 1:1 with the framebuffer.
+        SDL_SetWindowSize((SDL_Window*)win_, w_, h_);
+    }
+    // The renderer's output size just changed, and the 4:3 letterbox is derived
+    // from it — re-assert rather than trusting SDL to have recomputed.
+    SDL_RenderSetLogicalSize((SDL_Renderer*)ren_, w_, h_);
+    log_geometry(depth_);
     present();
     return true;
 }

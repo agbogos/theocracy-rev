@@ -214,14 +214,26 @@ results. Order below is **playability first, modernisation after**.
   in 640×480 / 800×600 space. Note `mvos.cfg`'s `[vmachine] fullscreen` is
   **inert** — the engine's fullscreen path ran through the X11 plugin's
   `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which we replaced wholesale.
-  - **HiDPI is on** (`SDL_WINDOW_ALLOW_HIGHDPI`, fullscreen only). Without it
+  - **`Alt+Enter` toggles fullscreen at runtime** — on macOS that is **⌥Return**
+    (SDL maps Option to `KMOD_ALT`; Command is `KMOD_GUI`). Deliberately not F11,
+    which the game itself uses. The `Return` is **swallowed** so the guest never
+    sees it — eKey `0x48` is a live game key and would confirm whatever dialog is
+    focused; its release is swallowed too, because an unpaired release into the
+    `Intuition+0x3c` key matrix is the stale-key-state class that wedged the menu
+    in G16. `Alt` itself still forwards, so the qualifier byte stays honest.
+    Key repeats are ignored. Self-drivers can't trip it — their synthetic events
+    never set `.mod`.
+  - **HiDPI is on for BOTH modes** (`SDL_WINDOW_ALLOW_HIGHDPI`). Without it
     macOS reports the window's *point* size, we render there, and the OS upscales
     again to the panel — two resamples. With it the renderer output is the real
     backing store, so the guest image is scaled once: measured 2940×1846 px
     (1470×923 pt), 800×600 at 3.08×, 239 px bars. The `[video]` line prints px,
     pt and `hidpi on/off`, so "equal px and pt" is the tell that it is off.
-    **`THEOC_NO_HIDPI=1`** reverts. Windowed deliberately stays non-HiDPI: it is
-    the verified baseline and the fallback path, and it does no upscaling.
+    **`THEOC_NO_HIDPI=1`** reverts. It covers windowed too (800×600 renders at
+    1600×1200) — not just a free sharpness win but *required*: `ALLOW_HIGHDPI` is
+    creation-time-only and `SDL_SetWindowFullscreen` cannot add it later, so a
+    window built without it would make `Alt+Enter` land in a blurrier fullscreen
+    than `THEOC_FULLSCREEN=1` gives.
 - `THEOC_START_SEC` default 600; `0` = unlimited (covers long intros / real play).
 - `THEOC_LOUD_ABORT=1` — trap guest abort()/Fatal with a backtrace + stop (debug).
 - Keyboard: letters/digits/arrows/modifiers/F-keys/enter/space/backspace; `[` `]`

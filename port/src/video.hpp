@@ -30,6 +30,11 @@ public:
     void present();
     void pump();
 
+    // Flip between borderless fullscreen and windowed, preserving the guest mode
+    // (the framebuffer and logical size are untouched — only the presentation
+    // scale changes). Returns false if SDL refused, leaving the mode as it was.
+    bool toggle_fullscreen();
+
     // Keep the window on screen for `seconds`, presenting/pumping, so a human
     // (or a demo run) can see it. Returns early if the window is closed.
     void keep_open_for(int seconds);
@@ -55,6 +60,10 @@ public:
     uint32_t fb_bytes() const { return (uint32_t)(fb_.size() * 2); }
 
 private:
+    // Report the present geometry (px vs pt, scale, bar widths) for the current
+    // mode. Shared by open() and toggle_fullscreen() so both paths log alike.
+    void log_geometry(int depth_code);
+
     void* win_ = nullptr;   // SDL_Window*
     void* ren_ = nullptr;   // SDL_Renderer*
     void* tex_ = nullptr;   // SDL_Texture*
