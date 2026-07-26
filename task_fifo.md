@@ -58,12 +58,23 @@ first, modernisation after**.
    dropped peer killed the host with SIGPIPE, because libmvos `main`'s
    `signal(SIGPIPE, SIG_IGN)` was hitting a stub.
 
-   **Remaining, in order:** `[network] enable=1` in `mvos.cfg`
-   → bring up server + 2 clients over loopback. The unknown is the netgame flow
-   itself (`NetGame_AssignTeams`, the team-info packet, lockstep sync), not the
-   transport. The packet format is already decoded — see
-   `docs/subsystems/multiplayer-and-factions.md` — so a malformed exchange is
-   diagnosable rather than opaque.
+   **Lobby: WORKING (G21).** `[network] enable=1`, then server + 2 clients as three
+   emulated processes on one Mac. Both clients connect to the real dedicated
+   server and **see each other**: distinct player ids, name/colour propagation,
+   agreement on the master, and master migration + `DeletePlayer` when one leaves.
+   Drivable unattended via `THEOC_CLICKS="65,360;350,245;505,361"` (Multiplayer →
+   entry → Join server) with `data/game/servers.txt` patched to `127.0.0.1`.
+   Fixed en route: `strrchr`/`strchr` (the netgame path is the only route that
+   reaches them) — back to 0 unimplemented.
+
+   **Next: a null call at `game 0x082bd6e7`.** Both clients end with
+   `Start FAULTED: UC_ERR_FETCH_UNMAPPED at eip=0`, with `0x082bd6e7` on the stack
+   — game code in the netgame region. Not an unimplemented import (0 of those), so
+   a genuine null function pointer / unset callback on the lobby path. **Needs
+   `theocracy.real` in Ghidra.** After that: actually starting a match, where
+   `NetGame_AssignTeams` and lockstep sync come in — the packet format is already
+   decoded (`docs/subsystems/multiplayer-and-factions.md`), so a malformed
+   exchange is diagnosable rather than opaque.
 
 ## Modernisation (deferred — after playability)
 

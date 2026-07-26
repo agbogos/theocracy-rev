@@ -820,6 +820,73 @@ real, and sockets additionally carry `SO_NOSIGPIPE` (the BSD equivalent of the
 per-send `MSG_NOSIGNAL` Linux code uses) so a write returns `EPIPE` instead.
 Verified with three abrupt client disconnects: exit 0, all three accepted.
 
+## G21 — netgame bring-up: server + 2 clients in a lobby (partial)
+
+`[network] enable=1` in `mvos.cfg`, then three emulated processes on one Mac.
+**Two clients join a lobby on the real dedicated server and see each other.**
+
+### Reproducing it
+
+```sh
+# 1. server
+DYLD_LIBRARY_PATH=/opt/homebrew/lib THEOC_SERVER=1 ./port/build/theoc
+# 2. each client — clicks Multiplayer, selects the server entry, Join server
+DYLD_LIBRARY_PATH=/opt/homebrew/lib THEOC_SKIP_MOVIES=1 \
+  THEOC_CLICKS="65,360;350,245;505,361" ./port/build/theoc
+```
+
+Two things make this drivable:
+
+- **Menu coordinates** come from `data/menu/menu.cfg` (XOR-encrypted; decrypt with
+  `tools/theocracy_crypt.py`): `multi 20 350` → click ~`65,360`, per the G17 offset
+  rule. The rest were read off a captured frame of the *TCP server selection*
+  screen: list entry ~`350,245`, **Join server** ~`505,361`.
+- **`data/game/servers.txt`** holds the server list — plaintext, `int32 count` +
+  a 40-byte address field + `int32`. It ships pointing at `192.168.0.1`; patching
+  the address field to `127.0.0.1` is exactly what the UI's "New entry" would
+  write, and avoids driving text entry to test. Original kept as `servers.txt.orig`
+  (the file is gitignored extracted data).
+
+### Result
+
+```
+CLIENT: gethostbyname('127.0.0.1') -> 127.0.0.1 ; connect(127.0.0.1:5042) ok
+SERVER: accept -> guest fd 4 from 127.0.0.1:61832
+        accept -> guest fd 5 from 127.0.0.1:61835
+c1: Packet(0): Welcome / Create player / MasterPlayer(0) / SetNameAndColor: 0,a
+    Packet(1): Create player / SetNameAndColor: 1,b        <- sees c2 join
+c2: Packet(1): Welcome / Create player / MasterPlayer(0) / SetNameAndColor: 1,b
+    Packet(165): MasterPlayer(1) / Packet(0): DeletePlayer <- master migrates on c1 exit
+```
+
+So the lobby has distinct player ids, per-player name/colour propagation, both
+peers agreeing on the master, and **master migration plus DeletePlayer** when one
+leaves. The engine also logs `No ipx, so going to the TCIPIP section` — the IPX
+probe fails and it falls through to TCP/IP, as intended.
+
+Note the server listens on **5042**, while the game's single-instance lock is
+**5043** — different ports, so the lock exemption (G19) and the server never
+interact.
+
+### Fixed en route: `strrchr`
+
+The first UNIMPLEMENTED trap in a long time — the netgame path is simply the only
+route that reaches it. The stub returned 0, guest code called through the NULL,
+and it faulted as a fetch at `eip=0`. Implemented `strrchr` **and** `strchr`;
+both must return a *guest* pointer into the string, not a host one. Both clients
+are back to **0 unimplemented**.
+
+### Still open — a null call at `game 0x082bd6e7`
+
+Both clients still end with `Start FAULTED: UC_ERR_FETCH_UNMAPPED at eip=0`, with
+`0x082bd6e7` on the stack as the return address — game code in the netgame region
+(`0x829xxxx–0x82cxxxx`). It is *not* an unimplemented import any more, so it is a
+genuine null function pointer or unset callback on the lobby path. This is the
+next thing to chase, and it needs `theocracy.real` loaded in Ghidra.
+
+Everything above the fault works, so the lobby is reachable and stable enough to
+iterate on.
+
 ## Build / run
 
 ```sh

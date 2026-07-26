@@ -1018,6 +1018,29 @@ void TrapLayer::register_builtins() {
         }
         return d;
     };
+    // strchr / strrchr return a POINTER INTO the guest string, so they must be
+    // computed as guest addresses, not host ones. First surfaced on the netgame
+    // path (the only route that reaches them): the stub returned 0, guest code
+    // called through the NULL result, and it faulted as a fetch at eip=0.
+    t["strchr"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t p = arg(m, esp, 0);
+        int c = (int)(arg(m, esp, 1) & 0xff);
+        if (!p) return 0;
+        std::string s = m.cstr(p);
+        size_t i = s.find((char)c);
+        if (i != std::string::npos) return p + (uint32_t)i;
+        return c == 0 ? p + (uint32_t)s.size() : 0;   // '\0' matches the terminator
+    };
+    t["strrchr"] = [](Machine& m, uint32_t esp) -> uint32_t {
+        uint32_t p = arg(m, esp, 0);
+        int c = (int)(arg(m, esp, 1) & 0xff);
+        if (!p) return 0;
+        std::string s = m.cstr(p);
+        size_t i = s.rfind((char)c);
+        if (i != std::string::npos) return p + (uint32_t)i;
+        return c == 0 ? p + (uint32_t)s.size() : 0;
+    };
+
     t["strlen"] = [](Machine& m, uint32_t esp) {
         return (uint32_t)m.cstr(arg(m, esp, 0)).size();
     };
