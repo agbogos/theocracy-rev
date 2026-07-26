@@ -15,6 +15,35 @@ first, modernisation after**.
 
 2. **Multiplayer** — sockets stubbed; untouched. Not implemented, not tested.
 
+   **Two-instance test: PASSED (2026-07-26), but for a reason that will not
+   survive the work.** Two `theoc` processes ran concurrently on one Mac with no
+   contention — both `exit=0`, 0 faults, 0 stalls, 0 unimplemented, both into
+   Realm Shell, each with its own SDL audio device; logs differ only by timer
+   jitter. **It passes because sockets are fake**: `bind` unconditionally returns
+   0, so both instances believe they hold the single-instance lock.
+   `cApplication::Start` binds `localhost:5043` and `Fatal`s if taken —
+   `"You can run only one Theocracy in the same time!"`, confirmed present in
+   `theocracy.real`. So making sockets real **breaks our own test harness**
+   unless the lock is deliberately exempted (identify it by port 5043 in `bind`
+   and keep it faked / per-instance). Decide that before writing socket code.
+
+   **Topology — use the shipped `server`, do not reimplement it.**
+   `data/cd/linux/server` is a **47 KB stripped ELF linking `libmvos.so` + libc**
+   — headless (no X11), and tiny next to the 6 MB game. Running it under our
+   existing dual-image `guestlink` means **the wire protocol never has to be
+   reverse-engineered**: both ends stay original code. `readme.linux` also settles
+   the spawn question — in-game server start was broken *on the original Linux
+   release* ("a bug in the GNU C library"), with the documented workaround being
+   to run `theoserver` manually. So `cTask::Launch` (fork/execlp) is **not** on
+   the path; we just launch the server as a third process.
+
+   Sketch, in order: real BSD sockets (guest↔host fd table, non-blocking +
+   a real `select`, which today always returns 0) → exempt the 5043 lock →
+   host mode to boot `server` instead of `theocracy.real` (headless: skip
+   video/audio/MPEG bring-up) → `[network] enable=1` in `mvos.cfg` → test as
+   server + 2 clients over loopback. The unknown is the netgame flow itself
+   (`NetGame_AssignTeams`, the team-info packet, lockstep sync), not the transport.
+
 ## Modernisation (deferred — after playability)
 
 3. **Decouple sim from render (frame-tied engine)** — the engine steps
