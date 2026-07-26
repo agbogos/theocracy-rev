@@ -14,6 +14,7 @@ Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linu
   - [porting/m1-loader.md](porting/m1-loader.md) — *superseded* (single-image loader); confirmed ELF facts + trap mechanism that carried into `guestlink`
   - [porting/m2-core.md](porting/m2-core.md) — *superseded* (pure-HLE native MVOS layer); source of RE'd struct layouts (vtables, singletons, `cTextFile`, render boundary)
   - [porting/vvc_x-backend.md](porting/vvc_x-backend.md) — the X11+MIT-SHM display/input plugin, fully decompiled; the video/input contract the SDL backend traps implement
+  - [porting/upscale-filtering.md](porting/upscale-filtering.md) — *deferred, assessment only*: why there is no true AA to be had (no geometry, no higher-res art), and the ~1–2h sharp-bilinear + scanline options for the "designed for CRT, looks aged" problem
 - **Reference**
   - [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) — **M0 deliverable**: full demangled API (252 classes / 2400 exports / the 232-symbol HLE boundary). Generated artifacts in `data/`; tooling in `tools/` (GNU-v2 demangler + inventory builder + `regen_api.sh`).
   - [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS** archive format + `tools/phls_extract.py` (extracts the CD game data → `data/game/`); the `RSA4096` XOR text-encryption (`tools/theocracy_crypt.py`)

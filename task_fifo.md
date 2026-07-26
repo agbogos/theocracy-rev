@@ -37,6 +37,15 @@ first, modernisation after**.
 5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
+6. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+   present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
+   the original display. Note there is **no true antialiasing available** (no
+   geometry to sample, no higher-res source art), so this is upscale filtering only.
+   Assessed at **~1–2 hours**, not really a track item: sharp-bilinear (nearest into
+   a 3× render target, then linear to screen — also wins back the ~5% area integer
+   scaling costs) plus an optional scanline knob. Full assessment, including the two
+   options deliberately rejected: `docs/porting/upscale-filtering.md`.
+
 ## Done
 
 - **Fullscreen + movie aspect-fit (G18, 2026-07-26)** — `THEOC_FULLSCREEN=1` opens
