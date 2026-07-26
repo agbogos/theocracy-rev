@@ -39,6 +39,22 @@ results. Order below is **playability first, modernisation after**.
 
 ## Done
 
+- **Fullscreen + movie aspect-fit (G18, 2026-07-26)** — `THEOC_FULLSCREEN=1` opens
+  borderless fullscreen at the desktop resolution, 4:3 preserved with pillarbox
+  bars; `Alt+Enter` (**⌥Return** on macOS) toggles at runtime. Cheap because
+  `SDL_RenderSetLogicalSize` was already in place — it letterboxes *and* makes SDL
+  hand back mouse coordinates in guest space, so there is no mapping code.
+  Verified by click-testing all four combinations (windowed/fullscreen × HiDPI
+  on/off): coordinates stay in 800×600 space. HiDPI is on in **both** modes because
+  `ALLOW_HIGHDPI` is creation-time-only, so a windowed-without-it window would make
+  the toggle land in a blurrier fullscreen than the env var gives.
+  Movies: the two shipped shapes (480×360 4:3, 608×300 widescreen) were blitted 1:1
+  top-left, leaving differently-shaped stale margins; now aspect-fitted and centred
+  with the bars blacked. The misleading part was that the old clamp read `cDisplay`'s
+  W/H, which hold the **movie's** dimensions while its pitch holds the **mode's** —
+  so the clamp could never fire. Full writeup: G18 in
+  `docs/porting/guest-libmvos.md`.
+
 - **RE-findings audit vs. the repaired DBs (2026-07-26)** — `FixBogusNoReturn.java`
   un-flagged **495** functions in libmvos and **277** in `theocracy.real`; both
   re-analysed, then every address `docs/` cites was re-checked. **5 wrong claims

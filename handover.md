@@ -1,6 +1,9 @@
 # Handover — Theocracy RE / macOS port
 
-_Last updated: 2026-07-22._ Read this first, then `docs/README.md`.
+_Last updated: 2026-07-26._ Read this first, then `docs/README.md`. Live task list:
+`task_fifo.md`. **Much of this file is a historical record** — the "Done so far"
+and "M2 core" sections describe the superseded pure-HLE approach and are kept only
+for the RE facts in them (see the pivot note below).
 
 ## Goal
 Make **Theocracy** (Philos Laboratories, 2000; Linux binaries in `data/cd/linux/`) run **natively on modern macOS** (Apple Silicon). Not a VM, not OS-level emulation shims, not a decompile-first rewrite — the game binary stays byte-for-byte intact and its i386 code runs under Unicorn.
@@ -16,7 +19,7 @@ Map **both** `theocracy.real` **and** the real `libmvos.so` under Unicorn; HLE-o
 - **libmvos owns `main()`** (game imports it) → our native runtime *becomes* `main()` and controls the whole boot. Boot sequence fully decompiled — `docs/subsystems/application-bootstrap.md`.
 
 ## Repo layout
-- `linux/` — the game binaries (see `docs/overview.md` for the inventory). **No game data** — it's on the CD, installed by `inst.linux`. A CD/ISO is still needed for anything past M1 (open blocker).
+- `data/cd/linux/` — the game binaries (see `docs/overview.md` for the inventory). The CD itself is in `data/cd/` and the extracted packs in `data/game/`, so the old "need a CD/ISO" blocker is **resolved** (see Game data below).
 - `docs/` — the canonical knowledge base. Update it; don't duplicate into ad-hoc notes. Start at `docs/README.md`.
 - `tools/` — reusable scripts (see below).
 - `data/` — generated API artifacts (regenerate, don't hand-edit).
@@ -29,7 +32,7 @@ Map **both** `theocracy.real` **and** the real `libmvos.so` under Unicorn; HLE-o
 - **M1 done**: `port/` is a working C++17 + Unicorn 2 host. It maps the ELF, traps all 232 imports (95 more JMP_SLOT/GLOB_DAT resolve to game-local exports), runs the 215 `.ctors` under emulation, calls `Init__12cApplication`, and all 9 subsystem flags go `0 → 1` — we execute the game's own code and reach its first callback. Build: `cmake -S port -B port/build && cmake --build port/build`; run: `DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc linux/theocracy.real`. Full writeup + confirmed ELF facts + M2 worklist: `docs/porting/m1-loader.md`. Reusable ELF fact-check: `tools/elf_facts.py` (needs `pyelftools`); copy-reloc inventory: `data/theocracy_copyrelocs.tsv`.
 
 ## Game data — UNBLOCKED
-CD is in `data/cd/` (user provided). The `.pck` packs are gzip-wrapped **PHLS** archives — cracked and extracted byte-exact by `tools/phls_extract.py`: `tdat.pck` → **7191 files** under `data/game/data/` (the Linux game data root: anim, map, locale, menu, sounds, scenario…). `tex.pck` is the Windows installer payload (skip). Format doc: `docs/reference/phls-format.md`. **No installed copy / Debian VM needed.** Two data caveats surfaced, one now solved: (a) `.cfg`/`.txt`/`.idx` files are **encrypted** behind an `RSA4096` header marker (binary assets plaintext) — **SOLVED**: symmetric XOR with keys `"theocracy sux"` (period 13) + `"mutant technology"` (period 17) over the post-header body (user supplied the recovered `XorBuff` → `tools/crypt/TheocracyEncDec.cpp`; ported to `tools/theocracy_crypt.py`, verified byte-exact; `phls_extract.py --decrypt` applies it). M2 ports `XorBuff` into the HLE `cTextFile`. (b) `mvos.cfg` isn't in the packs (installed by `inst.linux`) — still open. See `docs/open_questions.md` (#27 resolved, #28 open).
+CD is in `data/cd/` (user provided). The `.pck` packs are gzip-wrapped **PHLS** archives — cracked and extracted byte-exact by `tools/phls_extract.py`: `tdat.pck` → **7191 files** under `data/game/data/` (the Linux game data root: anim, map, locale, menu, sounds, scenario…). `tex.pck` is the Windows installer payload (skip). Format doc: `docs/reference/phls-format.md`. **No installed copy / Debian VM needed.** Two data caveats surfaced, one now solved: (a) `.cfg`/`.txt`/`.idx` files are **encrypted** behind an `RSA4096` header marker (binary assets plaintext) — **SOLVED**: symmetric XOR with keys `"theocracy sux"` (period 13) + `"mutant technology"` (period 17) over the post-header body (user supplied the recovered `XorBuff` → `tools/crypt/TheocracyEncDec.cpp`; ported to `tools/theocracy_crypt.py`, verified byte-exact; `phls_extract.py --decrypt` applies it). M2 ports `XorBuff` into the HLE `cTextFile`. (b) `mvos.cfg` isn't in the packs (installed by `inst.linux`) — **resolved**: we ship a hand-authored minimal `data/game/mvos.cfg`, reconstructed from the `EnvSystem` keys the boot actually reads. See `docs/open_questions.md` (#27 and #28 both resolved).
 
 ## M2 core — IN PROGRESS
 Native MVOS layer landed in `port/` (`mvos.{hpp,cpp}` + multi-region traps in `machine.*`). Details: `docs/porting/m2-core.md`. Done: **vtable synthesis** — the 79 `R_386_COPY` relocs now processed; 34 `__vt_*` tables (157 slots) filled with per-slot traps so guest virtual dispatch lands in `dispatch_vtable` (logs `[vtable] TODO name[slot]`); 10 pointer singletons backed by zeroed guest objects; first handlers (`cData_Bitmap`/`cData_AnimBitmap` ctors, `cMemBlock_::IsValid`, `GetBoundingBox`). Fault diagnostics now report `eip`+fault-addr. Result: `.ctors` faults **2→1**, Init still clean, 9 flags still 0→1. The `0x817e9d0` pointer-sprite ctor is fixed.
@@ -69,11 +72,13 @@ cmake -S port -B port/build && cmake --build port/build
 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc     # defaults to data/cd/linux/*
 ```
 
-### Next (see `task_fifo.md`, top = first)
-1. **Auto `R_386_COPY` singleton sync** in the linker (drop the manual sync in `main.cpp`)
-2. **abort/Fatal policy** — loud-abort mode so latent faults surface
-3. **Province-view perf** (last open functional bug; also slow on the Win VM)
-4. Long-session stability, breadth (full UI surface, multiplayer)
+### Next
+**`task_fifo.md` is the live list — read it there, not here.** The four items that
+sat in this slot (auto `R_386_COPY` sync, abort/Fatal policy, province-view perf,
+long-session stability + UI breadth) have all landed — see G12, G13,
+`docs/porting/frame-timing.md`, and the soak + QA pass. As of 2026-07-26 what
+remains is: a multi-hour stress harness, multiplayer, and the deferred
+modernisation items.
 ## Gotchas / conventions (will bite you)
 - **Shell is zsh with `noclobber` ON** — use `>|` to overwrite files in Bash calls, or redirects fail with "file exists".
 - **Ghidra is via MCP, ONE binary at a time**; the user switches the open file manually — ask them. Load the ghidra MCP tool schemas via ToolSearch (`select:mcp__ghidra__...`) before calling.

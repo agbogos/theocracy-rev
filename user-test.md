@@ -12,7 +12,24 @@ Two findings came out of the pass, both now tracked in `task_fifo.md`:
    bump arena, so the game eventually allocated over the live singleton.
    **Fixed** (see G14 in `docs/porting/guest-libmvos.md`).
 2. **Cursor leaves ghost trails** on some screens (Credits, Load Game) — render
-   artifact only, no gameplay effect. Still open.
+   artifact only, no gameplay effect. **Fixed** (see G17): `cSprite` runs a
+   two-slot double-buffer background restore, and our `OpenDisplay` points every
+   VVC GD slot at a single buffer.
+
+## Changed since this pass (2026-07-24) — needs covering in the next one
+
+Landed after the sheet was run, so **untested by this pass**:
+
+- **Fullscreen** — `THEOC_FULLSCREEN=1`, and `Alt+Enter` (**⌥Return**) to toggle at
+  runtime. 4:3 is preserved with pillarbox bars; HiDPI is on in both modes. Worth
+  checking: the toggle mid-cutscene and mid-game, and that mouse aim still feels
+  right scaled up (coordinates are confirmed correct, but *feel* is not).
+- **Movie aspect-fit** — cutscenes are now scaled to fit and centred instead of
+  landing top-left with stale pixels around them. Item 1's "wrong aspect" check is
+  the one to redo: the 608×300 cutscenes should show 82px letterbox bars, the
+  480×360 ones should fill the frame.
+- **Province view** — no longer the open perf bug this sheet describes (see item 8);
+  it was wall-clock coupling, not throughput, and now runs at its designed 12fps.
 
 Original brief: exercise the paths I can't verify headless (actual pixels, actual
 sound, real mouse/keyboard, "does it feel right"). Tick each item, jot anything
@@ -30,6 +47,7 @@ Env toggles:
 - `THEOC_AUTO_MENU=1` — auto-click Single Player (unattended smoke test)
 - `THEOC_START_SEC=N` — host wall-clock budget for the whole session (default 600; `0` = unlimited — use this for a real play session)
 - `THEOC_VIDEO_HOLD=N` — seconds to hold the window open after Start returns
+- `THEOC_FULLSCREEN=1` — borderless fullscreen, 4:3 pillarboxed (`Alt+Enter` toggles)
 
 For a real play session: `THEOC_START_SEC=0 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc`
 
@@ -104,7 +122,7 @@ Run **without** `THEOC_SKIP_MOVIES`.
 
 ## 8. Known-weak areas (confirm current state, don't expect perfect)
 
-- [x] **Province view** — open it; expect it to be **slow** (known bug, also slow on the Win VM). Note *how* slow and whether audio stutters there.
+- [x] **Province view** — *(premise since resolved: this was wall-clock coupling, not throughput. It now runs at the engine's designed 12fps; audio can still stutter there, tied to frame cost.)* Open it and note whether 12fps feels acceptable.
 - [x] **Long session** — if you play a while (10+ min), note any slowdown, audio drift, or crash
 - [ ] **Multiplayer** — NOT IMPLEMENTED (sockets stubbed); not tested
 
