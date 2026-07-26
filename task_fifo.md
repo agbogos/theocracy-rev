@@ -1,94 +1,49 @@
 # Task FIFO — Theocracy guest-libmvos
 
-Tracking only. Not a design doc. Remaining items, top = next. Playable
-single-player baseline is reached and the manual QA pass is complete; see
-`docs/porting/guest-libmvos.md` for what landed. Order below is **playability
-first, modernisation after**.
+Tracking only. Not a design doc. Remaining items, top = next. **Single-player
+and multiplayer are both playable and verified end-to-end**, and the manual QA
+pass is complete; see `docs/porting/guest-libmvos.md` for what landed. Order
+below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-1. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
+Three small ones first, all surfaced by the 2026-07-26 documentation pass
+(reading `port/src` structurally rather than chronologically — see
+`docs/porting/host-architecture.md`). Each is cheap now and confusing later.
+
+1. **Resolve `0x08598cec` by name.** The `HLE_SwapBuffers` handler
+   (`traps.cpp:3419`) falls back to a hardcoded **game**-space address when
+   libmvos's own `VVC` slot (`mvos+0xaefcc`) reads null. It is correct — the
+   copy-reloc table confirms it is `VVC` — but it is the last bare game address
+   baked into the host, and it would silently point at nothing in a differently
+   built executable. G20 de-hardcoded the whole boot path through
+   `guestlink::abs_sym`; this one was missed. Same fix.
+
+2. **Teardown never calls `CloseSubsystems`.** `kMvosCloseSubsystems`
+   (`mvos+0x950e0`) is declared in `main.cpp` and never used, so the ordered
+   shutdown libmvos's `main` performs — `TimerSystem`, `VVC`, `VKeyboard`,
+   `VMouse`, `SystemPointer`, `VCD`, `SoundCard` — does not happen; the process
+   just exits. Nothing observably breaks today. Decide whether to call it or to
+   delete the constant and write down why we skip it, rather than leaving a
+   declared-but-unused address implying it is handled.
+
+3. **Assert the trap-window page maths.** `add_code_traps` maps
+   `(nslots + 0xfff) & ~0xfff` and nothing checks the result against the next
+   region. Fine at today's ~119 HLE symbols (one page, and `VT_TRAP_BASE` sits
+   `0x01000000` above `TRAP_BASE`), so this is a one-line assert against a
+   failure that would otherwise be baffling.
+
+4. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
    path; a real multi-hour session is a human test. Needs a harness first:
    rate-limited logging (no gigabytes), periodic resource snapshots, and the
    watchdog armed, so a fault hours in is diagnosable from the log alone. Build
-   the harness, then the user drives.
-
-2. **Multiplayer** — transport done (G19); the netgame flow itself is untested.
-
-   **Two-instance test: PASSED (2026-07-26), but for a reason that will not
-   survive the work.** Two `theoc` processes ran concurrently on one Mac with no
-   contention — both `exit=0`, 0 faults, 0 stalls, 0 unimplemented, both into
-   Realm Shell, each with its own SDL audio device; logs differ only by timer
-   jitter. **It passes because sockets are fake**: `bind` unconditionally returns
-   0, so both instances believe they hold the single-instance lock.
-   `cApplication::Start` binds `localhost:5043` and `Fatal`s if taken —
-   `"You can run only one Theocracy in the same time!"`, confirmed present in
-   `theocracy.real`. So making sockets real **breaks our own test harness**
-   unless the lock is deliberately exempted (identify it by port 5043 in `bind`
-   and keep it faked / per-instance). Decide that before writing socket code.
-
-   **Topology — use the shipped `server`, do not reimplement it.**
-   `data/cd/linux/server` is a **47 KB stripped ELF linking `libmvos.so` + libc**
-   — headless (no X11), and tiny next to the 6 MB game. Running it under our
-   existing dual-image `guestlink` means **the wire protocol never has to be
-   reverse-engineered**: both ends stay original code. `readme.linux` also settles
-   the spawn question — in-game server start was broken *on the original Linux
-   release* ("a bug in the GNU C library"), with the documented workaround being
-   to run `theoserver` manually. So `cTask::Launch` (fork/execlp) is **not** on
-   the path; we just launch the server as a third process.
-
-   **Sockets: DONE (G19).** Real BSD sockets with the four Linux→BSD translations
-   (`sockaddr_in` layout, `O_NONBLOCK` 0x800→0x0004, Linux errno values, and the
-   engine never setting `sin_family` — it binds `{family=0, port=5043,
-   INADDR_ANY}`, which Linux tolerates and BSD rejects). `select` is real but its
-   timeout is **capped at 20 ms** because we are single-threaded.
-   `gethostbyname` is real (the ctor calls it first and gives up on NULL). The
-   5043 lock is faked so two clients can coexist; **`THEOC_REAL_LOCK=1`** restores
-   stock behaviour and proves the transport (real bind, real `EADDRINUSE`, guest
-   correctly Fatals). Two clients both reach Realm Shell, 0 faults, 0 unimplemented.
-
-   **Headless server: DONE (G20).** `THEOC_SERVER=1` boots the shipped
-   `data/cd/linux/server` under the same host/linker/HLE — 26 undefined symbols,
-   all already implemented. Headless is *derived*: the game copy-relocs all nine
-   `_12cApplication.*` flags, `server` carries only `Network`, so no
-   `_12cApplication.Video` symbol ⇒ no display bring-up. Boot path is now resolved
-   by name (`guestlink::abs_sym`) instead of hardcoded game addresses. It really
-   listens — `lsof` shows `TCP *:5042 (LISTEN)` and external clients are accepted.
-   **Server port 5042 ≠ the game's 5043 lock**, so no collision. Fixed en route: a
-   dropped peer killed the host with SIGPIPE, because libmvos `main`'s
-   `signal(SIGPIPE, SIG_IGN)` was hitting a stub.
-
-   **Lobby: WORKING (G21).** `[network] enable=1`, then server + 2 clients as three
-   emulated processes on one Mac. Both clients connect to the real dedicated
-   server and **see each other**: distinct player ids, name/colour propagation,
-   agreement on the master, and master migration + `DeletePlayer` when one leaves.
-   Drivable unattended via `THEOC_CLICKS="65,360;350,245;505,361"` (Multiplayer →
-   entry → Join server) with `data/game/servers.txt` patched to `127.0.0.1`.
-   Fixed en route: `strrchr`/`strchr` (the netgame path is the only route that
-   reaches them) — back to 0 unimplemented.
-
-   **Note on provenance:** the lobby packets were produced by the **user clicking
-   manually**, not by automation — the scripted path clicked the "Join server"
-   *text* rather than the small square button to its left (~`466,361`). Transport
-   results (connect/accept) are automated; lobby results were not.
-
-   **Map selection crash: FIXED.** Our `__xstat` wrote **96** bytes into an
-   **88**-byte Linux/i386 `struct stat`, running 8 bytes past the caller's stack
-   local and zeroing the saved EBP + return address. `cDirent::cDirent`
-   (`mvos+0x4c030`, calls `__xstat` twice) therefore `ret`-ed to 0 — a fault at
-   `eip=0` several frames from the damage. Only the netgame map dialog builds a
-   `cDirent`, so single-player never hit it. Now writes the real 88-byte layout,
-   with the **real** `st_mode` (the old code hardcoded `S_IFREG`, which would have
-   called every directory a file) and `st_size` at its correct `+0x2c`.
-   Found via two new instruments after three failed inferences: a **zero-GOT scan**
-   (reported 0, killing the GOT theory) and **`THEOC_TRACE=1`**, a 32-block ring
-   dumped on fault — which showed `mvos+0x4c1e8` was an *epilogue*, not a call.
-   Rule of thumb learned: `eip=0` with `EBP=0` means a **smashed frame**, not a
-   null call.
+   the harness, then the user drives. The existing instruments are catalogued in
+   `docs/porting/diagnostics.md`; the gap is log rate-limiting, since `THEOC_SOAK`
+   already snapshots resources per cycle.
 
 ## Modernisation (deferred — after playability)
 
-3. **Decouple sim from render (frame-tied engine)** — the engine steps
+5. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -101,14 +56,14 @@ first, modernisation after**.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-4. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+6. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+7. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-6. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+8. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
    present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
    the original display. Note there is **no true antialiasing available** (no
    geometry to sample, no higher-res source art), so this is upscale filtering only.
@@ -118,6 +73,38 @@ first, modernisation after**.
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
 ## Done
+
+- **Multiplayer — DONE, verified end-to-end by the user (2026-07-26).** A real
+  netgame ran successfully: past the lobby, past map selection, into a played
+  game. That closes the whole track, and it closes it *without* the wire protocol
+  ever being reverse-engineered — the decision to run the shipped
+  `data/cd/linux/server` under the same emulator, rather than reimplement it,
+  is what made both ends original code. What it took, in order:
+  - **Sockets (G19)** — real BSD transport with four Linux→BSD translations, each
+    of which fails *silently* rather than loudly: `sockaddr_in` layout,
+    `O_NONBLOCK` `0x800`→`0x0004`, Linux errno values, and the engine never
+    setting `sin_family` (it binds `{family=0, port=5043, INADDR_ANY}`, which
+    Linux tolerates and BSD rejects). `select`'s timeout is capped at 20 ms
+    because we are single-threaded. The port-5043 single-instance lock is faked
+    so two clients can share a Mac; `THEOC_REAL_LOCK=1` restores stock behaviour
+    and doubles as proof the transport works.
+  - **Headless server (G20)** — `THEOC_SERVER=1`, 26 undefined symbols, all
+    already implemented. Headless is *derived*, not declared: `server` carries no
+    `_12cApplication.Video` flag, so no display is ever brought up. Boot resolves
+    by name (`guestlink::abs_sym`) instead of hardcoded game addresses — which is
+    what item #1 above is the last remnant of.
+  - **Lobby (G21)** — server + 2 clients as three emulated processes on one Mac:
+    distinct player ids, name/colour propagation, agreement on the master, and
+    master migration + `DeletePlayer` on leave.
+  - **Map selection** — our `__xstat` wrote **96** bytes into an **88**-byte
+    Linux/i386 `struct stat`, running past the caller's stack local and zeroing
+    the saved EBP and return address, so `cDirent::cDirent` `ret`-ed to 0. Only
+    the netgame map dialog builds a `cDirent`, which is why single-player never
+    saw it. Cost three wrong inferences before two new instruments settled it;
+    the method is written up in `docs/reference/re-methodology.md` §7.
+  - Full narratives: G19–G21 in `docs/porting/guest-libmvos.md`. The protocol
+    itself, decoded for diagnosis rather than reimplementation:
+    `docs/subsystems/multiplayer-and-factions.md`.
 
 - **Fullscreen + movie aspect-fit (G18, 2026-07-26)** — `THEOC_FULLSCREEN=1` opens
   borderless fullscreen at the desktop resolution, 4:3 preserved with pillarbox
@@ -254,7 +241,7 @@ first, modernisation after**.
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #3 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #5 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and
@@ -290,7 +277,7 @@ rather than a mechanism:
   table, and nothing in the game depends on them.
 - **Known:** audio can stutter during the ~1s province-load compute spike (the
   emulator is genuinely busy and rarely yields). Steady state is clean — see
-  item #3 and `docs/porting/frame-timing.md`.
+  item #5 and `docs/porting/frame-timing.md`.
 
 Where the rest went: presentation (fullscreen, `Alt+Enter`, crisp-UI/smooth-video,
 HiDPI, movie aspect-fit) is G18 in `docs/porting/guest-libmvos.md`; the timer and

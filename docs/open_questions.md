@@ -49,14 +49,16 @@ understand in order to run it.*
 8. **Faction roster template** `DAT_08645240` (11 × 0x10) — name / color / type
    / AI per faction.
 9. **Realm-select UI** that writes `g_LocalFactionTable` (multiplayer only).
-29. **The netgame flow between lobby and battle** — the lobby works (G21: two
-    clients on the shipped dedicated server, ids/names/colours/master
-    migration), and `FUN_0829c300` is the whole session once it starts, but the
-    path connecting them is unread. Specifically: what happens on ready-up /
-    start, and **who dispatches `FUN_0829c300`** — neither it nor
-    `NetGame_AssignTeams` is called directly; both sit in function tables
-    (`0x85906a0` / `0x85907d4` / `0x84bccb4`), so entry is indirect. This is
-    the next thing the port actually walks into.
+29. **What dispatches the netgame session** — `FUN_0829c300` is the whole
+    multiplayer game start to finish, and `NetGame_AssignTeams` parses the team
+    info, but **neither is called directly**: both sit in function tables
+    (`0x85906a0` / `0x85907d4` / `0x84bccb4`), so entry is indirect and the
+    caller is unread. Note this is now a *pure RE* question, not a blocker —
+    multiplayer was verified end-to-end on 2026-07-26 (a real netgame ran
+    through lobby, map selection and play), so the path evidently works; we
+    simply have not read who takes it. Answering it would also close the
+    remaining half of #6, since the dispatcher is where the tick-sync receive
+    side is reachable from.
 
 ## Open — front-end / flow (game binary)
 

@@ -138,8 +138,8 @@ accurate and still cited; the *approach* is not current.
 | SimulationStep (one tick) | first pass done (units manager is the next target, open question #1) |
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp` |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted |
-| **macOS port — guest-libmvos (current)** | **PLAYABLE** — dual-image emulator; single-player runs (menu → realm → units, war, save/load), cutscenes with audio, 0 unimplemented traps. Multiplayer reaches a working lobby on the shipped dedicated server |
-| **macOS port — next** | Multi-hour stress harness → the netgame flow past the lobby; then modernisation (decouple sim from render). Full list: `../task_fifo.md` |
+| **macOS port — guest-libmvos (current)** | **PLAYABLE, single-player and multiplayer** — dual-image emulator; single-player runs end to end (menu → realm → units, war, save/load) with cutscenes and audio, 0 unimplemented traps. Multiplayer verified end-to-end 2026-07-26: the shipped dedicated server runs under the same emulator, so both ends stay original code and the wire protocol never had to be reversed |
+| **macOS port — next** | Three small host cleanups, then the multi-hour stress harness; then modernisation (decouple sim from render). Full list: `../task_fifo.md` |
 | RE findings audit | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Method distilled into [reference/re-methodology.md](reference/re-methodology.md) |
 | Everything else | mapped only (see [overview.md](overview.md)) |
 
