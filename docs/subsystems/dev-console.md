@@ -184,14 +184,15 @@ base `ap - 4`.
 ## Using it — the commands
 
 The shell is real and has a help system. **`help`** or **`?`** prints the command
-list for the screen you are on; several commands print their own syntax when
-called with no arguments. The shells are per-screen and reject each other's
-commands ("On realm screen you have different commands!").
+list for the screen you are on. The two shells are separate and reject each
+other's commands ("On realm screen you have different commands!"). An
+unrecognised word prints **`Unknown command.`** — which is itself useful: silence
+means something is broken upstream, not that you mistyped.
 
-`cShell` carries its name at `+0x00` (hence the `Shell Changed to Province Shell`
-log line), an echo flag at `+0x40` — set to **1** by both ctors, so input is
-echoed back as `> <line>` — and its vtable pointer at `+0x4c`, which is what
-`cShell::Parser` dispatches through (`vt+0xc` = `ProcessCommand`).
+`cShell` carries its name at `+0x00` (hence `Shell Changed to Province Shell` in
+the log), an echo flag at `+0x40` — set to **1** by both ctors, so input is echoed
+as `> <line>` — and its vtable at `+0x4c`, which `cShell::Parser` dispatches
+through (`vt+0xc` = `ProcessCommand`).
 
 | Shell | Ctor | vtable | `ProcessCommand` |
 |---|---|---|---|
@@ -199,24 +200,168 @@ echoed back as `> <line>` — and its vtable pointer at `+0x4c`, which is what
 | Province Shell | `0x81eed4b` | `0x838f4b4` | `0x81eed90` |
 | `cChatConsole` (netgame chat) | `0x81f3f13` | `0x83923a0` | `0x81f3e30` |
 
-**Realm screen:** `edit`, `save`, `tribe <0-7>`, `owner <0-7>`, `jewel <+/-value>`,
-`date <year> <month> <day>`, `mannaking <mana> [sphere]`, `missionstat`, `aiprov`,
-`set-def-price`, `ghost`, `prof`, `hello` (→ `Szia.`), `bye` / `exit` / `quit`.
-`save` writes `%s/init.dat` and is edit-mode only.
+### Realm screen
 
-**Province screen:** `mitem`, `allspell`, `myspell`, `mannaking`, `getdump`,
-`setdump`, `clrdump`, `allcheat`, `onlycheat`, `printid`, `language`, `teleport`,
-`dragon`, `allbuilding`, `punt`, `guard`, `prof`, `stat`, `maninfo`, `mapbitmap`,
-`mapfill`, `killtribe`, `edit`, `man`, `building`, `missionflag`, `values`,
-`move`, `destroy`, `delbld`, `resource`, `hero`, `anim`, `clearanim`, `saveanim`,
-`pos`.
+Its `help` is the better of the two — it is *categorised*, which a flat string
+dump hides:
 
-`mannaking` takes `<mana> [sphere]` with spheres `sun, moon, stars, nature, soul`.
-`allcheat` / `onlycheat` toggle `RealmCheat` and `ProvCheat`.
+```
+You can use the following developer commands:
+missionstat, ghost, prof, aiprov.
 
-Note that shell **output** goes to the console the shell's `+0x44` back-pointer
-names — the *log* console (the big box), not the input strip you type into. That
-is the intended split, and it is why the input strip can look inert.
+You can use the editor commands:
+edit, save, tribe, owner, jewel, date, mannaking, mem.
+
+On province screen you have different commands!
+```
+
+| Command | Advertised | Syntax / behaviour |
+|---|---|---|
+| `help`, `?` | — | prints the block above |
+| `missionstat` | dev | `missionstat [n]` — one mission, or all if no argument |
+| `ghost` | dev | no arguments |
+| `prof` | dev | profiler dump (`FUN_08072ca0`) |
+| `aiprov` | dev | hover a province first; prints `TRIBE / CAPITAL DISTANCE / OPTIMAL FORCE / ACTUAL FORCE`. With no province hovered it prints its own 3-line description |
+| `edit` | editor | **reports** edit mode, does not toggle it — see below |
+| `save` | editor | writes `<scenario>/init.dat`; refuses with `Only in edit mode.` |
+| `tribe` | editor | `tribe <num(0-7)>` — sets `g_GameSession+0x2d`, the local faction |
+| `owner` | editor | `owner <num(0-7)>` — reassigns the hovered province |
+| `jewel` | editor | `jewel <+/-value>` |
+| `date` | editor | `date <year> <month> <day>` |
+| `mannaking` | editor | `mannaking <mana> [sphere]`, spheres `sun, moon, stars, nature, soul`; no args prints syntax, a description and the current five values |
+| `mem` | editor | **advertised but has no handler** (see below) |
+| `hello` | *hidden* | replies `Szia.` |
+| `bye`, `exit`, `quit` | *hidden* | `exit(0)` — quits the process immediately, no save prompt |
+| `set-def-price` | *hidden* | resets default prices across every province |
+
+### Province screen
+
+Its `help` is a flat list with no categories:
+
+```
+mitem, allspell, myspell, mannaking, getdump, setdump, clrdump, allcheat,
+onlycheat, printid, language, teleport, dragon, allbuilding, punt, guard,
+prof, stat, maninfo, mapbitmap, mapfill, killtribe, edit, man, building,
+missionflag, values, move, destroy, delbld, resource, hero, anim, clearanim,
+saveanim, pos
+```
+
+36 advertised. Of these, `getdump`, `setdump` and `clrdump` **have no handler**
+(below). Only three carry any description of their own: `stat` (its own
+`Available commands:` block — `(nothing)` prints all statistics, `help`, `clear`),
+`mannaking` (as on realm), and `printid` (prints `Registration ID:[%s]`). The
+whole province handler contains exactly **one** `Syntax :` string, against the
+realm shell's five.
+
+### Undocumented literals
+
+`ProcessCommand` for the province shell compares against **57** distinct string
+literals, versus the 36 its help advertises. The extra ones are real — they are
+in the code — but they are a **mix of top-level commands and sub-arguments of
+other commands**, and the two cannot be reliably separated from the decompiler
+output, because it reuses variable names across the else-if ladder and the argv
+load is hoisted far from each comparison. Two independent classification passes
+disagreed, so no split is claimed here.
+
+- **Confirmed top-level and hidden** (read directly from the code, sitting in the
+  same ladder as `onlycheat`/`printid`): **`zila`**, **`bagoy`**, **`tomy`** —
+  Hungarian, and almost certainly developer nicknames used as personal shortcuts.
+- **Clearly sub-arguments** by form and by the commands they neighbour: `on`,
+  `off`, `enable`, `disable`, `add`, `sub`, `set`, `all`, `closest`, `null`,
+  `alfa`, `clear`.
+- **Unclassified** — present in the handler, absent from help, could be either:
+  `kill`, `capture`, `goto`, `fillpeople`, `canbuild`, `buildpercent`, `mapanim`,
+  `win`.
+
+Resolving the split properly needs the disassembly (tracking which argv slot each
+comparison's source register was loaded from), not the decompile — see
+[../reference/re-methodology.md](../reference/re-methodology.md) §5.
+
+### Commands advertised with no handler
+
+Four strings appear **only inside the help literal** and are never compared
+against in `ProcessCommand`:
+
+| Shell | Command |
+|---|---|
+| Realm | `mem` |
+| Province | `getdump`, `setdump`, `clrdump` |
+
+Typing them yields `Unknown command.` They are the residue of a help string that
+outlived its implementation — worth knowing before hunting for a handler that
+does not exist.
+
+## Edit mode
+
+**Edit mode is `g_GameSession+0x50`** — the byte
+[../structs/cGameSession.md](../structs/cGameSession.md) currently calls
+`bPaused`. That name is at best half right: it *does* gate the simulation, but it
+is set once at load and is the editor switch, not a pause control.
+
+Written in exactly two places, both at session construction:
+
+| Site | Source of the value |
+|---|---|
+| `GameSession_Construct(session, scenarioID, startPaused)` (`0x817af70`) | `+0x50 = param_3` |
+| `FUN_0817b610` — the load-game session ctor | `+0x50 = param_3`, passed down from `FUN_081a07f0(path, editFlag)` = **LoadGame** |
+
+`SetupGame(1)` → `LoadGame(…, 1)` = edit mode; `SetupGame(2)` → `LoadGame(…, 0)`
+= normal. The printfs name them: *"Scenario edit mode"* / *"Scenario normal
+mode"*.
+
+**What it does.** A byte-level scan of accesses through the `g_GameSession`
+pointer finds **65 reads and zero writes** — so it is decided at load and never
+toggles at runtime. Two effects are pinned down:
+
+- `RealmGameLoop`: `if (g_GameSession+0x50 == 0) SimulationUpdate(g_World)` —
+  **edit mode freezes the simulation**.
+- The console `save` command refuses unless it is set; `edit` merely *reports* it
+  (`You are in edit mode now.` / `You are not in edit mode.`) and cannot change it.
+
+The other 63 read sites are not individually characterised.
+
+**It is unreachable as shipped.** Both `SetupGame` call sites push `2`, and the
+scenario-start path (`FUN_08145550`) is called with `(2, 0)`. Nothing in the
+shipped menus selects mode 1.
+
+**Enabling it.** Because the flag is read live everywhere, writing
+`g_GameSession+0x50 = 1` at runtime turns edit mode on with no patching — the same
+shape as the console hook. Note that this necessarily freezes the simulation:
+edit mode *is* the frozen-sim state, not a cheat mode layered on normal play.
+
+## Cheats
+
+Three bytes in `.data`, all zero-initialised:
+
+| Address | Name (from its own log strings) | Read by |
+|---|---|---|
+| `0x84c9123` | **RealmCheat** | realm-view code — `0x81a97a0`, `0x81a9821`, `0x81a9b4f` |
+| `0x84c9124` | **ProvCheat** | `0x81b5be8`, and all three key dispatchers: `0x81e1bf0` (inside `InGame_HandleKeyCommand`, gating case `0x1c` = **Alt+Q** → `FUN_081d81d0`), `0x81e22d2` (Ctrl), `0x81e2366` (plain) |
+| `0x84c9125` | *(unnamed)* | toggled by `onlycheat`; readers not characterised |
+
+```c
+// onlycheat
+if (DAT_084c9123 == 0) { DAT_084c9123 = 1; Print("RealmCheat Enabled"); }
+if (DAT_084c9124 == 0) { DAT_084c9124 = 1; Print("ProvCheat Enabled");  }
+DAT_084c9125 = DAT_084c9125 ^ 1;
+```
+
+- **`onlycheat` enables**; **`allcheat` reports** status. The `… Disabled`
+  strings are status text, not actions.
+- There is **no write of `0`** to either flag anywhere in the binary. Once
+  enabled they stay enabled for the session; only `0x84c9125` can be toggled back.
+- The effect is mostly to **unlock extra in-game key commands** — the ProvCheat
+  readers are the key dispatchers. What each unlocked key actually does is **not
+  yet characterised**; the gates are known, the payloads are not.
+
+**Two orphaned enablers.** `FUN_080635a0` and `FUN_080635d0` both set
+`Intuition_Mode` (to `1` and `-1`) and turn **both** cheat flags on. Neither has a
+single reference anywhere — not a call, not a data word in any table (checked
+across `.rodata` and `.data`; the only hit is an `.eh_frame` entry, which is not a
+reference — see [../reference/re-methodology.md](../reference/re-methodology.md)
+§3). They are dead entry points, presumably a stripped command-line or debug-menu
+hook. In the shipped binary the console is the only way to turn cheats on, which
+is circular: you need the console, which needs multiplayer battle mode.
 
 ## Status
 
@@ -232,6 +377,20 @@ Alt+C closes, and the command sets respond on realm and province.
 - **The red console is not a bug.** It renders with `data/fonts/small_red.mft` —
   the console's own font, visible in the log as `SinglePalette font [...]`. An
   earlier draft of this doc filed it as an open cosmetic defect; it never was one.
+
+### Open
+
+- **Cheat payloads.** The gates are known (`RealmCheat` / `ProvCheat` and their
+  read sites); what the unlocked key commands actually *do* is uncharacterised.
+  `InGame_HandleKeyCommand` case `0x1c` (Alt+Q → `FUN_081d81d0`) is the one
+  concrete entry point identified so far.
+- **Province command classification.** 57 literals vs 36 advertised, with no
+  reliable split between top-level commands and sub-arguments. Needs disassembly,
+  not decompile.
+- **`g_GameSession+0x50` naming.** [../structs/cGameSession.md](../structs/cGameSession.md)
+  calls it `bPaused`; it is the edit-mode flag, set once at load and never written
+  at runtime. That doc still needs the correction.
+- **`0x84c9125`.** The third cheat byte `onlycheat` toggles; readers not traced.
 
 ## Cross-references
 
