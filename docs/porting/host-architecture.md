@@ -194,17 +194,46 @@ Read and write guest memory only through `m.read/write/r32/w32/cstr`. Return gue
   wrong as a general test, since it would also label a host region "game" —
   except that host regions all sit at or above `0x50000000` and are filtered
   earlier.
-- **`0x08598cec` is the `VVC` singleton**, and it is a legitimate address rather
-  than a mystery: `data/theocracy_copyrelocs.tsv` lists it as the 4-byte
-  `R_386_COPY` of libmvos's `VVC` pointer into the game's `.bss`. The
-  `HLE_SwapBuffers` handler (`traps.cpp:3419`) reads it as a fallback when
-  `m.r32(MVOS_BASE + 0xaefcc)` — libmvos's own slot for the same pointer —
-  yields null. Both are the *same storage* after `copy_to_game` rebinding, so
-  the fallback is belt-and-braces. It is still the only bare game address baked
-  into the host, and it should be resolved by name through
-  `guestlink::abs_sym("VVC")` the way `main.cpp`'s boot path already resolves
-  the singletons and the nine `cApplication` flags — the change that let the
-  `server` executable boot at all (G20).
+### Game-space addresses in the host
+
+**Resolved by name — done (2026-07-27).** Four singleton pointers (`VVC`
+`0x08598cec`, `Intuition` `0x08598454`, `VMouse` `0x08598c3c`, `VKeyboard`
+`0x08598b58`) used to be hardcoded in `traps.cpp`. All four are `R_386_COPY`
+globals listed in `data/theocracy_copyrelocs.tsv`, so the executable's dynamic
+symbol table names them. `main.cpp` now resolves all four through
+`guestlink::abs_sym` from whichever image was booted and hands them to
+`TrapLayer::set_game_globals`; the trap layer looks them up via `game_glob()`
+and falls back to libmvos's own slot as before. Boot prints
+`[link] game singleton globals resolved by name: 4/4`. This is the same fix that
+let the `server` executable boot at all (G20).
+
+**Two that cannot be, and why that is accepted.** `THEOC_CONSOLE` and
+`THEOC_EDIT` need two game-internal globals that are **not** copy-relocs and
+**not** dynamic symbols — `theocracy.real` is `.symtab`-stripped and none of its
+348 exports covers them:
+
+| Address | What | Used by |
+|---|---|---|
+| `0x085c0fe0` | `g_LogConsole` (`cVOConsole` in game `.bss`) | `maybe_redirect_console` |
+| `0x084c9610` | `g_GameSession` (`cGameSession*`) | `apply_edit_mode` |
+
+There is no name to resolve, so `abs_sym` cannot help and no amount of work makes
+these safe against a differently built executable. Both are accepted
+deliberately, with the reasoning recorded rather than left implicit:
+
+- They serve **developer features, not the port**. `THEOC_CONSOLE` and
+  `THEOC_EDIT` reach *into* the game to expose its own debug surface, which is a
+  step beyond "run the shipped binary faithfully". That scope creep was a
+  conscious call.
+- Both are **opt-in and default-off**. With the env vars unset, neither address
+  is ever read, so a mismatched executable behaves exactly as before.
+- Both are **guarded at use**: the console open is refused unless a `cShell` is
+  attached, and the edit stamp is skipped while `g_GameSession` is null. A wrong
+  address yields a no-op, not a corrupted write.
+
+If the game surface ever needs to be addressed properly, the answer is a
+signature scan or a per-build address table — not another bare constant. Full
+context: [../subsystems/dev-console.md](../subsystems/dev-console.md).
 - **`kMvosCloseSubsystems = 0x950e0`** (libmvos file offset) is declared in `main.cpp` but never used — teardown never calls it. Whether that matters is untested.
 - **`Machine::install_traps` vs `add_code_traps`.** The header calls `install_traps` a "back-compat shim". Both are live; `install_traps` is used only for the import window.
 - **`Video::keep_open_for`** presents outside the frame counter, which is why `stop_watchdog()` must be called before it. That ordering is a real coupling, not a stylistic one.

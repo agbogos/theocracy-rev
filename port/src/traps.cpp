@@ -2944,7 +2944,8 @@ void TrapLayer::tick_pointer_click_anim() {
 uint32_t TrapLayer::intuition_obj() const {
     if (!machine_) return 0;
     Machine& m = *machine_;
-    uint32_t intu = m.r32(0x08598454);
+    uint32_t intu = 0;
+    if (uint32_t g = game_glob("Intuition")) intu = m.r32(g);
     if (!intu && mvos_base_) intu = m.r32(mvos_base_ + 0xaefe4);
     return intu;
 }
@@ -3126,7 +3127,7 @@ static uint32_t sdl_scancode_to_ekey(SDL_Scancode sc) {
 void TrapLayer::on_sdl_event(const SDL_Event& e) {
     if (!machine_) return;
     Machine& m = *machine_;
-    uint32_t vmouse = m.r32(0x08598c3c);
+    uint32_t vmouse = game_glob("VMouse") ? m.r32(game_glob("VMouse")) : 0;
     uint32_t vptr   = m.r32(mvos_base_ + 0xaef9c);
 
     auto clamp = [&](int v, int lo, int hi) {
@@ -3237,7 +3238,7 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
         // Intuition ring types 8 (down) / 0x10 (up); cVOEditRow only reacts
         // to type 8. Shift qualifiers are eKey 0x37/0x38 (Intuition+0x73/74).
         uint32_t code = sdl_scancode_to_ekey(e.key.keysym.scancode);
-        uint32_t vkey = m.r32(0x08598b58);
+        uint32_t vkey = game_glob("VKeyboard") ? m.r32(game_glob("VKeyboard")) : 0;
         uint32_t intu = intuition_obj();
         bool down = (e.type == SDL_KEYDOWN);
         if (code && code <= 0x63) {
@@ -3309,7 +3310,7 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
         update_intuition_pointer(mouse_x_, mouse_y_, 0);
         // ReleaseAll: clear key matrices so nothing sticks after alt-tab.
         uint32_t intu = intuition_obj();
-        uint32_t vkey = m.r32(0x08598b58);
+        uint32_t vkey = game_glob("VKeyboard") ? m.r32(game_glob("VKeyboard")) : 0;
         std::vector<uint8_t> z(0x64, 0);
         if (intu) {
             m.write(intu + 0x3c, z.data(), 0x64);
@@ -3449,7 +3450,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             // Keep VVC GD slots alive (Refresh__7cSprite reads +0x10).
             if (gd_ && mvos_base_) {
                 uint32_t vvc = m.r32(mvos_base_ + 0xaefcc);
-                if (!vvc) vvc = m.r32(0x08598cec);
+                if (!vvc && game_glob("VVC")) vvc = m.r32(game_glob("VVC"));
                 if (vvc) {
                     m.w32(vvc + 0x00, gd_);
                     m.w32(vvc + 0x04, gd_);

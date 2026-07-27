@@ -7,19 +7,13 @@ below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-Three small ones first, all surfaced by the 2026-07-26 documentation pass
+Two small ones first, both surfaced by the 2026-07-26 documentation pass
 (reading `port/src` structurally rather than chronologically — see
 `docs/porting/host-architecture.md`). Each is cheap now and confusing later.
+The third of that set — resolving the hardcoded game singletons by name — is
+done; see Done below.
 
-1. **Resolve `0x08598cec` by name.** The `HLE_SwapBuffers` handler
-   (`traps.cpp:3419`) falls back to a hardcoded **game**-space address when
-   libmvos's own `VVC` slot (`mvos+0xaefcc`) reads null. It is correct — the
-   copy-reloc table confirms it is `VVC` — but it is the last bare game address
-   baked into the host, and it would silently point at nothing in a differently
-   built executable. G20 de-hardcoded the whole boot path through
-   `guestlink::abs_sym`; this one was missed. Same fix.
-
-2. **Teardown never calls `CloseSubsystems`.** `kMvosCloseSubsystems`
+1. **Teardown never calls `CloseSubsystems`.** `kMvosCloseSubsystems`
    (`mvos+0x950e0`) is declared in `main.cpp` and never used, so the ordered
    shutdown libmvos's `main` performs — `TimerSystem`, `VVC`, `VKeyboard`,
    `VMouse`, `SystemPointer`, `VCD`, `SoundCard` — does not happen; the process
@@ -27,13 +21,13 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
    delete the constant and write down why we skip it, rather than leaving a
    declared-but-unused address implying it is handled.
 
-3. **Assert the trap-window page maths.** `add_code_traps` maps
+2. **Assert the trap-window page maths.** `add_code_traps` maps
    `(nslots + 0xfff) & ~0xfff` and nothing checks the result against the next
    region. Fine at today's ~119 HLE symbols (one page, and `VT_TRAP_BASE` sits
    `0x01000000` above `TRAP_BASE`), so this is a one-line assert against a
    failure that would otherwise be baffling.
 
-4. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
+3. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
    path; a real multi-hour session is a human test. Needs a harness first:
    rate-limited logging (no gigabytes), periodic resource snapshots, and the
    watchdog armed, so a fault hours in is diagnosable from the log alone. Build
@@ -43,7 +37,7 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
 
 ## Modernisation (deferred — after playability)
 
-5. **Decouple sim from render (frame-tied engine)** — the engine steps
+4. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -56,14 +50,14 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-6. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+5. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-7. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+6. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-8. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+7. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
    present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
    the original display. Note there is **no true antialiasing available** (no
    geometry to sample, no higher-res source art), so this is upscale filtering only.
@@ -73,6 +67,20 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
 ## Done
+
+- **Game singleton addresses resolved by name (2026-07-27)** — closes the old
+  FIFO #1. `VVC`, `Intuition`, `VMouse` and `VKeyboard` were hardcoded in
+  `traps.cpp`; all four are `R_386_COPY` globals, so `main.cpp` now resolves them
+  through `guestlink::abs_sym` and passes them to `TrapLayer::set_game_globals`
+  (`[link] game singleton globals resolved by name: 4/4`). Verified end to end:
+  boot, display, scenario load, mouse and keyboard paths, 0 unimplemented.
+  The two addresses `THEOC_CONSOLE`/`THEOC_EDIT` need (`g_LogConsole`,
+  `g_GameSession`) **cannot** be resolved — not copy-relocs, not dynamic symbols,
+  and the game is `.symtab`-stripped. Accepted deliberately: they serve developer
+  features rather than the port, are default-off, and are guarded so a wrong
+  address is a no-op. Reasoning recorded in
+  `docs/porting/host-architecture.md`; not tracked here, because there is nothing
+  to do.
 
 - **Dev console working in single-player — `THEOC_CONSOLE=1` (2026-07-27).**
   **Alt+V** opens, **Alt+C** closes, on **both** the realm and province screens;
@@ -125,7 +133,7 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
     already implemented. Headless is *derived*, not declared: `server` carries no
     `_12cApplication.Video` flag, so no display is ever brought up. Boot resolves
     by name (`guestlink::abs_sym`) instead of hardcoded game addresses — which is
-    what item #1 above is the last remnant of.
+    what the singleton lookups in `main.cpp` now do for the whole host.
   - **Lobby (G21)** — server + 2 clients as three emulated processes on one Mac:
     distinct player ids, name/colour propagation, agreement on the master, and
     master migration + `DeletePlayer` on leave.
@@ -274,7 +282,7 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #5 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #4 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and

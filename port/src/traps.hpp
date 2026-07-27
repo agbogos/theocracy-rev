@@ -43,6 +43,15 @@ public:
     // mvos_base is guestlink::MVOS_BASE. Maps plugin trap window + guest FB.
     void install_plugins_and_video(Machine& m, uint32_t mvos_base);
 
+    // Game-space singleton pointers, resolved BY NAME in main.cpp. These are
+    // R_386_COPY globals, so the executable's dynamic symbol table names them
+    // and `guestlink::abs_sym` can find them in whatever image was booted —
+    // which is the point: a hardcoded game address silently points at nothing
+    // in a differently built executable. See docs/porting/host-architecture.md.
+    void set_game_globals(std::unordered_map<std::string, uint32_t> g) {
+        game_globals_ = std::move(g);
+    }
+
     // THEOC_CONSOLE=1: arm the in-game developer console (Alt+V opens it on
     // both the realm and province screens). No game-space patching — the open
     // is a host-driven guest call. See docs/subsystems/dev-console.md.
@@ -101,6 +110,13 @@ private:
     // which is which by calling send/recv vs read/write).
     int host_fd_of(int gfd);
     int adopt_host_fd(int hfd);
+
+    // name -> game-space address of the copy-reloc'd singleton pointer.
+    std::unordered_map<std::string, uint32_t> game_globals_;
+    uint32_t game_glob(const char* n) const {
+        auto it = game_globals_.find(n);
+        return it == game_globals_.end() ? 0 : it->second;
+    }
 
     std::vector<std::string> names_;
     std::vector<uint64_t>    hits_;

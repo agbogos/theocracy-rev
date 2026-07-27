@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "blit.hpp"
@@ -158,6 +159,20 @@ int main(int argc, char** argv) {
 
     if (L.traps && !headless)
         L.traps->install_plugins_and_video(m, guestlink::MVOS_BASE);
+
+    // Hand the trap layer the game-space singleton pointers, resolved BY NAME
+    // from whichever executable we booted. These are R_386_COPY globals, so the
+    // dynamic symbol table names them; hardcoding their addresses instead would
+    // silently point at nothing in a differently built image. See
+    // docs/porting/host-architecture.md, "Game-space addresses in the host".
+    if (L.traps) {
+        std::unordered_map<std::string, uint32_t> globs;
+        for (const char* n : {"VVC", "VKeyboard", "VMouse", "Intuition"})
+            if (uint32_t a = game_sym(n)) globs[n] = a;
+        L.traps->set_game_globals(globs);
+        std::printf("  [link] game singleton globals resolved by name: %zu/4\n",
+                    globs.size());
+    }
 
     // THEOC_CONSOLE=1: arm the dev console. Skipped for headless images
     // (`server` has no screens and no console).
