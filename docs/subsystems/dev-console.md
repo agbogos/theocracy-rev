@@ -463,16 +463,26 @@ Alt+C closes, and the command sets respond on realm and province.
   the console's own font, visible in the log as `SinglePalette font [...]`. An
   earlier draft of this doc filed it as an open cosmetic defect; it never was one.
 
-### Open
+### Open — and deliberately left so
 
-- **Cheat payloads — mostly done.** The ProvCheat key table is decoded (above);
-  what remains is the `0x84ca13e` selector's meaning, the letter-cluster
-  handlers individually, and everything `RealmCheat` gates (`0x81a97a0`,
-  `0x81a9821`, `0x81a9b4f` — untouched).
+The cheat/console surface below is **incomplete by choice**, not by oversight.
+The console itself works on both screens and the useful cheats are identified;
+the remainder is tangential to the port, so it is **not tracked in
+`../../task_fifo.md`** and nobody should expect it to be picked up in order.
+Recorded here so the next person knows where the edge is rather than
+rediscovering it.
+
+- **`RealmCheat` is entirely unexamined.** Three read sites — `0x81a97a0`,
+  `0x81a9821`, `0x81a9b4f`, all in realm-view code. The flag and its toggles are
+  understood; nothing about what it *unlocks* has been looked at.
+- **ProvCheat leftovers.** The `0x84ca13e` selector (keys `1`–`8`/`A` write 0..8
+  into it) — meaning unknown. The ~15 letter-cluster handlers are characterised
+  as a family but not read individually; reading all of them is the arcane part
+  and was explicitly stopped.
+- **`0x84c9125`.** The third cheat byte `onlycheat` toggles; readers not traced.
 - **Province command classification.** 57 literals vs 36 advertised, with no
   reliable split between top-level commands and sub-arguments. Needs disassembly,
   not decompile.
-- **`0x84c9125`.** The third cheat byte `onlycheat` toggles; readers not traced.
 
 ## Cross-references
 
