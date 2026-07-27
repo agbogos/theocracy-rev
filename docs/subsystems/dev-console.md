@@ -370,9 +370,8 @@ Print(DAT_084c9124 ? "ProvCheat Enabled" : "ProvCheat Disabled");
   additionally toggles `0x84c9125`. The `… Disabled` strings report the state
   *after* the toggle.
 - So cheats **can** be turned back off: run `allcheat` twice.
-- The effect is mostly to **unlock extra in-game key commands** — the ProvCheat
-  readers are the key dispatchers. What each unlocked key actually does is **not
-  yet characterised**; the gates are known, the payloads are not.
+- The effect is to **unlock extra in-game key commands** — the ProvCheat readers
+  are the key dispatchers. Decoded below.
 
 > **Corrected 2026-07-27.** This section previously said `allcheat` merely
 > reported status and that "there is no write of `0` to either flag anywhere in
@@ -382,6 +381,61 @@ Print(DAT_084c9124 ? "ProvCheat Enabled" : "ProvCheat Disabled");
 > `80 /6` (xor) group, so a read-modify-write read as "never written".
 > `tools/elfq.py xref-global` covers the whole `80 /n` group precisely because of
 > this.
+
+### What the cheat keys actually do
+
+`ProvCheat` gates three separate things. The big one is in the **plain-key**
+dispatcher (`FUN_081e2330`, i.e. no Ctrl and no Alt held) at `0x81e2366`:
+
+```
+81e2366: cmp byte [ProvCheat], 0
+81e236d: jz   0x81e65d6              ; cheats off -> ignore the key
+81e2373: mov  ecx,[ebp+0x14]         ; eKey
+81e2376: add  ecx,-2
+81e2379: cmp  ecx,0x57
+81e237c: ja   0x81e65d6
+81e2382: jmp  [0x838ab18 + ecx*4]    ; 88-entry jump table
+```
+
+So with cheats on, **bare keypresses in the province view** run cheat handlers.
+The table at `0x838ab18` covers eKey `0x02..0x59`; **42 of its 88 entries are
+live**, the rest go to the common exit. Identified by the strings they print:
+
+| Key | Effect |
+|---|---|
+| `V` | `Real visibility mode turned ON./OFF.` — fog of war |
+| `X` | `Surrender mode turned ON.  This is the real mode.` / `OFF.  This is the cheat mode.` |
+| `Z` | `Men tire while do something` / `Men don't tire while do something` — stamina |
+| `G` | `Governor is removed from province` |
+| `B` | `Only for test!!!` |
+| `F9` | `Swordsmen created` |
+| `F10` | `Swordsmen+Spearmen created` |
+| `F11` | `Swordsmen+Archers created` |
+| `F12` | `Spearmen+Archers created` |
+| `F8` | toggles `0x84c9fe6` and printfs the new state |
+| `F4` | touches `0x84c9125` (the third cheat byte) and calls `FUN_081d0e20`, the same helper the Alt dispatcher's quick path uses |
+
+Two families were left undecoded, both uniform enough to characterise without
+reading each one:
+
+- **`1`–`8` and `A`** — nine 16-byte stubs at `0x81e4210`, each
+  `mov word [0x84ca13e], N` for `N` = 0..8 then jump to the common exit. A
+  16-bit selector; what it selects is not chased.
+- **The letter cluster** (`S D F H J K L Q W E R T Y U I`) — near-identical
+  handlers ~`0x180` bytes apart, all opening on the world's unit/selection
+  arrays (`+0x40b30`, `+0x40dc0`, `+0x40dc4`). Same shape as the `F9`–`F12`
+  spawners, and laid out as a keyboard cluster, so almost certainly per-type
+  unit creation. Not individually confirmed.
+
+The other two gates are small:
+
+- **Ctrl dispatcher** (`0x81e22d2`): exactly one key — `cmp [ebp+0x14], 0x25` =
+  **Ctrl+Z**. Guarded on a further global `0x84c9ff8` being non-null, then sets
+  `[world+0x40dd4] = 6` and calls `FUN_0814e2b0`.
+- **Alt dispatcher**: `InGame_HandleKeyCommand` case `0x1c` = **Alt+Q** →
+  `FUN_081d81d0`.
+- **`0x81b5be8`**: a permission check that is bypassed when ProvCheat is on **and
+  Right-Shift is held** (`Intuition+0x3c+0x38`), skipping a test of `[obj+0x10]`.
 
 **Two orphaned enablers.** `FUN_080635a0` and `FUN_080635d0` both set
 `Intuition_Mode` (to `1` and `-1`) and turn **both** cheat flags on. They sit
@@ -411,10 +465,10 @@ Alt+C closes, and the command sets respond on realm and province.
 
 ### Open
 
-- **Cheat payloads.** The gates are known (`RealmCheat` / `ProvCheat` and their
-  read sites); what the unlocked key commands actually *do* is uncharacterised.
-  `InGame_HandleKeyCommand` case `0x1c` (Alt+Q → `FUN_081d81d0`) is the one
-  concrete entry point identified so far.
+- **Cheat payloads — mostly done.** The ProvCheat key table is decoded (above);
+  what remains is the `0x84ca13e` selector's meaning, the letter-cluster
+  handlers individually, and everything `RealmCheat` gates (`0x81a97a0`,
+  `0x81a9821`, `0x81a9b4f` — untouched).
 - **Province command classification.** 57 literals vs 36 advertised, with no
   reliable split between top-level commands and sub-arguments. Needs disassembly,
   not decompile.
