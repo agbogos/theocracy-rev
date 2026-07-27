@@ -74,24 +74,38 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
 
 ## Done
 
-- **Dev console unlocked in single-player — `THEOC_CONSOLE=1` (2026-07-27).**
-  It was never compiled out: `InGame_HandleKeyCommand` case `0x21` (**Alt+V**)
-  opens it only when `g_GameSession+0x2c != 0`, the *multiplayer battle* flag,
-  which both SP entry paths force-clear (and `GameSession_Construct` never
-  initialises at all — the clears are defensive, not a decision). Patched the
-  branch (`74 1f` → `90 90` at `0x81e20b9`) rather than forcing the flag, because
-  62 other sites read it. **The non-obvious half:** `g_CmdConsole` is never given
-  a `cShell` — both `ChangeShell` sites in the game pass the *log* console — so
-  `cConsole::Process`'s null check drops every typed command, in multiplayer too.
-  The host mirrors the log console's shell onto it per present. Patch site is
-  guarded by a 16-byte opcode signature since none of these addresses is a
-  dynamic symbol. **Interactive behaviour is not yet verified** — Alt+V, the
-  close chord, and the shell's command set need a human at the keyboard.
-  Write-up: `docs/subsystems/dev-console.md`. Also corrected two doc errors it
-  surfaced (exit key `0xe` is **C**, not Backspace — eKey is not a PC scancode;
-  `cShell` is `g_World+0x5d8`, not `+0x176` — an unscaled `int *` offset) and
-  added re-methodology §10 (libmvos vtables are zeros until `.rel.rodata` is
-  applied, which is also why virtual methods show no Ghidra xrefs).
+- **Dev console working in single-player — `THEOC_CONSOLE=1` (2026-07-27).**
+  **Alt+V** opens, **Alt+C** closes, on **both** the realm and province screens;
+  the shells' full command sets respond (`tribe`, `owner`, `jewel`, `date`,
+  `save`, `mannaking`, `allcheat`, …). Verified interactively.
+
+  The console was never compiled out — but three separate things were wrong, and
+  only the last one was in the game:
+  1. **`vsprintf` was an unimplemented host trap.** It is the first call in
+     `cConsole::Input`, so every command formatted into a buffer we never wrote.
+     The only printf-family symbol libmvos imports that the host lacked.
+  2. **Output went to a console nothing shows.** Commands print via
+     `Print(shell->+0x44, …)`, which `ChangeShell` points at `g_LogConsole`,
+     while the shipped opener opens `g_CmdConsole` — an object with no shell at
+     `+0x38` *and* no display role. It can neither execute nor show.
+  3. **The realm screen has no opener at any address.**
+     `InGame_HandleKeyCommand` is not a global hotkey handler; keys reach the
+     focused `cVObject` through its `vtable+0x10`, and only the province view's
+     widget routes Alt+key there. `RealmGameLoop`'s event drain dispatches
+     nothing at all.
+
+  So the final implementation **does not patch the game**: the host captures
+  Alt+V in the SDL hook and calls `Edit__10cVOConsole(g_LogConsole)` at the next
+  present, via the same one-redirect-per-present path the timer and sound slices
+  use. The earlier branch patch, opcode signature guard and per-present shell
+  mirror are all deleted. Write-up: `docs/subsystems/dev-console.md`.
+
+  Doc errors this corrected: exit key `0xe` is **C**, not Backspace (eKey is not
+  a PC scancode; the qualifier mask bit 1 is **Alt**); `cShell` is `g_World+0x5d8`,
+  not `+0x176` (unscaled `int *` offset). New methodology entries: §10 (libmvos
+  vtables are zeros until `.rel.rodata` is applied) and **§11 (run it and read
+  the log before reverse-engineering — both root causes here were host-side and
+  visible in output we already had)**.
 
 - **Multiplayer — DONE, verified end-to-end by the user (2026-07-26).** A real
   netgame ran successfully: past the lobby, past map selection, into a played

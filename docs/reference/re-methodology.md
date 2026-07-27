@@ -227,6 +227,33 @@ The same caution applies to `theocracy.real`, which resolves its vtables through
 
 ---
 
+## 11. If it runs, run it before you read it
+
+The dev-console work (2026-07-27) is the cautionary case. The feature was gated
+by one branch, and a large static pass went into proving *which* branch and what
+else read the same flag — analysis that was correct, already known, and not the
+blocker. Two runs then produced both real causes in seconds:
+
+- `[trap] TODO vsprintf` in the log — an **unimplemented host trap**, and the
+  first call in `cConsole::Input`. No amount of patching the guest could have
+  worked around it, and nothing in either binary hints at it, because the defect
+  was ours.
+- `SinglePalette font [data/fonts/small_red.mft]` — dissolved a "the console
+  turns red, something is wrong" theory that had already been written into a doc
+  as an open defect. It is just the console's font.
+
+Neither is discoverable by reading the binaries; both were in output we already
+had. The follow-on lesson is about *direction*: the question that cracked it was
+not "why is the input gated?" but **"where does the output go?"** — which led in
+three lookups to `Print(shell->+0x44, …)` and a console nothing ever shows.
+
+So, when the port can execute the path: run it with the flag on, read the log,
+and let the log choose what gets reverse-engineered. Reach for Ghidra when the
+log names something you cannot resolve — not before. This sits alongside §7: the
+running system is evidence, and it is usually cheaper evidence than the file.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:

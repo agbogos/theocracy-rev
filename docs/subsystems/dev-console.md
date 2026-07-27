@@ -119,43 +119,67 @@ bottom strip, read output in the big box" — `cShell+0x44` is a back-pointer to
 the console the shell reports *to*, and it points at the log console — but the
 input half was never connected.
 
+## Why the realm screen has no opener at all
+
+`InGame_HandleKeyCommand` is **not** a global hotkey handler. Key events reach
+whichever `cVObject` has focus, through that widget class's **`vtable+0x10`**
+slot (4-byte slots; the classes in this family share `+0x14`/`+0x18` PLT entries).
+Only two functions in the binary call `InGame_HandleKeyCommand`, and only one of
+them — `FUN_080bfff0`, at `vtable+0x10` of the vtable at `0x832c960` — belongs to
+the **province** view's widget.
+
+The realm map view is a different class (its object is built by `FUN_081a7180`
+in `RealmGameLoop`), and its handler never routes Alt+key anywhere near case
+`0x21`. `RealmGameLoop`'s own event drain (`g_RealmScreen+0x70..0x7c`) does not
+dispatch at all — it only `delete`s events of type `-1`.
+
+⇒ On the realm screen there is **no branch to patch, at any address**. Which is
+why the whole approach had to change.
+
 ## What `THEOC_CONSOLE=1` does
 
-Implemented in `TrapLayer::install_console_unlock` (`port/src/traps.cpp`), called
-from `main.cpp` after `guestlink::link`, plus a few lines in the `HLE_SwapBuffers`
-handler. Both halves are needed; either alone is useless.
+**It does not patch the game.** It calls the opener itself:
 
-**1. Neuter the gate** — `74 1f` → `90 90` at `0x81e20b9`, so the branch falls
-through into `push`/`call` unconditionally.
+```
+Alt+V (SDL event hook)  ->  console_open_pending_
+next present            ->  guest call Edit__10cVOConsole(g_LogConsole)
+```
 
-We patch the *branch* rather than forcing `+0x2c = 1` because **62 other sites
-read that flag**. Forcing it would also: invert case `0x14` (`0f 85` at
-`0x81e1eb5` — an order becomes disabled), switch on the battle-stat views
-(`FUN_08296b00`/`08296c90`), and change the province screen's button-palette
-creation and its teardown path. Patching the branch touches nothing else.
+`TrapLayer::enable_dev_console` arms it; `TrapLayer::maybe_redirect_console`
+services it from the present path, rewriting the trap return into a cdecl guest
+call the same way the timer and sound slices do (a nested `uc_emu_start` crashes
+Unicorn). Being screen-independent, it works on realm and province alike, and it
+needs no patch site, no opcode signature and no `g_GameSession+0x2c` games.
 
-**2. Mirror the shell** — copy `[g_LogConsole+0x38]` into `[g_CmdConsole+0x38]`
-once per present, so a typed line reaches `cShell::Parser` instead of being
-dropped by the null check. Per present rather than once, because the attached
-shell is *per screen* (see the table above) and is cleared again by
-`RestoreShell` on teardown; mirroring continuously tracks all of that for free.
-Only the command console's `+0x38` is written — the shell's own `+0x44`
-back-pointer is left pointing at the log console, so output still lands in the
-big box, which is the original two-console design.
+**Why `g_LogConsole` and not `g_CmdConsole`** (the strip the shipped call opens):
+the command console is a dead end on both halves — no shell at `+0x38` to execute
+with, and it is not the shell's print target either. `g_LogConsole` is both, so
+input, echo and output land in one visible box.
 
-### On the hardcoded addresses
+**Guard:** the open is refused unless `g_LogConsole+0x38` (the shell) is non-null.
+`ChangeShell` runs at realm/province entry and `RestoreShell` at exit, so that
+field is set exactly while a game screen is live; outside that window the
+`cConsoleVO` at `+0x44` is stale from a previous screen and `Edit` would link a
+dead widget. Alt+V elsewhere logs and does nothing.
 
-`g_CmdConsole`, `g_LogConsole`, `g_GameSession` and the patch site are **not
-dynamic symbols** — `theocracy.real` is `.symtab`-stripped and exports 348
-symbols, none of which is any of these. They cannot be resolved by name the way
-`guestlink::abs_sym` does for the boot path (G20), which is what
-[`../../task_fifo.md`](../../task_fifo.md) item #1 exists to finish for the last
-such address in the host.
+The `V` keypress is swallowed (down and up) exactly as `Alt+Enter` already is —
+eKey `0x21` is a live game key, and leaking it would also type a stray `v` into
+the console being opened.
 
-The mitigation is a **16-byte opcode signature check** before writing: the host
-reads `0x081e20b0..0x081e20bf`, compares against the exact `mov`/`cmp`/`jz`/`push`
-encoding above, and on mismatch prints both byte strings and declines to patch. A
-differently built executable gets a refusal, not a corrupted instruction.
+`g_LogConsole` (`0x85c0fe0`) is the only game address left in the host for this
+feature. It is not a dynamic symbol — `theocracy.real` is `.symtab`-stripped and
+none of its 348 exports covers it — so it cannot be resolved by name the way
+`guestlink::abs_sym` does for the boot path.
+
+### The host bug this uncovered
+
+`vsprintf` was an **unimplemented trap**. It is the first call in
+`cConsole::Input`, so every command formatted into a buffer the host never wrote,
+and nothing downstream could work — with or without any patch. It is the only
+printf-family symbol libmvos imports that the host lacked (`printf`, `fprintf`,
+`sprintf` were all present). Implemented in `register_builtins`: on i386 a
+`va_list` is just a pointer into the caller's stack, so it reuses `format()` with
+base `ap - 4`.
 
 ## Using it — the commands
 
@@ -196,20 +220,18 @@ is the intended split, and it is why the input strip can look inert.
 
 ## Status
 
-- **Verified interactively (2026-07-27):** **Alt+V** opens the console and
-  **Alt+H** closes it, typing works, and ENTER reaches
-  `cConsole::Input` → `Process` (`cConsoleVO::Key[ENTER] str[…]` in the log).
-- **Resolved — the qualifier mask.** `cVOConsole::SetExitKey(eKeyCode, unsigned
-  char)` stores the exit key at `cConsoleVO+0xb8` and a qualifier mask at `+0xbc`;
-  `cConsoleVO::Key` closes when `code == exitKey && (quals & mask) == mask`. Both
-  consoles use mask `2`, and Alt+H closing the command console (exit key `0x13` =
-  **H**) proves **bit 1 = Alt**. Bit 0 is Shift — the only bit
-  `cKeyboard::RawkeyToAscii` reads, selecting between two 100-entry tables. So the
-  log console's `(0x0e, 2)` is **Alt+C**.
-- **Open — cosmetic.** After ENTER the command console re-links as a plain VO
-  (`Show` → "Console: Show console for watching", `Unlinking`, `Linking as VO`)
-  and renders as a red box. Suspected palette-index difference between the
-  requester and VO paint paths rather than an error state; not yet chased.
+**Working on both screens, verified interactively (2026-07-27).** Alt+V opens,
+Alt+C closes, and the command sets respond on realm and province.
+
+- **The qualifier mask is resolved.** `SetExitKey` stores the key at
+  `cConsoleVO+0xb8` and a mask at `+0xbc`; `cConsoleVO::Key` closes when
+  `code == exitKey && (quals & mask) == mask`. Bit 0 is Shift (the only bit
+  `cKeyboard::RawkeyToAscii` reads — it selects between two 100-entry tables) and
+  **bit 1 is Alt**, established by Alt+H closing the command console (exit key
+  `0x13` = H, mask 2). So `g_LogConsole`'s `(0x0e, 2)` is **Alt+C**.
+- **The red console is not a bug.** It renders with `data/fonts/small_red.mft` —
+  the console's own font, visible in the log as `SinglePalette font [...]`. An
+  earlier draft of this doc filed it as an open cosmetic defect; it never was one.
 
 ## Cross-references
 

@@ -159,11 +159,10 @@ int main(int argc, char** argv) {
     if (L.traps && !headless)
         L.traps->install_plugins_and_video(m, guestlink::MVOS_BASE);
 
-    // THEOC_CONSOLE=1: unlock the SP dev console. Game-space patch, so it goes in
-    // after the image is linked and is skipped for headless images (`server` has
-    // no realm screen and no console). Declines itself on a byte mismatch.
+    // THEOC_CONSOLE=1: arm the dev console. Skipped for headless images
+    // (`server` has no screens and no console).
     if (L.traps && !headless && std::getenv("THEOC_CONSOLE"))
-        L.traps->install_console_unlock(m);
+        L.traps->enable_dev_console();
 
     // libmvos DT_INIT + .ctors, then game .ctors --------------------------------
     if (L.mvos_init) {

@@ -87,7 +87,7 @@ being rewritten or abandoned.
 - [subsystems/game-loop-and-simulation.md](subsystems/game-loop-and-simulation.md) — `RealmGameLoop` and `SimulationUpdate`'s fixed timestep with bounded catch-up; the dev-console gating.
 - [subsystems/simulation-step.md](subsystems/simulation-step.md) — one deterministic tick, and the argument for lockstep (command queue + shared seeded RNG + discrete ticks).
 - [subsystems/multiplayer-and-factions.md](subsystems/multiplayer-and-factions.md) — the 11-faction roster, the `+0x2c` battle-mode flag, the netgame session lifecycle, and the decoded team-info packet.
-- [subsystems/dev-console.md](subsystems/dev-console.md) — the developer console: never compiled out, gated behind one never-taken branch in single-player, and **half-wired even in multiplayer** (the command console is never given a `cShell`, so a typed command is dropped). The Alt+key dispatcher and eKey matrix, all four writers of the battle-mode flag, and what `THEOC_CONSOLE=1` patches.
+- [subsystems/dev-console.md](subsystems/dev-console.md) — the developer console: never compiled out, gated behind one never-taken branch in single-player, and **half-wired even in multiplayer** (the command console is never given a `cShell`, so a typed command is dropped). The Alt+key dispatcher and eKey matrix, all four writers of the battle-mode flag, why the realm screen has no opener at any address, and how `THEOC_CONSOLE=1` opens it without patching the game.
 - [structs/cGameSession.md](structs/cGameSession.md) — the session struct, full `0x58` layout with per-field evidence.
 - [structs/cTribe.md](structs/cTribe.md) — the faction struct (`0x84`): diplomacy relation codes, resources, the roster template.
 

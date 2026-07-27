@@ -1090,6 +1090,21 @@ void TrapLayer::register_builtins() {
         m.write(buf, s.c_str(), (uint32_t)s.size() + 1);
         return (uint32_t)s.size();
     };
+    // vsprintf(buf, fmt, va_list ap). On i386 cdecl a va_list is just a pointer
+    // into the caller's stack at the first vararg, so it reuses format() by
+    // handing it a base such that arg(base, 0) == [ap]: format reads
+    // esp + 4 + 4*i, hence ap - 4.
+    //
+    // This was the last unimplemented libc symbol libmvos actually calls, and it
+    // is the entry point of cConsole::Input — so every console command silently
+    // formatted into an unwritten buffer. Nothing downstream could work.
+    t["vsprintf"] = [this](Machine& m, uint32_t esp) {
+        uint32_t buf = arg(m, esp, 0);
+        uint32_t ap  = arg(m, esp, 2);
+        std::string s = format(m, m.cstr(arg(m, esp, 1)), ap - 4, 0);
+        m.write(buf, s.c_str(), (uint32_t)s.size() + 1);
+        return (uint32_t)s.size();
+    };
     t["sscanf"] = [](Machine& m, uint32_t esp) { return do_sscanf(m, esp); };
 
     t["__write"] = [](Machine& m, uint32_t esp) {
@@ -3200,6 +3215,23 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
                 return;
             }
         }
+        // THEOC_CONSOLE: Alt+V opens the dev console. Swallowed for the same
+        // reason as Alt+Enter — eKey 0x21 is 'V', a live game key, and leaking
+        // it would also type a stray 'v' into the console we are about to open.
+        // The actual open happens at present time (maybe_redirect_console); it
+        // cannot be done here because calling guest code from an SDL callback
+        // would nest uc_emu_start.
+        if (console_enabled_ && e.key.keysym.scancode == SDL_SCANCODE_V) {
+            if (e.type == SDL_KEYDOWN && (e.key.keysym.mod & KMOD_ALT) && !e.key.repeat) {
+                console_open_pending_ = true;
+                console_key_swallow_ = true;
+                return;
+            }
+            if (e.type == SDL_KEYUP && console_key_swallow_) {
+                console_key_swallow_ = false;
+                return;
+            }
+        }
         // eKeyCode is *not* a PC scancode. Table is KeyTableConvert in
         // libmvos_keyboard_x (XKeysym → dense enum). ProcessInputs drains
         // Intuition ring types 8 (down) / 0x10 (up); cVOEditRow only reacts
@@ -3418,12 +3450,6 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             // reaches cShell::Parser instead of being dropped by the null check
             // in cConsole::Process. Re-done per present because the attached
             // shell is per-screen and is cleared again by RestoreShell.
-            if (console_unlocked_) {
-                constexpr uint32_t kCmdConsole = 0x085c0f80;
-                constexpr uint32_t kLogConsole = 0x085c0fe0;
-                constexpr uint32_t kShellField = 0x38;  // cConsole+0x38 = cShell*
-                m.w32(kCmdConsole + kShellField, m.r32(kLogConsole + kShellField));
-            }
             // Keep VVC GD slots alive (Refresh__7cSprite reads +0x10).
             if (gd_ && mvos_base_) {
                 uint32_t vvc = m.r32(mvos_base_ + 0xaefcc);
@@ -3565,6 +3591,10 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             // One guest redirect per present (no nested uc_emu_start). Prefer
             // sound when its ~90ms slice is due so the 33ms timer cannot starve
             // the mixer; otherwise fire SIGALRM → TimerSystem::Proc.
+            // The console open goes first: it is a one-shot user action, so it
+            // can never starve either of the periodic ones.
+            if (maybe_redirect_console(m, esp))
+                return 0;
             if (maybe_redirect_sound(m, esp))
                 return 0;
             if (maybe_redirect_timer(m, esp))
@@ -3671,76 +3701,70 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
     }
 }
 
-// THEOC_CONSOLE=1 — unlock the in-game developer console in single-player.
+// THEOC_CONSOLE=1 — open the in-game developer console on demand (Alt+V).
 //
-// The console was never compiled out. Both cVOConsoles are constructed on every
-// realm/province screen, and Alt+V reaches InGame_HandleKeyCommand case 0x21,
-// which opens the command console *only* when g_GameSession+0x2c != 0. That byte
-// is the multiplayer/battle-mode flag, not a debug switch: NetGame_InitBattle
-// sets it, and both single-player entry paths (SetupGame, the scenario starter)
-// force-clear it. So in SP the console is one never-taken branch away.
+// The console was never compiled out. It is fully linked and both cVOConsoles
+// are Setup on every realm and province screen; what is missing is a way in.
 //
-// Two things have to happen, and the second is the non-obvious one:
+// The shipped opener is InGame_HandleKeyCommand case 0x21, gated on
+// g_GameSession+0x2c (the multiplayer battle flag, which single-player always
+// clears). Patching that branch works — but only on the *province* screen,
+// because InGame_HandleKeyCommand is not a global hotkey handler: it is reached
+// from per-widget cVObject key callbacks (vtable+0x10), and only the province
+// view's widget class routes Alt+key to it. The realm map view's widget has a
+// different handler entirely, so on realm there is no branch to patch. Its
+// event drain in RealmGameLoop only deletes type -1 and dispatches nothing.
 //
-// 1. Neuter the gate. We patch the branch rather than forcing +0x2c = 1 because
-//    62 other sites read that flag — case 0x14 inverts on it (an order would be
-//    disabled), battle-stat views switch on, and the province screen changes its
-//    button-palette and teardown paths. Patching the branch touches nothing else.
+// So we do not patch the game at all. We call the opener ourselves:
 //
-// 2. Give the command console a shell. g_CmdConsole's cShell (cConsole+0x38) is
-//    never set: both ChangeShell call sites in the whole game pass g_LogConsole.
-//    cConsole::Process is null-safe (`if (shell) cShell::Parser(...)`), so a
-//    typed line would be silently dropped — the console would open, edit, and do
-//    nothing. Mirroring the log console's shell pointer completes what looks like
-//    the intended two-console design: you type in the bottom input strip, and the
-//    shell's own back-pointer (cShell+0x44, still the log console) keeps output
-//    in the big log box. We re-mirror every present rather than once, because the
-//    game attaches a *different* shell per screen (realm g_World+0x5d8, province
-//    province+0x409dc) and clears it again via RestoreShell on teardown.
+//   Alt+V (SDL hook)  ->  console_open_pending_
+//   next present      ->  guest call Edit__10cVOConsole(g_LogConsole)
 //
-// These are bare game addresses — the thing FIFO #1 exists to get rid of — and
-// none of them is a dynamic symbol in this .symtab-stripped executable, so they
-// cannot be resolved by name the way guestlink::abs_sym does for the boot path.
-// The mitigation is to verify the exact opcode bytes first and refuse loudly on
-// a mismatch, so a differently built theocracy.real declines the patch instead of
-// corrupting a random instruction.
-bool TrapLayer::install_console_unlock(Machine& m) {
-    // 081e20b0  a1 10 96 4c 08     mov  eax, [g_GameSession]
-    // 081e20b5  80 78 2c 00        cmp  byte [eax+0x2c], 0
-    // 081e20b9  74 1f              jz   081e20da        <-- taken in SP: return
-    // 081e20bb  68 80 0f 5c 08     push g_CmdConsole
-    // 081e20c0  e8 ff cf e6 ff     call Edit__10cVOConsole
-    static constexpr uint32_t kGateSite = 0x081e20b0;
-    static const uint8_t kExpect[] = {
-        0xa1, 0x10, 0x96, 0x4c, 0x08,        // mov eax,[0x084c9610]
-        0x80, 0x78, 0x2c, 0x00,              // cmp byte [eax+0x2c],0
-        0x74, 0x1f,                          // jz  +0x1f
-        0x68, 0x80, 0x0f, 0x5c, 0x08,        // push 0x085c0f80
-    };
-    uint8_t have[sizeof kExpect];
-    try {
-        m.read(kGateSite, have, sizeof have);
-    } catch (...) {
-        std::fprintf(stderr, "  [console] THEOC_CONSOLE: cannot read %#x — not patching\n",
-                     kGateSite);
+// which is screen-independent and needs no patch site or byte signature.
+//
+// Why the *log* console and not g_CmdConsole (the bottom input strip the
+// shipped call opens): g_CmdConsole is a dead end. It is never given a cShell
+// (both ChangeShell call sites in the whole game pass g_LogConsole), so
+// cConsole::Process's null check drops the line; and every command's output
+// goes to Print(shell->+0x44, …), which ChangeShell points at g_LogConsole — a
+// console nothing ever shows. g_LogConsole is both the shell's owner and its
+// print target, so input, echo and output all land in one visible box.
+//
+// Closing chord is the object's own: SetExitKey(0x0e, mask 2) = Alt+C.
+void TrapLayer::enable_dev_console() {
+    console_enabled_ = true;
+    std::printf("  [console] THEOC_CONSOLE: dev console armed "
+                "(Alt+V opens, Alt+C closes; realm and province)\n");
+}
+
+// Service a pending Alt+V by rewriting the trap return into a guest call of
+// Edit__10cVOConsole(g_LogConsole), the same one-redirect-per-present trick the
+// timer and sound slices use (a nested uc_emu_start crashes Unicorn).
+//
+// Guarded on the console actually having a shell attached: ChangeShell runs at
+// realm/province entry and RestoreShell at exit, so +0x38 is non-zero exactly
+// while a game screen is live. Outside that window the cConsoleVO at +0x44 is
+// stale from a previous screen, and Edit would link a dead widget.
+bool TrapLayer::maybe_redirect_console(Machine& m, uint32_t esp) {
+    if (!console_open_pending_ || !mvos_base_) return false;
+    console_open_pending_ = false;
+
+    constexpr uint32_t kLogConsole = 0x085c0fe0;  // g_LogConsole (game .bss)
+    constexpr uint32_t kShellField = 0x38;        // cConsole+0x38 = cShell*
+    uint32_t shell = 0;
+    try { shell = m.r32(kLogConsole + kShellField); } catch (...) { return false; }
+    if (!shell) {
+        std::printf("  [console] Alt+V ignored — no shell attached "
+                    "(not in a realm/province game screen)\n");
         return false;
     }
-    if (std::memcmp(have, kExpect, sizeof kExpect) != 0) {
-        std::fprintf(stderr,
-                     "  [console] THEOC_CONSOLE: byte signature mismatch at %#x — this is not "
-                     "the theocracy.real this patch was derived from; not patching.\n    expected:",
-                     kGateSite);
-        for (uint8_t b : kExpect) std::fprintf(stderr, " %02x", b);
-        std::fprintf(stderr, "\n    found:   ");
-        for (uint8_t b : have) std::fprintf(stderr, " %02x", b);
-        std::fprintf(stderr, "\n");
-        return false;
-    }
-    // jz -> two NOPs: fall through into push/call unconditionally.
-    const uint8_t nops[2] = {0x90, 0x90};
-    m.write(kGateSite + 9, nops, sizeof nops);
-    console_unlocked_ = true;
-    std::printf("  [console] THEOC_CONSOLE: dev console unlocked in single-player "
-                "(Alt+V opens; MP gate at %#x nop'd)\n", kGateSite + 9);
+
+    uint32_t fn  = mvos_base_ + 0x43670;  // Edit__10cVOConsole (libmvos file off)
+    uint32_t ret = m.r32(esp);
+    uint32_t sp  = esp;
+    sp -= 4; m.w32(sp, kLogConsole);      // cdecl arg0 = this
+    sp -= 4; m.w32(sp, ret);              // return address
+    m.redirect_guest(fn, sp);
+    std::printf("  [console] Alt+V → Edit(g_LogConsole) shell=%#x\n", shell);
     return true;
 }
