@@ -3740,7 +3740,7 @@ void TrapLayer::enable_dev_console() {
 // normal. Every shipped call site passes normal, so the mode exists in the
 // binary but nothing ever selects it.
 //
-// 65 sites read that flag and none writes it through g_GameSession, so simply
+// 58 sites read that flag and none writes it through g_GameSession, so simply
 // stamping it is enough — no game code will clear it back.
 //
 // Re-applied per present rather than once, because the game builds a *new*

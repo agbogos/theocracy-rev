@@ -37,7 +37,7 @@ All RE-confirmed, and the reason the project is tractable at all:
 | `data/commit-log.md` | the whole commit history flattened. Untracked — generate it with `python3 tools/dump_commit_log.py` |
 | `docs/` | this knowledge base |
 | `port/` | the emulator host (C++17 + Unicorn 2 + SDL2 + libav) — see [porting/host-architecture.md](porting/host-architecture.md) |
-| `tools/` | reusable scripts: demangler, extractor, crypto, API inventory, Ghidra scripts |
+| `tools/` | reusable scripts: demangler, extractor, crypto, API inventory, Ghidra scripts, and [`elfq.py`](../tools/elfq.py) — query either binary straight from the ELF (xrefs, PLT map, relocation-aware vtables) without Ghidra |
 | `include/mvos_api.hpp` | generated signature reference (each method annotated with its file address) |
 | `task_fifo.md` | the live worklist — top item is next |
 

@@ -225,6 +225,12 @@ The same caution applies to `theocracy.real`, which resolves its vtables through
 `.rel.got`/`.rel.bss`; the host's `guestlink` applies all of this at load, so the
 *running* image is correct and only static file reads are exposed.
 
+**Use `tools/elfq.py vtable <addr>` rather than re-deriving this.** It scans every
+`.rel*` section, resolves each word to its symbol, and prints raw offsets instead
+of assuming an entry stride — g++ 2.x emits either 4-byte pointer arrays or
+8-byte `{delta, index, pfn}` structs depending on `-fvtable-thunks`, and these two
+binaries do not agree, so a hardcoded stride reads a delta as a function pointer.
+
 ---
 
 ## 11. If it runs, run it before you read it
@@ -269,3 +275,8 @@ Before a finding lands in `docs/` or in host code:
    any output get truncated on the way?
 7. If you read a vtable or a pointer table out of a file and got zeros, did you
    apply the relocations — from *every* `.rel*` section, not just `.rel.dyn`?
+8. If you hand-rolled a byte scan, does it decode the *whole* opcode group? An
+   `80 /n` scan that only knows `/7` (cmp) misses `/6` (xor), so a
+   read-modify-write toggle reads as "never written" — which is exactly how the
+   cheat flags were first documented wrong. Prefer `tools/elfq.py`, which was
+   built after that scan produced two wrong claims in committed docs.

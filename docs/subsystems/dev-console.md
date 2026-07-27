@@ -66,7 +66,7 @@ that one. There is no second way in.
 
 `g_GameSession+0x2c` is the **multiplayer/battle-mode flag**, not a debug switch.
 Scanning the game for accesses through the `g_GameSession` pointer (`0x84c9610`)
-gives 65: **62 reads, 4 writes**. The writes are the entire story.
+gives 65: **61 reads, 4 writes**. The writes are the entire story.
 
 | Site | Value | Function |
 |---|---|---|
@@ -310,7 +310,7 @@ Written in exactly two places, both at session construction:
 mode"*.
 
 **What it does.** A byte-level scan of accesses through the `g_GameSession`
-pointer finds **65 reads and zero writes** — so it is decided at load and never
+pointer finds **58 reads and zero writes** — so it is decided at load and never
 toggles at runtime. Two effects are pinned down:
 
 - `RealmGameLoop`: `if (g_GameSession+0x50 == 0) SimulationUpdate(g_World)` —
@@ -358,16 +358,35 @@ if (DAT_084c9124 == 0) { DAT_084c9124 = 1; Print("ProvCheat Enabled");  }
 DAT_084c9125 = DAT_084c9125 ^ 1;
 ```
 
-- **`onlycheat` enables**; **`allcheat` reports** status. The `… Disabled`
-  strings are status text, not actions.
-- There is **no write of `0`** to either flag anywhere in the binary. Once
-  enabled they stay enabled for the session; only `0x84c9125` can be toggled back.
+```c
+// allcheat  — toggles BOTH, then prints the resulting state
+al = DAT_084c9123; al ^= 1; DAT_084c9123 = al;   // 0x81ef5f7..0x81ef5ff
+DAT_084c9124 ^= 1;                               // 0x81ef605
+Print(al ? "RealmCheat Enabled" : "RealmCheat Disabled");
+Print(DAT_084c9124 ? "ProvCheat Enabled" : "ProvCheat Disabled");
+```
+
+- **`allcheat` toggles both flags**; **`onlycheat` force-enables both** and
+  additionally toggles `0x84c9125`. The `… Disabled` strings report the state
+  *after* the toggle.
+- So cheats **can** be turned back off: run `allcheat` twice.
 - The effect is mostly to **unlock extra in-game key commands** — the ProvCheat
   readers are the key dispatchers. What each unlocked key actually does is **not
   yet characterised**; the gates are known, the payloads are not.
 
+> **Corrected 2026-07-27.** This section previously said `allcheat` merely
+> reported status and that "there is no write of `0` to either flag anywhere in
+> the binary". Both were wrong. The toggle is a `xor` — `mov al,[flag]; xor al,1;
+> mov [flag],al` on RealmCheat and `xor byte [flag],1` on ProvCheat — and the
+> ad-hoc scan behind the original claim did not decode `88 /r` (store) or the
+> `80 /6` (xor) group, so a read-modify-write read as "never written".
+> `tools/elfq.py xref-global` covers the whole `80 /n` group precisely because of
+> this.
+
 **Two orphaned enablers.** `FUN_080635a0` and `FUN_080635d0` both set
-`Intuition_Mode` (to `1` and `-1`) and turn **both** cheat flags on. Neither has a
+`Intuition_Mode` (to `1` and `-1`) and turn **both** cheat flags on. They sit
+immediately after `RollingDemoFrame__Fv` (`0x8063540`), i.e. in the attract/demo
+-mode neighbourhood, which fits their setting of `Intuition_Mode`. Neither has a
 single reference anywhere — not a call, not a data word in any table (checked
 across `.rodata` and `.data`; the only hit is an `.eh_frame` entry, which is not a
 reference — see [../reference/re-methodology.md](../reference/re-methodology.md)
