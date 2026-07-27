@@ -2496,7 +2496,8 @@ void TrapLayer::enable_longrun() {
         if (n > 0) longrun_every_ = std::chrono::seconds(n);
     }
     longrun_t0_ = longrun_last_ = std::chrono::steady_clock::now();
-    longrun_heap_base_ = longrun_heap_start_ = heap_next_;
+    longrun_live_base_ = longrun_live_start_ = heap_live_;
+    longrun_heap_start_ = heap_next_;
     std::fprintf(stderr,
                  "  [longrun] session harness armed — [health] every %llds, "
                  "logs rate-limited\n", (long long)longrun_every_.count());
@@ -2542,15 +2543,25 @@ void TrapLayer::longrun_tick(Machine& m) {
     if (machine_) { try { esp = machine_->reg(UC_X86_REG_ESP); } catch (...) {} }
 
     double frontier_mb = (heap_next_ - guestmap::HEAP_BASE) / 1048576.0;
-    double grown_mb    = (double)(heap_next_ - longrun_heap_base_) / 1048576.0;
+    // Signed: the live set *falls* when a scenario is torn down or a save
+    // reloaded, and that drop is a real, informative event. The frontier can
+    // only ever rise, which is the other half of why it made a bad leak signal.
+    double grown_mb    = ((double)heap_live_ - (double)longrun_live_base_) / 1048576.0;
     double per_hour    = secs > 0 ? grown_mb * 3600.0 / secs : 0.0;
     double per_kframe  = longrun_frames_ ? grown_mb * 1000.0 / longrun_frames_ : 0.0;
     double fps         = secs > 0 ? longrun_frames_ / secs : 0.0;
     // Interval rates are wild during a scenario load (tens of MB in one
     // interval extrapolates to thousands of MB/h). The since-start figures are
     // the ones to read for a slow leak; the interval ones catch a sudden onset.
-    double total_mb    = (double)(heap_next_ - longrun_heap_start_) / 1048576.0;
+    double total_mb    = ((double)heap_live_ - (double)longrun_live_start_) / 1048576.0;
     double avg_per_hour = uptime > 0 ? total_mb * 3600.0 / uptime : 0.0;
+    // Headroom is a frontier question — it is the bump frontier that runs into
+    // the end of the arena — so report it from the frontier, not from live.
+    double front_grown  = (double)(heap_next_ - longrun_heap_start_) / 1048576.0;
+    double front_per_h  = uptime > 0 ? front_grown * 3600.0 / uptime : 0.0;
+    double headroom_h   = front_per_h > 0.01
+                        ? (guestmap::HEAP_SIZE / 1048576.0 - frontier_mb) / front_per_h
+                        : 0.0;
 
     // audio_underrun_ counts interleaved stereo *samples* and is reset by the
     // THEOC_FPS line, so we cannot reset it too without the two instruments
@@ -2563,15 +2574,24 @@ void TrapLayer::longrun_tick(Machine& m) {
                              ? underrun_raw - longrun_underrun_base_ : 0) / 2;
     longrun_underrun_base_ = underrun_raw;
 
+    // Wall-clock stamp so an out-of-band note ("reloaded a save at 21:44") can
+    // be lined up against the samples. Uptime alone cannot do that.
+    char clock[16] = "--:--:--";
+    { std::time_t t = std::time(nullptr); std::tm tmv{};
+      if (localtime_r(&t, &tmv)) std::strftime(clock, sizeof clock, "%H:%M:%S", &tmv); }
+
     std::fprintf(stderr,
-        "[health] up %.2fh | %.1f fps (cap %dms) | frames %llu\n"
-        "         heap %.2f MB live / %.2f MB frontier | grew %.3f MB total "
-        "(avg %.3f MB/h) | interval +%.3f MB/h, %.4f MB/1k frames\n"
-        "         rss %.1f MB (%+.1f since start) | esp %#x | stubs %u B | "
-        "fds %zu | audio q=%.2fs underrun-frames %llu | logs suppressed %llu\n",
-        uptime / 3600.0, fps, frame_cap_ms(), (unsigned long long)longrun_frames_total_,
-        heap_live_ / 1048576.0, frontier_mb, total_mb, avg_per_hour,
-        per_hour, per_kframe,
+        "[health] %s | up %.2fh | %.1f fps (cap %dms) | frames %llu\n"
+        "         heap live %.2f MB | grew %+.3f MB total (avg %+.3f MB/h) | "
+        "interval %+.3f MB/h, %+.4f MB/1k frames\n"
+        "         frontier %.2f MB of %.0f MB arena (+%.3f MB/h -> %.1f h headroom) | "
+        "rss %.1f MB (%+.1f since start)\n"
+        "         esp %#x | stubs %u B | fds %zu | audio q=%.2fs "
+        "underrun-frames %llu | logs suppressed %llu\n",
+        clock, uptime / 3600.0, fps, frame_cap_ms(),
+        (unsigned long long)longrun_frames_total_,
+        heap_live_ / 1048576.0, total_mb, avg_per_hour, per_hour, per_kframe,
+        frontier_mb, guestmap::HEAP_SIZE / 1048576.0, front_per_h, headroom_h,
         rss / 1048576.0, (double)(rss - longrun_rss_base_) / 1048576.0,
         esp, stub_next_ ? stub_next_ - guestmap::STUB_CODE : 0u, fds_.size(),
         qdepth / 44100.0, (unsigned long long)under_frames,
@@ -2580,7 +2600,7 @@ void TrapLayer::longrun_tick(Machine& m) {
 
     longrun_last_ = now;
     longrun_frames_ = 0;
-    longrun_heap_base_ = heap_next_;
+    longrun_live_base_ = heap_live_;
 }
 
 void TrapLayer::fps_tick(Machine& m) {

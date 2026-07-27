@@ -16,24 +16,51 @@ maths. See Done below. What remains under playability is a test, not a change.
 1. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
    itself is yours.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
    snapshot, rate-limits the repeatable log lines so an overnight session cannot
-   fill the disk, and arms the watchdog by default. All on stderr, so
-   `2>session.log` captures everything.
+   fill the disk, arms the watchdog, and lifts the `Start()` wall-clock budget.
+   All on stderr, so `2>session.log` captures everything.
 
    ```sh
    DYLD_LIBRARY_PATH=/opt/homebrew/lib \
      THEOC_LONGRUN=60 THEOC_FRAME_MS=50 ./port/build/theoc 2>session.log
+   python3 tools/plot_health.py session.log      # -> session-health.svg
    ```
 
-   Reading it afterwards: `interval +MB/h` catches a sudden onset, `avg MB/h` a
-   slow leak (it includes the one-time ~29 MB scenario load, so give it ~30 min
-   before trusting it), and **growth per 1k frames** is the cross-run figure —
-   the engine is frame-tied, so 20fps steps the sim ~1.67× faster than the 12fps
-   default and allocates proportionally more per wall-clock hour.
+   Reading it afterwards: plot it rather than reading 137 samples as text — the
+   question is about slope. All growth figures are on the **live set** (the
+   frontier is a high-water mark; see the Done entry below). `interval` catches
+   a sudden onset, `avg` a slow leak (it includes the one-time ~29 MB scenario
+   load, so give it ~30 min), and **growth per 1k frames** is the cross-run
+   figure — the engine is frame-tied, so 20fps steps the sim ~1.67× faster than
+   the 12fps default and allocates proportionally more per wall-clock hour.
 
    Known baseline to beat: the 20-cycle soak measured **+18 KB/cycle** of guest
    heap, linear, i.e. ~7000 cycles to exhaust the 128 MB arena. Anything steeper
    over hours is new. Not yet built, and only worth building if a leak shows up:
    an allocation-site histogram, which is the only way to attribute one.
+
+   **2.28 h drive (2026-07-27, hand-played, most functions exercised) — a real
+   leak, ~7 MB/h.** 137 samples. Guest heap live **24.6 → 53.5 MB**, and the fit
+   past warm-up is **+7.23 MB/h live / +8.20 MB/h frontier**, dead linear across
+   117 samples — i.e. **~8.9 h before the 128 MB arena is exhausted.** Nothing
+   else moved: fps 19.2–19.6 flat for the whole session, stubs 144 B, fds 2,
+   0 suppressed, no fault, no abort, no watchdog stall. ESP took four values but
+   they recur and return (`0x6fffc240` at 0.03 h *and* 2.12 h), so no stack
+   drift — worth noting the 20-cycle soak's "ESP identical" was an artifact of
+   sampling one point in a scripted loop; across free play it is a game-state
+   indicator, not a leak signal. A host RSS drop of 79 MB at 1.87 h was the
+   user reloading a save, not a buffer lifetime bug.
+
+   **Two lessons, both about being wrong.** First, the 10-minute run this
+   replaced looked like it was *plateauing* and was read that way — it was warm-up,
+   and ten minutes could not tell the two apart. Second, the harness's own growth
+   figures were computed off the frontier and read `+0.000 MB/h` in 105 of the
+   137 samples *while this leak was running*; fixed, and written up in
+   `docs/porting/diagnostics.md`, "Live set vs. frontier".
+
+   Next run should confirm the slope survives the metric fix before anyone
+   chases it — and the reload annotation will partition the session so
+   per-activity rates can be separated. Then the allocation-site histogram,
+   which is the only way to attribute it.
 
 ## Modernisation (deferred — after playability)
 
@@ -67,6 +94,33 @@ maths. See Done below. What remains under playability is a test, not a change.
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
 ## Done
+
+- **`[health]` growth measured on the live set, not the frontier (2026-07-27)** —
+  the frontier is a *high-water mark*. Before G15, when `free()` was a no-op, it
+  tracked the live set exactly; once the allocator started reclaiming, it stopped
+  moving as soon as freed blocks were reused. Every growth figure in `[health]`
+  was derived from it, so on the 2.28 h session **105 of 137 samples read
+  `interval +0.000 MB/h` while the live set was climbing 7.2 MB/h**. Growth is now
+  signed and taken from `heap_live_` (a *drop* — teardown, save reload — is real
+  information the frontier cannot represent); the frontier is reported as a level
+  with its own rate and the resulting arena headroom, which is genuinely a
+  frontier question. `[health]` also gained a wall-clock stamp so out-of-band
+  notes can be aligned to samples. Written up in `docs/porting/diagnostics.md`,
+  "Live set vs. frontier"; the general lesson is `frame-timing.md`'s — **when an
+  instrument reads exactly zero, confirm it can be non-zero before believing it.**
+  New: `tools/plot_health.py` (stdlib-only, emits SVG) fits the slope and flags
+  live-set drops, because the trend is not visible by reading samples.
+
+- **`THEOC_LONGRUN` no longer capped at ten minutes (2026-07-27)** — the harness
+  armed the watchdog but left `THEOC_START_SEC` at its 600s default, which is
+  sized for "boot, look at it, exit". So the multi-hour session harness ended
+  every session at 10 minutes, and ended it with `Start (host Start timeout —
+  still in game)` — a line that reads like a fault when nothing had gone wrong.
+  Found by the first person to actually drive it. `THEOC_LONGRUN` now defaults
+  `THEOC_START_SEC=0` the same way it defaults the watchdog, unless set
+  explicitly. **Lesson, and the reason this is written down:** a harness that
+  configures *some* of the knobs its own purpose depends on is worse than one
+  that configures none, because the one it missed presents as a result.
 
 - **Trap-window page maths asserted (2026-07-27)** — closes the last of the three
   2026-07-26 cleanups. `Machine::add_code_traps` (`port/src/machine.cpp`) now

@@ -272,7 +272,14 @@ private:
     std::chrono::steady_clock::time_point longrun_t0_{}, longrun_last_{};
     uint64_t longrun_frames_ = 0;          // frames since the last [health]
     uint64_t longrun_frames_total_ = 0;
-    uint32_t longrun_heap_base_ = 0;    // frontier at the last [health]
+    // Growth is measured on the LIVE set, not the frontier. The frontier is a
+    // high-water mark: since the G15 allocator rewrite gave free() real
+    // reclamation it stops moving as soon as freed blocks are reused, so a
+    // frontier-based rate reads 0.000 through a session that is leaking. It is
+    // still tracked, because headroom against the 128 MB arena is a frontier
+    // question — but it is reported as a level, never as the leak signal.
+    uint32_t longrun_live_base_ = 0;    // live set at the last [health]
+    uint32_t longrun_live_start_ = 0;   // live set when the harness armed
     uint32_t longrun_heap_start_ = 0;   // frontier when the harness armed
     size_t   longrun_rss_base_ = 0;
     uint64_t longrun_underrun_base_ = 0;

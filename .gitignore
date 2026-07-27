@@ -34,3 +34,5 @@ __pycache__/
 
 # ── Profiling / run logs ──────────────────────────────────────────────────
 *.log
+# tools/plot_health.py output — regenerate it from the log
+*-health.svg

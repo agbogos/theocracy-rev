@@ -189,6 +189,16 @@ int main(int argc, char** argv) {
             putenv(wd);
             std::fprintf(stderr, "  [longrun] THEOC_WATCHDOG defaulted to 30s\n");
         }
+        // ...and lift the Start() budget, for the same reason. Its 600s default
+        // is sized for "boot, look at it, exit", so leaving it in place caps a
+        // multi-hour session at ten minutes and ends it with a line that reads
+        // like a fault ("host Start timeout") when nothing went wrong. Measured:
+        // a session driven with the documented invocation stopped at 0.17h.
+        if (!std::getenv("THEOC_START_SEC")) {
+            static char ss[] = "THEOC_START_SEC=0";
+            putenv(ss);
+            std::fprintf(stderr, "  [longrun] THEOC_START_SEC defaulted to unlimited\n");
+        }
         L.traps->enable_longrun();
     }
 
