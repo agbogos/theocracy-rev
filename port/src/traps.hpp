@@ -43,6 +43,11 @@ public:
     // mvos_base is guestlink::MVOS_BASE. Maps plugin trap window + guest FB.
     void install_plugins_and_video(Machine& m, uint32_t mvos_base);
 
+    // THEOC_CONSOLE=1: unlock the in-game developer console in single-player.
+    // Game-space patch, so it is a no-op on any image whose bytes do not match.
+    // Returns true if the patch went in. See docs/subsystems/dev-console.md.
+    bool install_console_unlock(Machine& m);
+
     // Guest trap address for an imported symbol (TRAP_BASE + slot), or 0 if the
     // symbol isn't imported. Lets the host invoke an import handler directly.
     uint32_t trap_addr(const std::string& name) const {
@@ -223,6 +228,9 @@ private:
     std::vector<SoftThread> soft_threads_;
     bool sound_main_patched_ = false;
     bool redirecting_sound_ = false;
+    // THEOC_CONSOLE: once the MP gate is patched out, mirror the game's cShell
+    // onto the command console every present (see install_console_unlock).
+    bool console_unlocked_ = false;
     std::chrono::steady_clock::time_point next_sound_slice_{};
     void patch_sound_main_oneshot(Machine& m);
     // If a soft thread needs a slice, rewrite trap return into Entry(arg).

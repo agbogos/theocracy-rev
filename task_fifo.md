@@ -74,6 +74,25 @@ Three small ones first, all surfaced by the 2026-07-26 documentation pass
 
 ## Done
 
+- **Dev console unlocked in single-player — `THEOC_CONSOLE=1` (2026-07-27).**
+  It was never compiled out: `InGame_HandleKeyCommand` case `0x21` (**Alt+V**)
+  opens it only when `g_GameSession+0x2c != 0`, the *multiplayer battle* flag,
+  which both SP entry paths force-clear (and `GameSession_Construct` never
+  initialises at all — the clears are defensive, not a decision). Patched the
+  branch (`74 1f` → `90 90` at `0x81e20b9`) rather than forcing the flag, because
+  62 other sites read it. **The non-obvious half:** `g_CmdConsole` is never given
+  a `cShell` — both `ChangeShell` sites in the game pass the *log* console — so
+  `cConsole::Process`'s null check drops every typed command, in multiplayer too.
+  The host mirrors the log console's shell onto it per present. Patch site is
+  guarded by a 16-byte opcode signature since none of these addresses is a
+  dynamic symbol. **Interactive behaviour is not yet verified** — Alt+V, the
+  close chord, and the shell's command set need a human at the keyboard.
+  Write-up: `docs/subsystems/dev-console.md`. Also corrected two doc errors it
+  surfaced (exit key `0xe` is **C**, not Backspace — eKey is not a PC scancode;
+  `cShell` is `g_World+0x5d8`, not `+0x176` — an unscaled `int *` offset) and
+  added re-methodology §10 (libmvos vtables are zeros until `.rel.rodata` is
+  applied, which is also why virtual methods show no Ghidra xrefs).
+
 - **Multiplayer — DONE, verified end-to-end by the user (2026-07-26).** A real
   netgame ran successfully: past the lobby, past map selection, into a played
   game. That closes the whole track, and it closes it *without* the wire protocol

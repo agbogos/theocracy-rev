@@ -117,6 +117,7 @@ Not diagnostics, but they shape every run and belong in one list.
 | `THEOC_START_SEC` | seconds | **600**; `0` = unlimited; negative clamps to 0 | Host wall-clock budget for the entire `Start()` call (intros + menu + play). Not an in-game timer. A timeout while the window is still open is reported as "host Start timeout — still in game" and counted as a live session, not a failure. |
 | `THEOC_VIDEO_HOLD` | seconds | **2** | How long the window is held open after `Start` returns, so a final frame can be read. Previously visible only inside a sample command line. |
 | `THEOC_FULLSCREEN` | set, non-empty, not `"0"` | off | Borderless fullscreen at the desktop resolution (`FULLSCREEN_DESKTOP`, never an exclusive mode switch); 4:3 is preserved with pillarbox bars. Falls back to windowed if creation fails. `Alt+Enter` (⌥Return) toggles at runtime. |
+| `THEOC_CONSOLE` | presence | off | Unlocks the in-game developer console in single-player (**Alt+V**). Two game-space edits: NOPs the multiplayer gate in `InGame_HandleKeyCommand` case `0x21`, and mirrors the log console's `cShell` onto the command console each present so typed commands actually execute. Verifies a 16-byte opcode signature first and declines loudly on a mismatch — these are bare game addresses that no symbol can resolve. Skipped for headless images. Full chain: [../subsystems/dev-console.md](../subsystems/dev-console.md). |
 
 ---
 

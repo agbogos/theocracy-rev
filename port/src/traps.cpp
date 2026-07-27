@@ -3413,6 +3413,17 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         //   SwapBuffers__4cVVC (us), AfterSwapBuffer (restore under-cursor).
         // So the real cSprite is already composited onto the LFB here.
         if (video_.is_open()) {
+            // THEOC_CONSOLE: mirror whatever cShell the game has attached to the
+            // log console onto the command console, so a typed line actually
+            // reaches cShell::Parser instead of being dropped by the null check
+            // in cConsole::Process. Re-done per present because the attached
+            // shell is per-screen and is cleared again by RestoreShell.
+            if (console_unlocked_) {
+                constexpr uint32_t kCmdConsole = 0x085c0f80;
+                constexpr uint32_t kLogConsole = 0x085c0fe0;
+                constexpr uint32_t kShellField = 0x38;  // cConsole+0x38 = cShell*
+                m.w32(kCmdConsole + kShellField, m.r32(kLogConsole + kShellField));
+            }
             // Keep VVC GD slots alive (Refresh__7cSprite reads +0x10).
             if (gd_ && mvos_base_) {
                 uint32_t vvc = m.r32(mvos_base_ + 0xaefcc);
@@ -3658,4 +3669,78 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
         m.write(at, &ret, 1);
         std::printf("  [HLE] nop'd PushMouseInput @%#x (SDL owns Intuition pipe)\n", at);
     }
+}
+
+// THEOC_CONSOLE=1 — unlock the in-game developer console in single-player.
+//
+// The console was never compiled out. Both cVOConsoles are constructed on every
+// realm/province screen, and Alt+V reaches InGame_HandleKeyCommand case 0x21,
+// which opens the command console *only* when g_GameSession+0x2c != 0. That byte
+// is the multiplayer/battle-mode flag, not a debug switch: NetGame_InitBattle
+// sets it, and both single-player entry paths (SetupGame, the scenario starter)
+// force-clear it. So in SP the console is one never-taken branch away.
+//
+// Two things have to happen, and the second is the non-obvious one:
+//
+// 1. Neuter the gate. We patch the branch rather than forcing +0x2c = 1 because
+//    62 other sites read that flag — case 0x14 inverts on it (an order would be
+//    disabled), battle-stat views switch on, and the province screen changes its
+//    button-palette and teardown paths. Patching the branch touches nothing else.
+//
+// 2. Give the command console a shell. g_CmdConsole's cShell (cConsole+0x38) is
+//    never set: both ChangeShell call sites in the whole game pass g_LogConsole.
+//    cConsole::Process is null-safe (`if (shell) cShell::Parser(...)`), so a
+//    typed line would be silently dropped — the console would open, edit, and do
+//    nothing. Mirroring the log console's shell pointer completes what looks like
+//    the intended two-console design: you type in the bottom input strip, and the
+//    shell's own back-pointer (cShell+0x44, still the log console) keeps output
+//    in the big log box. We re-mirror every present rather than once, because the
+//    game attaches a *different* shell per screen (realm g_World+0x5d8, province
+//    province+0x409dc) and clears it again via RestoreShell on teardown.
+//
+// These are bare game addresses — the thing FIFO #1 exists to get rid of — and
+// none of them is a dynamic symbol in this .symtab-stripped executable, so they
+// cannot be resolved by name the way guestlink::abs_sym does for the boot path.
+// The mitigation is to verify the exact opcode bytes first and refuse loudly on
+// a mismatch, so a differently built theocracy.real declines the patch instead of
+// corrupting a random instruction.
+bool TrapLayer::install_console_unlock(Machine& m) {
+    // 081e20b0  a1 10 96 4c 08     mov  eax, [g_GameSession]
+    // 081e20b5  80 78 2c 00        cmp  byte [eax+0x2c], 0
+    // 081e20b9  74 1f              jz   081e20da        <-- taken in SP: return
+    // 081e20bb  68 80 0f 5c 08     push g_CmdConsole
+    // 081e20c0  e8 ff cf e6 ff     call Edit__10cVOConsole
+    static constexpr uint32_t kGateSite = 0x081e20b0;
+    static const uint8_t kExpect[] = {
+        0xa1, 0x10, 0x96, 0x4c, 0x08,        // mov eax,[0x084c9610]
+        0x80, 0x78, 0x2c, 0x00,              // cmp byte [eax+0x2c],0
+        0x74, 0x1f,                          // jz  +0x1f
+        0x68, 0x80, 0x0f, 0x5c, 0x08,        // push 0x085c0f80
+    };
+    uint8_t have[sizeof kExpect];
+    try {
+        m.read(kGateSite, have, sizeof have);
+    } catch (...) {
+        std::fprintf(stderr, "  [console] THEOC_CONSOLE: cannot read %#x — not patching\n",
+                     kGateSite);
+        return false;
+    }
+    if (std::memcmp(have, kExpect, sizeof kExpect) != 0) {
+        std::fprintf(stderr,
+                     "  [console] THEOC_CONSOLE: byte signature mismatch at %#x — this is not "
+                     "the theocracy.real this patch was derived from; not patching.\n    expected:",
+                     kGateSite);
+        for (uint8_t b : kExpect) std::fprintf(stderr, " %02x", b);
+        std::fprintf(stderr, "\n    found:   ");
+        for (uint8_t b : have) std::fprintf(stderr, " %02x", b);
+        std::fprintf(stderr, "\n");
+        return false;
+    }
+    // jz -> two NOPs: fall through into push/call unconditionally.
+    const uint8_t nops[2] = {0x90, 0x90};
+    m.write(kGateSite + 9, nops, sizeof nops);
+    console_unlocked_ = true;
+    std::printf("  [console] THEOC_CONSOLE: dev console unlocked in single-player "
+                "(Alt+V opens; MP gate at %#x nop'd)\n", kGateSite + 9);
+    return true;
 }

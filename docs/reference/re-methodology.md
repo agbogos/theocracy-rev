@@ -193,6 +193,40 @@ device xf86."`) and are equally good grep anchors.
 
 ---
 
+## 10. libmvos vtables are zeros in the file — apply `.rel.rodata`
+
+Reading a vtable straight out of `libmvos.so.0.9` gives **all zeros**, and it
+looks for all the world like the class has no virtual functions. It does not.
+libmvos puts its vtables in **`.rodata`** and populates them with relocations in
+**`.rel.rodata`** (`0x3f98` bytes of them). The stored values are 0 because the
+`R_386_32` entries resolve against a symbol, not against an inline addend.
+
+Two ways this bites:
+
+- **Read the file and you conclude the slot is NULL.** `cConsole::Input`
+  dispatches through `vt+0xc`; the raw bytes there are `00 00 00 00`, which reads
+  as "this call crashes". With the relocation applied it is
+  `Process__8cConsolePCc`, and the class works fine. Scan *every* `.rel*`
+  section — this object has no `.rel.dyn`, so a scan that assumes that name finds
+  nothing and silently confirms the wrong answer.
+- **Ghidra shows no xrefs to virtual methods.** `cConsoleVO::Key` reports only
+  `Entry Point [EXTERNAL]` and no callers, because the vtable slot that reaches it
+  is one of these unresolved words. "No xrefs" here means "dispatched virtually",
+  not "dead code" — the same shape as the `get_function_by_address` artifact in §3.
+
+Layout, once resolved: GNU v2 vtables are **8-byte entries**, `{short delta;
+short index; void *pfn}`, so entry *i*'s function pointer is at `vt + i*8 + 4`.
+Entry 0 is the `__tf…` type-info function; the first real virtual is at `vt+0xc`.
+Walking past the last real slot runs into the adjacent `__ti…` type-info nodes
+and the mangled type-name string — which is the marker that you have reached the
+end, not a slot full of garbage.
+
+The same caution applies to `theocracy.real`, which resolves its vtables through
+`.rel.got`/`.rel.bss`; the host's `guestlink` applies all of this at load, so the
+*running* image is correct and only static file reads are exposed.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -206,3 +240,5 @@ Before a finding lands in `docs/` or in host code:
 5. Is this a layout you read, or a layout you inferred from call sites?
 6. Was the claim measured on the running system, or read off a file — and did
    any output get truncated on the way?
+7. If you read a vtable or a pointer table out of a file and got zeros, did you
+   apply the relocations — from *every* `.rel*` section, not just `.rel.dyn`?

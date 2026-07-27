@@ -26,11 +26,15 @@ A single byte drives several mode differences:
 `NetGame_InitBattle` builds the session with `scenarioID = -1` (no campaign scenario), unpaused, loads a `LevelID` battle map (`new 0x40f80`). Region strings: `"Where is the team info in netgame?"`, `"hmm..keves a map :-o"` (Hungarian).
 
 ## Dev console — availability
-Two `cVOConsole`s:
-- **`g_LogConsole`** (`0x85c0fe0`): output/log console, **Backspace = close** (`SetExitKey 0xe, mod 2`), auto-shown on output by `Console_ShowAndPrint` (`0x81f3fb0`). Backspace can only dismiss it after it self-shows.
-- **`g_CmdConsole`** (`0x85c0f80`): interactive command console, opened by `InGame_HandleKeyCommand` **case 0x21** → `Edit`, **gated on `+0x2c != 0`**. ⇒ **usable in multiplayer battles only.**
+Full write-up: **[dev-console.md](dev-console.md)**. Two `cVOConsole`s:
+- **`g_LogConsole`** (`0x85c0fe0`): output/log console, `SetExitKey(0x0e, mask 2)` = **C**+qualifier, auto-shown on output by `Console_ShowAndPrint` (`0x81f3fb0`). It can only be dismissed after it self-shows. This is the console that receives a `cShell`.
+- **`g_CmdConsole`** (`0x85c0f80`): interactive command console, opened by `InGame_HandleKeyCommand` **case 0x21** (= **Alt+V**) → `Edit`, **gated on `+0x2c != 0`**. ⇒ **reachable in multiplayer battles only** — and it never gets a shell, so a command typed into it is dropped by the null check in `cConsole::Process`. The interactive console is effectively vestigial as shipped, in MP too.
 
-To use the command console in single-player you'd have to force `g_GameSession+0x2c` non-zero (runtime patch) — nothing in the SP path enables it.
+Single-player never sets `+0x2c`. `THEOC_CONSOLE=1` unlocks the console in the port by NOPing the gate branch (rather than forcing the flag, which 62 other sites read) and mirroring the log console's shell onto the command console.
+
+> **Corrected 2026-07-27.** The exit key `0xe` was previously read as
+> **Backspace**; `eKeyCode` is not a PC scancode — Backspace is `0x36` and `0x0e`
+> is **C**. See [re-methodology](../reference/re-methodology.md) §1.
 
 ## Netgame session lifecycle — `FUN_0829c300(netCtx, teamInfo)`
 
