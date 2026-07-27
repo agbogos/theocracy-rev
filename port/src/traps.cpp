@@ -1124,7 +1124,9 @@ void TrapLayer::register_builtins() {
     t["abort"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         static const bool loud = std::getenv("THEOC_LOUD_ABORT") != nullptr;
         if (!loud) {
-            std::fprintf(stderr, "  [abort] ignored (bring-up; THEOC_LOUD_ABORT=1 to trap)\n");
+            if (rl_allow("abort-ignored", 5, std::chrono::seconds(60)))
+                std::fprintf(stderr,
+                             "  [abort] ignored (bring-up; THEOC_LOUD_ABORT=1 to trap)\n");
             return 0;
         }
         const uint32_t mvos = mvos_base_ ? mvos_base_ : 0x10000000u;
@@ -2454,6 +2456,133 @@ void TrapLayer::register_builtins() {
         t[nm] = [](Machine&, uint32_t) -> uint32_t { return 0; };
 }
 
+// The present-to-present cap, in ms (THEOC_FRAME_MS; 83 = the engine's own
+// 12fps limiter, 0 = uncapped). Read once. Shared by the frame limiter and the
+// [health] line, which reports it because the engine is frame-tied: growth
+// rates are only comparable between runs at the same cap.
+int TrapLayer::frame_cap_ms() {
+    static const int ms = []{
+        const char* e = std::getenv("THEOC_FRAME_MS");
+        return e ? std::atoi(e) : 83;
+    }();
+    return ms;
+}
+
+// ---- long-session harness (THEOC_LONGRUN) ----------------------------------
+//
+// The 20-cycle soak covers one scripted path in ~9 minutes. A multi-hour human
+// session is a different test: nothing drives it, the interesting failures are
+// slow (drift, leak, a stall hours in), and the only artefact afterwards is the
+// log. That imposes two requirements the existing instruments do not meet.
+//
+// 1. The log must stay small. Anything repeatable has to be rate-limited, or a
+//    single stuck condition writes gigabytes overnight and buries the cause.
+//    rl_allow() keeps a burst then throttles, and counts what it dropped — a
+//    silenced spammer stays visible as a number rather than vanishing.
+// 2. A fault hours in must be diagnosable from the log alone, which means
+//    periodic state, not just events. [health] is that: one dense line whose
+//    deltas answer "was it already going wrong an hour ago?".
+//
+// On rates: the engine is frame-tied, so wall-clock rates are only comparable
+// between runs at the same frame cap. A session at THEOC_FRAME_MS=50 (20fps)
+// steps the simulation ~1.67x faster than the 83ms default, and therefore
+// allocates ~1.67x as much per hour while being no less correct. [health]
+// prints growth per 1000 frames alongside per hour, and states the cap, so runs
+// at different speeds can be compared directly.
+void TrapLayer::enable_longrun() {
+    longrun_ = true;
+    if (const char* v = std::getenv("THEOC_LONGRUN")) {
+        int n = std::atoi(v);
+        if (n > 0) longrun_every_ = std::chrono::seconds(n);
+    }
+    longrun_t0_ = longrun_last_ = std::chrono::steady_clock::now();
+    longrun_heap_base_ = longrun_heap_start_ = heap_next_;
+    std::fprintf(stderr,
+                 "  [longrun] session harness armed — [health] every %llds, "
+                 "logs rate-limited\n", (long long)longrun_every_.count());
+}
+
+bool TrapLayer::rl_allow(const char* key, uint32_t burst,
+                         std::chrono::seconds interval) {
+    if (!longrun_) return true;                 // untouched outside long runs
+    RateLimit& r = rl_[key];
+    ++r.seen;
+    auto now = std::chrono::steady_clock::now();
+    if (r.emitted < burst) { ++r.emitted; r.last = now; return true; }
+    if (now - r.last >= interval) {
+        r.last = now;
+        ++r.emitted;
+        return true;
+    }
+    ++r.suppressed;
+    ++rl_suppressed_total_;
+    return false;
+}
+
+void TrapLayer::longrun_tick(Machine& m) {
+    if (!longrun_) return;
+    ++longrun_frames_;
+    ++longrun_frames_total_;
+    auto now = std::chrono::steady_clock::now();
+    if (now - longrun_last_ < longrun_every_) return;
+
+    double secs = std::chrono::duration<double>(now - longrun_last_).count();
+    double uptime = std::chrono::duration<double>(now - longrun_t0_).count();
+
+    size_t rss = 0;
+#if defined(__APPLE__)
+    mach_task_basic_info info{};
+    mach_msg_type_number_t cnt = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  (task_info_t)&info, &cnt) == KERN_SUCCESS)
+        rss = info.resident_size;
+#endif
+    if (!longrun_rss_base_) longrun_rss_base_ = rss;
+    uint32_t esp = 0;
+    if (machine_) { try { esp = machine_->reg(UC_X86_REG_ESP); } catch (...) {} }
+
+    double frontier_mb = (heap_next_ - guestmap::HEAP_BASE) / 1048576.0;
+    double grown_mb    = (double)(heap_next_ - longrun_heap_base_) / 1048576.0;
+    double per_hour    = secs > 0 ? grown_mb * 3600.0 / secs : 0.0;
+    double per_kframe  = longrun_frames_ ? grown_mb * 1000.0 / longrun_frames_ : 0.0;
+    double fps         = secs > 0 ? longrun_frames_ / secs : 0.0;
+    // Interval rates are wild during a scenario load (tens of MB in one
+    // interval extrapolates to thousands of MB/h). The since-start figures are
+    // the ones to read for a slow leak; the interval ones catch a sudden onset.
+    double total_mb    = (double)(heap_next_ - longrun_heap_start_) / 1048576.0;
+    double avg_per_hour = uptime > 0 ? total_mb * 3600.0 / uptime : 0.0;
+
+    // audio_underrun_ counts interleaved stereo *samples* and is reset by the
+    // THEOC_FPS line, so we cannot reset it too without the two instruments
+    // stealing from each other. Track our own baseline and report the delta as
+    // frames, which is what the number means.
+    uint64_t underrun_raw; size_t qdepth;
+    { std::lock_guard<std::mutex> lock(audio_mu_);
+      underrun_raw = audio_underrun_; qdepth = audio_q_.size(); }
+    uint64_t under_frames = (underrun_raw > longrun_underrun_base_
+                             ? underrun_raw - longrun_underrun_base_ : 0) / 2;
+    longrun_underrun_base_ = underrun_raw;
+
+    std::fprintf(stderr,
+        "[health] up %.2fh | %.1f fps (cap %dms) | frames %llu\n"
+        "         heap %.2f MB live / %.2f MB frontier | grew %.3f MB total "
+        "(avg %.3f MB/h) | interval +%.3f MB/h, %.4f MB/1k frames\n"
+        "         rss %.1f MB (%+.1f since start) | esp %#x | stubs %u B | "
+        "fds %zu | audio q=%.2fs underrun-frames %llu | logs suppressed %llu\n",
+        uptime / 3600.0, fps, frame_cap_ms(), (unsigned long long)longrun_frames_total_,
+        heap_live_ / 1048576.0, frontier_mb, total_mb, avg_per_hour,
+        per_hour, per_kframe,
+        rss / 1048576.0, (double)(rss - longrun_rss_base_) / 1048576.0,
+        esp, stub_next_ ? stub_next_ - guestmap::STUB_CODE : 0u, fds_.size(),
+        qdepth / 44100.0, (unsigned long long)under_frames,
+        (unsigned long long)rl_suppressed_total_);
+    std::fflush(stderr);
+
+    longrun_last_ = now;
+    longrun_frames_ = 0;
+    longrun_heap_base_ = heap_next_;
+}
+
 void TrapLayer::fps_tick(Machine& m) {
     if (!fps_init_) {
         fps_init_ = true;
@@ -2461,6 +2590,7 @@ void TrapLayer::fps_tick(Machine& m) {
         fps_last_ = std::chrono::steady_clock::now();
         fps_blocks_base_ = m.exec_blocks();
     }
+    longrun_tick(m);
     if (!fps_on_) return;
     ++fps_frames_;
     auto now = std::chrono::steady_clock::now();
@@ -3564,10 +3694,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             // THEOC_FRAME_MS overrides, 0 disables). Present-to-present timing so
             // only too-fast frames are slowed — the game's usleep pacing already
             // counts toward the interval and is not double-limited.
-            static const int frame_ms = []{
-                const char* e = std::getenv("THEOC_FRAME_MS");
-                return e ? atoi(e) : 83;
-            }();
+            const int frame_ms = frame_cap_ms();
             if (frame_ms > 0) {
                 auto now = std::chrono::steady_clock::now();
                 if (last_present_.time_since_epoch().count()) {

@@ -57,6 +57,11 @@ public:
     // is a host-driven guest call. See docs/subsystems/dev-console.md.
     void enable_dev_console();
 
+    // THEOC_LONGRUN[=secs]: arm the multi-hour session harness — periodic
+    // [health] snapshots and rate-limited logging. See
+    // docs/porting/diagnostics.md, "Long-session harness".
+    void enable_longrun();
+
     // THEOC_EDIT=1: force the game's edit mode on (g_GameSession+0x50). Freezes
     // the simulation by design — that is what edit mode is. Enables the console
     // `save` command. See docs/subsystems/dev-console.md#edit-mode.
@@ -165,7 +170,9 @@ private:
             double ms = std::chrono::duration<double, std::milli>(
                             std::chrono::steady_clock::now() - t0).count();
             ms -= self->slow_credit_ms_ - credit0;   // minus deliberate waits
-            if (ms >= lim)
+            // Rate-limited: one wedged handler would otherwise emit a [slow]
+            // line every frame for hours.
+            if (ms >= lim && self->rl_allow(what, 5, std::chrono::seconds(60)))
                 std::fprintf(stderr, "  [slow] %s took %.0f ms\n", what, ms);
         }
     };
@@ -255,6 +262,39 @@ private:
     bool console_open_pending_ = false;
     bool console_key_swallow_ = false;
     bool maybe_redirect_console(Machine& m, uint32_t esp);
+    // ---- long-session harness (THEOC_LONGRUN) --------------------------------
+    // A multi-hour run has two failure modes a normal session does not: the log
+    // grows without bound, and a fault arrives hours after the state that caused
+    // it. So: rate-limit anything repeatable, and emit a periodic one-line
+    // snapshot dense enough that the log alone explains a fault after the fact.
+    bool longrun_ = false;
+    std::chrono::seconds longrun_every_{60};
+    std::chrono::steady_clock::time_point longrun_t0_{}, longrun_last_{};
+    uint64_t longrun_frames_ = 0;          // frames since the last [health]
+    uint64_t longrun_frames_total_ = 0;
+    uint32_t longrun_heap_base_ = 0;    // frontier at the last [health]
+    uint32_t longrun_heap_start_ = 0;   // frontier when the harness armed
+    size_t   longrun_rss_base_ = 0;
+    uint64_t longrun_underrun_base_ = 0;
+    void longrun_tick(Machine& m);
+    static int frame_cap_ms();          // THEOC_FRAME_MS, read once
+
+    // Rate limiter: allow `burst` messages per key, then at most one per
+    // `interval`, counting what was dropped. Suppression totals surface in the
+    // [health] line, so a silenced spammer is still visible as a number.
+    struct RateLimit {
+        uint32_t seen = 0, emitted = 0, suppressed = 0;
+        std::chrono::steady_clock::time_point last{};
+    };
+    std::unordered_map<std::string, RateLimit> rl_;
+    uint64_t rl_suppressed_total_ = 0;
+public:
+    // Returns true if this message should be printed. Cheap no-op when the
+    // harness is off, so call sites can use it unconditionally.
+    bool rl_allow(const char* key, uint32_t burst = 5,
+                  std::chrono::seconds interval = std::chrono::seconds(30));
+private:
+
     // THEOC_EDIT: re-applied per present, because the game builds a *new*
     // cGameSession on every load and writes the flag from LoadGame's editFlag.
     bool edit_mode_ = false;

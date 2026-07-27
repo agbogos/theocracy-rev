@@ -180,6 +180,18 @@ int main(int argc, char** argv) {
     if (L.traps && !headless && std::getenv("THEOC_CONSOLE"))
         L.traps->enable_dev_console();
 
+    // THEOC_LONGRUN[=secs]: multi-hour session harness. Arms the stall watchdog
+    // too unless the user set it explicitly — a fault hours in is exactly the
+    // case the watchdog exists for, and forgetting it wastes the whole session.
+    if (L.traps && !headless && std::getenv("THEOC_LONGRUN")) {
+        if (!std::getenv("THEOC_WATCHDOG")) {
+            static char wd[] = "THEOC_WATCHDOG=30";
+            putenv(wd);
+            std::fprintf(stderr, "  [longrun] THEOC_WATCHDOG defaulted to 30s\n");
+        }
+        L.traps->enable_longrun();
+    }
+
     // THEOC_EDIT=1: force the game's edit mode on. Independent of the console,
     // though `save` is the main reason to want it.
     if (L.traps && !headless && std::getenv("THEOC_EDIT"))

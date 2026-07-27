@@ -177,6 +177,23 @@ void Machine::add_code_traps(uint32_t base, uint32_t nslots, TrapFn fn,
         // hook rewrites EIP first) so a jump there is a hook hit, not a fault.
         uint32_t page = (nslots + 0xfff) & ~0xfffu;
         if (page < 0x1000) page = 0x1000;
+        // The three trap windows sit 0x01000000 apart (PLUGIN 0x76…, TRAP
+        // 0x77…, VT_TRAP 0x78…) and one byte is consumed per slot, so a window
+        // only overruns its neighbour past ~16M slots. That is not reachable
+        // today (~119 HLE symbols = one page), which is exactly why nothing
+        // caught it — and why the failure would be baffling if it ever did
+        // happen: the overlap maps silently and the *neighbour's* traps stop
+        // dispatching, far from the import that grew.
+        uint32_t limit = 0;
+        for (uint32_t nb : {PLUGIN_TRAP_BASE, TRAP_BASE, VT_TRAP_BASE})
+            if (nb > base && (limit == 0 || nb < limit)) limit = nb;
+        if (base + page < base || (limit && base + page > limit)) {
+            std::fprintf(stderr,
+                         "add_code_traps: window [%#x, %#x) for %u slots runs into "
+                         "the next trap region at %#x\n",
+                         base, base + page, nslots, limit);
+            throw std::runtime_error("trap window overlaps the next region");
+        }
         map(base, page, UC_PROT_READ | UC_PROT_EXEC);
     }
     regions_.push_back({base, base + nslots, std::move(fn)});

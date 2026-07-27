@@ -1,6 +1,6 @@
 # Diagnostics: the instruments, and the method they encode
 
-This is the single catalogue of every diagnostic the port carries — the ~37
+This is the single catalogue of every diagnostic the port carries — the ~38
 `THEOC_*` environment knobs, the instruments that are always on and are not env
 knobs at all, and the debugging method the whole set exists to serve.
 
@@ -52,7 +52,7 @@ one run. When a claim is about guest state, read guest state.
 
 ## The complete `THEOC_*` catalogue
 
-37 variables. **A note on parsing that bites:** most are gated on *presence*
+38 variables. **A note on parsing that bites:** most are gated on *presence*
 only, so `THEOC_WATCHDOG=0` still turns the watchdog on. The only three that
 inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
 leading `0`), `THEOC_FULLSCREEN` and `THEOC_NO_HIDPI` (off when unset, empty, or
@@ -86,6 +86,7 @@ then falls into whatever that variable's zero case is.
 | `THEOC_SHOT_DIR` | path | `.` | Destination directory for the above. |
 | `THEOC_AUTO_PROVINCE` | presence | off | Self-drives menu → Prophecy (80,260) → OK (466,537) into province view on a wall clock (steps at 1.5/1.7/1.9s and 3.5/3.7/3.9s), for unattended timing tests. Wall-clock rather than frame-counted because fps varies wildly across screens. One-way trip — it cannot cycle; that is what `THEOC_SOAK` is for. |
 | `THEOC_AUTO_MENU` | presence | off | Bring-up driver: once an 800×600 menu has presented 45 frames, synthesizes aim/down/up on the Single Player button (80,260; `menu.cfg` "single 20 250") at frames 45/50/55. Guarded on `width()==800` so it cannot fire on another screen. |
+| `THEOC_LONGRUN` | seconds | off; **60s** when the value parses ≤ 0 | The multi-hour session harness. Prints a three-line `[health]` snapshot on that interval — uptime, fps and the frame cap in effect, heap live/frontier with growth both since start and per interval, host RSS delta, guest ESP, stub bytes, open fds, audio queue depth and underrun frames, and how many log lines have been suppressed. Also **rate-limits repeatable log lines** (`[slow]`, ignored aborts: a burst of 5 then one per 60s, with the dropped count surfaced in `[health]`), so a stuck condition cannot write gigabytes overnight. Arms `THEOC_WATCHDOG=30` unless it was set explicitly. Everything goes to **stderr**, like every other instrument, so `2>log` captures the whole session. |
 | `THEOC_AUTO_KEYS` | presence | off | Taps SPACE (down, then up 0.2s later) every 6s through the real SDL event path, from both present sites so it also fires during cutscenes. The mouse self-drivers never press a key, so the keyboard half of the input path had no unattended coverage — and SPACE is exactly the key that wedged `cIntuition::PushKeyInput`. |
 | `THEOC_SERVER` | presence | off (boots `data/cd/linux/theocracy.real`) | Boots the shipped dedicated server `data/cd/linux/server` instead — same host, same linker, same HLE. Headless is *derived*, not declared: `server` carries no `_12cApplication.Video` requirement flag, so video/input/blit bring-up is skipped automatically. |
 | `THEOC_START_ANYWAY` | presence | off | Calls `Start__12cApplication` even when `OpenSubsystems` did not return cleanly. For bringing up a boot path that dies in subsystem open, when you want to see how far the game itself gets. Previously undocumented. |
@@ -132,6 +133,7 @@ Not diagnostics, but they shape every run and belong in one list.
 | **It crashed at `eip=0`.** | The zero-GOT scan (always on) is already in the log — if it says 0 slots, it is *not* an unresolved import. Then `THEOC_TRACE=1`, because at `eip=0` the frame pointer is normally 0 and the EBP backtrace prints "no frame pointer". `eip=0` with `EBP=0` means a smashed frame; look for who wrote past a buffer. |
 | **Audio stutters.** | `THEOC_FPS=1` — `underrun=N/s` counts callback samples pulled from an empty queue, and `audio q=` is the current depth in seconds. Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
 | **A visual bug.** | Frames, not logs. `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` to capture (it covers cutscenes too), `THEOC_CLICKS="x,y;x,y"` to drive to the screen, `THEOC_MOUSE_SWEEP=1` when the bug needs a moving pointer across consecutive frames. Lift the coordinates with `THEOC_REPORT_CLICKS=1` first. For geometry and scaling, read the `[video]` line before looking at the screen. |
+| **A multi-hour session.** | `THEOC_LONGRUN=60` and redirect stderr to a file. Read the `[health]` lines afterwards: `interval +MB/h` catches a sudden onset, `avg MB/h` catches a slow leak — but note the average includes the one-time ~29 MB scenario load, so it only becomes meaningful after ~30 min. **Growth per 1k frames is the figure to compare across runs**, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
 | **It leaks over a long session.** | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. Note there is no allocation-site histogram; attributing a slow leak would need one built. |
 | **A missing import.** | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
 

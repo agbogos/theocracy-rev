@@ -19,13 +19,27 @@ closed; see Done below.
    `0x01000000` above `TRAP_BASE`), so this is a one-line assert against a
    failure that would otherwise be baffling.
 
-2. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
-   path; a real multi-hour session is a human test. Needs a harness first:
-   rate-limited logging (no gigabytes), periodic resource snapshots, and the
-   watchdog armed, so a fault hours in is diagnosable from the log alone. Build
-   the harness, then the user drives. The existing instruments are catalogued in
-   `docs/porting/diagnostics.md`; the gap is log rate-limiting, since `THEOC_SOAK`
-   already snapshots resources per cycle.
+2. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
+   itself is yours.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
+   snapshot, rate-limits the repeatable log lines so an overnight session cannot
+   fill the disk, and arms the watchdog by default. All on stderr, so
+   `2>session.log` captures everything.
+
+   ```sh
+   DYLD_LIBRARY_PATH=/opt/homebrew/lib \
+     THEOC_LONGRUN=60 THEOC_FRAME_MS=50 ./port/build/theoc 2>session.log
+   ```
+
+   Reading it afterwards: `interval +MB/h` catches a sudden onset, `avg MB/h` a
+   slow leak (it includes the one-time ~29 MB scenario load, so give it ~30 min
+   before trusting it), and **growth per 1k frames** is the cross-run figure —
+   the engine is frame-tied, so 20fps steps the sim ~1.67× faster than the 12fps
+   default and allocates proportionally more per wall-clock hour.
+
+   Known baseline to beat: the 20-cycle soak measured **+18 KB/cycle** of guest
+   heap, linear, i.e. ~7000 cycles to exhaust the 128 MB arena. Anything steeper
+   over hours is new. Not yet built, and only worth building if a leak shows up:
+   an allocation-site histogram, which is the only way to attribute one.
 
 ## Modernisation (deferred — after playability)
 
