@@ -7,19 +7,13 @@ below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-One small one first, the last of the three surfaced by the 2026-07-26
-documentation pass (reading `port/src` structurally rather than chronologically
-— see `docs/porting/host-architecture.md`). The other two of that set — the
-hardcoded game singletons, and the `CloseSubsystems` teardown question — are
-closed; see Done below.
+All three host cleanups surfaced by the 2026-07-26 documentation pass (reading
+`port/src` structurally rather than chronologically — see
+`docs/porting/host-architecture.md`) are now closed: the hardcoded game
+singletons, the `CloseSubsystems` teardown question, and the trap-window page
+maths. See Done below. What remains under playability is a test, not a change.
 
-1. **Assert the trap-window page maths.** `add_code_traps` maps
-   `(nslots + 0xfff) & ~0xfff` and nothing checks the result against the next
-   region. Fine at today's ~119 HLE symbols (one page, and `VT_TRAP_BASE` sits
-   `0x01000000` above `TRAP_BASE`), so this is a one-line assert against a
-   failure that would otherwise be baffling.
-
-2. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
+1. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
    itself is yours.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
    snapshot, rate-limits the repeatable log lines so an overnight session cannot
    fill the disk, and arms the watchdog by default. All on stderr, so
@@ -43,7 +37,7 @@ closed; see Done below.
 
 ## Modernisation (deferred — after playability)
 
-3. **Decouple sim from render (frame-tied engine)** — the engine steps
+2. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -56,14 +50,14 @@ closed; see Done below.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-4. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+3. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+4. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-6. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+5. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
    present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
    the original display. Note there is **no true antialiasing available** (no
    geometry to sample, no higher-res source art), so this is upscale filtering only.
@@ -73,6 +67,17 @@ closed; see Done below.
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
 ## Done
+
+- **Trap-window page maths asserted (2026-07-27)** — closes the last of the three
+  2026-07-26 cleanups. `Machine::add_code_traps` (`port/src/machine.cpp`) now
+  checks the page-rounded window against the nearest higher trap base
+  (`PLUGIN_TRAP_BASE`/`TRAP_BASE`/`VT_TRAP_BASE`, `0x01000000` apart) and against
+  address overflow, throwing with both extents instead of mapping over its
+  neighbour. Unreachable at today's ~119 HLE symbols — the value is that the
+  failure would otherwise be baffling: the overlap maps silently and it is the
+  *neighbour's* traps that stop dispatching, far from the import set that grew.
+  Landed with the `THEOC_LONGRUN` harness in the same commit; recorded in
+  `docs/porting/host-architecture.md`, "Trap-window sizing".
 
 - **Teardown deliberately skips `CloseSubsystems` (2026-07-27)** — closes the old
   FIFO #1/#2. Decided *not* to call it and deleted the unused
@@ -299,7 +304,8 @@ closed; see Done below.
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #3 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = **Decouple sim from
+  render**, under Modernisation.
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and
@@ -335,7 +341,8 @@ rather than a mechanism:
   table, and nothing in the game depends on them.
 - **Known:** audio can stutter during the ~1s province-load compute spike (the
   emulator is genuinely busy and rarely yields). Steady state is clean — see
-  item #5 and `docs/porting/frame-timing.md`.
+  **Real threads / signal delivery** under Modernisation, and
+  `docs/porting/frame-timing.md`.
 
 Where the rest went: presentation (fullscreen, `Alt+Enter`, crisp-UI/smooth-video,
 HiDPI, movie aspect-fit) is G18 in `docs/porting/guest-libmvos.md`; the timer and
