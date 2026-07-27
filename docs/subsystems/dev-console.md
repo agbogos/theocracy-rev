@@ -45,7 +45,7 @@ Intuition key matrix, which is indexed `Intuition + 0x3c + eKey`:
 | — | — | none | `FUN_081e2330` |
 
 The case selector is the raw eKey, and case `0x21` is **V**. So the chord is
-**Alt+V**, and this is the whole gate:
+**Alt+V** (confirmed live), and this is the whole gate:
 
 ```
 081e20b0: a1 10 96 4c 08   mov  eax, [0x084c9610]    ; g_GameSession
@@ -157,27 +157,59 @@ reads `0x081e20b0..0x081e20bf`, compares against the exact `mov`/`cmp`/`jz`/`pus
 encoding above, and on mismatch prints both byte strings and declines to patch. A
 differently built executable gets a refusal, not a corrupted instruction.
 
+## Using it — the commands
+
+The shell is real and has a help system. **`help`** or **`?`** prints the command
+list for the screen you are on; several commands print their own syntax when
+called with no arguments. The shells are per-screen and reject each other's
+commands ("On realm screen you have different commands!").
+
+`cShell` carries its name at `+0x00` (hence the `Shell Changed to Province Shell`
+log line), an echo flag at `+0x40` — set to **1** by both ctors, so input is
+echoed back as `> <line>` — and its vtable pointer at `+0x4c`, which is what
+`cShell::Parser` dispatches through (`vt+0xc` = `ProcessCommand`).
+
+| Shell | Ctor | vtable | `ProcessCommand` |
+|---|---|---|---|
+| Realm Shell | `0x81f33cb` | `0x8391954` | `0x81f3410` |
+| Province Shell | `0x81eed4b` | `0x838f4b4` | `0x81eed90` |
+| `cChatConsole` (netgame chat) | `0x81f3f13` | `0x83923a0` | `0x81f3e30` |
+
+**Realm screen:** `edit`, `save`, `tribe <0-7>`, `owner <0-7>`, `jewel <+/-value>`,
+`date <year> <month> <day>`, `mannaking <mana> [sphere]`, `missionstat`, `aiprov`,
+`set-def-price`, `ghost`, `prof`, `hello` (→ `Szia.`), `bye` / `exit` / `quit`.
+`save` writes `%s/init.dat` and is edit-mode only.
+
+**Province screen:** `mitem`, `allspell`, `myspell`, `mannaking`, `getdump`,
+`setdump`, `clrdump`, `allcheat`, `onlycheat`, `printid`, `language`, `teleport`,
+`dragon`, `allbuilding`, `punt`, `guard`, `prof`, `stat`, `maninfo`, `mapbitmap`,
+`mapfill`, `killtribe`, `edit`, `man`, `building`, `missionflag`, `values`,
+`move`, `destroy`, `delbld`, `resource`, `hero`, `anim`, `clearanim`, `saveanim`,
+`pos`.
+
+`mannaking` takes `<mana> [sphere]` with spheres `sun, moon, stars, nature, soul`.
+`allcheat` / `onlycheat` toggle `RealmCheat` and `ProvCheat`.
+
+Note that shell **output** goes to the console the shell's `+0x44` back-pointer
+names — the *log* console (the big box), not the input strip you type into. That
+is the intended split, and it is why the input strip can look inert.
+
 ## Status
 
-- **Verified:** the patch applies on the shipped binary — the host prints
-  `[console] THEOC_CONSOLE: dev console unlocked in single-player` and the
-  signature check passes.
-- **Not yet verified interactively:** that Alt+V visibly opens the console in a
-  running game, what the close chord actually is, and whether the shell's command
-  set does anything interesting. The host has no scripted key injection beyond
-  `THEOC_AUTO_KEYS` (SPACE only), so this needs a human at the keyboard.
-- **Open — the qualifier mask.** `cVOConsole::SetExitKey(eKeyCode, unsigned char)`
-  stores the exit key at `cConsoleVO+0xb8` and a qualifier mask at `+0xbc`;
-  `cConsoleVO::Key` closes the console when `code == exitKey && (quals & mask) ==
-  mask`. Both consoles use mask `2`. Bit 0 is Shift (it is the only bit
-  `cKeyboard::RawkeyToAscii` looks at — it selects between two 100-entry tables),
-  but **bit 1 is not yet identified**: `cConsoleVO::Key` has no resolvable callers
-  in Ghidra, because libmvos's vtables are unrelocated zeros in the file (see
-  [../reference/re-methodology.md](../reference/re-methodology.md) §10). Until
-  that is pinned down, the close chord is a guess — most likely Ctrl+H for the
-  command console. `InGame_HandleKeyCommand` case `0xd` (**Alt+B**) also calls
-  `Hide` on the command console, but only if the requester has not swallowed the
-  key first.
+- **Verified interactively (2026-07-27):** **Alt+V** opens the console and
+  **Alt+H** closes it, typing works, and ENTER reaches
+  `cConsole::Input` → `Process` (`cConsoleVO::Key[ENTER] str[…]` in the log).
+- **Resolved — the qualifier mask.** `cVOConsole::SetExitKey(eKeyCode, unsigned
+  char)` stores the exit key at `cConsoleVO+0xb8` and a qualifier mask at `+0xbc`;
+  `cConsoleVO::Key` closes when `code == exitKey && (quals & mask) == mask`. Both
+  consoles use mask `2`, and Alt+H closing the command console (exit key `0x13` =
+  **H**) proves **bit 1 = Alt**. Bit 0 is Shift — the only bit
+  `cKeyboard::RawkeyToAscii` reads, selecting between two 100-entry tables. So the
+  log console's `(0x0e, 2)` is **Alt+C**.
+- **Open — cosmetic.** After ENTER the command console re-links as a plain VO
+  (`Show` → "Console: Show console for watching", `Unlinking`, `Linking as VO`)
+  and renders as a red box. Suspected palette-index difference between the
+  requester and VO paint paths rather than an error state; not yet chased.
 
 ## Cross-references
 
