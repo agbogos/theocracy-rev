@@ -7,27 +7,19 @@ below is **playability first, modernisation after**.
 
 ## Remaining (FIFO — prefer top)
 
-Two small ones first, both surfaced by the 2026-07-26 documentation pass
-(reading `port/src` structurally rather than chronologically — see
-`docs/porting/host-architecture.md`). Each is cheap now and confusing later.
-The third of that set — resolving the hardcoded game singletons by name — is
-done; see Done below.
+One small one first, the last of the three surfaced by the 2026-07-26
+documentation pass (reading `port/src` structurally rather than chronologically
+— see `docs/porting/host-architecture.md`). The other two of that set — the
+hardcoded game singletons, and the `CloseSubsystems` teardown question — are
+closed; see Done below.
 
-1. **Teardown never calls `CloseSubsystems`.** `kMvosCloseSubsystems`
-   (`mvos+0x950e0`) is declared in `main.cpp` and never used, so the ordered
-   shutdown libmvos's `main` performs — `TimerSystem`, `VVC`, `VKeyboard`,
-   `VMouse`, `SystemPointer`, `VCD`, `SoundCard` — does not happen; the process
-   just exits. Nothing observably breaks today. Decide whether to call it or to
-   delete the constant and write down why we skip it, rather than leaving a
-   declared-but-unused address implying it is handled.
-
-2. **Assert the trap-window page maths.** `add_code_traps` maps
+1. **Assert the trap-window page maths.** `add_code_traps` maps
    `(nslots + 0xfff) & ~0xfff` and nothing checks the result against the next
    region. Fine at today's ~119 HLE symbols (one page, and `VT_TRAP_BASE` sits
    `0x01000000` above `TRAP_BASE`), so this is a one-line assert against a
    failure that would otherwise be baffling.
 
-3. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
+2. **Multi-hour gameplay stress test** — the 20-cycle soak covers one scripted
    path; a real multi-hour session is a human test. Needs a harness first:
    rate-limited logging (no gigabytes), periodic resource snapshots, and the
    watchdog armed, so a fault hours in is diagnosable from the log alone. Build
@@ -37,7 +29,7 @@ done; see Done below.
 
 ## Modernisation (deferred — after playability)
 
-4. **Decouple sim from render (frame-tied engine)** — the engine steps
+3. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -50,14 +42,14 @@ done; see Done below.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-5. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+4. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-6. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+5. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-7. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+6. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
    present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
    the original display. Note there is **no true antialiasing available** (no
    geometry to sample, no higher-res source art), so this is upscale filtering only.
@@ -67,6 +59,17 @@ done; see Done below.
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
 ## Done
+
+- **Teardown deliberately skips `CloseSubsystems` (2026-07-27)** — closes the old
+  FIFO #1/#2. Decided *not* to call it and deleted the unused
+  `kMvosCloseSubsystems` constant so it stops implying teardown is handled.
+  Nothing it releases outlives the process (SDL devices are host-owned and closed
+  by us; the guest heap is one mapping the OS reclaims), it closes devices rather
+  than flushing files, and calling it would run seven HLE close paths nothing
+  else exercises at the least diagnosable moment. Reasoning and the revisit
+  trigger — a platform like Windows where exit does not reclaim as cleanly — are
+  in `docs/porting/host-architecture.md`, "Why teardown skips CloseSubsystems".
+  Also drops one of the two standing build warnings.
 
 - **Game singleton addresses resolved by name (2026-07-27)** — closes the old
   FIFO #1. `VVC`, `Intuition`, `VMouse` and `VKeyboard` were hardcoded in
@@ -282,7 +285,7 @@ done; see Done below.
   render to the designed 12fps (`THEOC_FRAME_MS=83`). (3) fps-coupled audio
   mixer → buffer-driven + serviced from `usleep`. Diagnostics: `THEOC_FPS`,
   `THEOC_AUTO_PROVINCE`, block counter. Native LFB16 blit family also landed.
-  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #4 (decouple).
+  Full writeup: `docs/porting/frame-timing.md`. Follow-up = FIFO #3 (decouple).
 - **`THEOC_LOUD_ABORT=1` — loud abort mode** — default abort stays non-fatal
   (log + continue) so the happy path is unaffected; loud mode dumps a guest
   backtrace (EBP walk, `game`/`mvos+off` labels for the two Ghidra DBs) and

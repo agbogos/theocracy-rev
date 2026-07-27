@@ -194,6 +194,34 @@ Read and write guest memory only through `m.read/write/r32/w32/cstr`. Return gue
   wrong as a general test, since it would also label a host region "game" —
   except that host regions all sit at or above `0x50000000` and are filtered
   earlier.
+### Why teardown skips `CloseSubsystems`
+
+libmvos's `main` ends by calling `CloseSubsystems` (file `0x950e0`), which shuts
+down `TimerSystem`, `VVC`, `VKeyboard`, `VMouse`, `SystemPointer`, `VCD` and
+`SoundCard` in order. The host never calls it, and that is a **decision, not an
+oversight** — the constant that used to sit unused in `main.cpp` has been deleted
+so it stops implying otherwise.
+
+The reasoning:
+
+- **Nothing outlives the process.** Everything `CloseSubsystems` releases is
+  either host-owned or inside the Unicorn mapping. SDL audio and video are opened
+  and closed by us (`Video`, the audio device in `traps.cpp`); the guest heap is
+  one big mapping the OS reclaims. There is no guest-side resource that survives
+  exit for the guest to leak.
+- **It closes devices, not files.** Nothing in that sequence flushes game state,
+  so skipping it cannot lose a save or corrupt a file.
+- **Calling it would add a failure surface, not remove one.** Those seven close
+  paths run through HLE device stubs that no other code path exercises, at the
+  one moment a fault is most annoying and least diagnosable — a crash *after* the
+  session is otherwise over. Zero upside, non-zero downside.
+
+**When to revisit.** If the host is ever ported to a platform where process exit
+does not reclaim as cleanly, or where an audio/video device left open by the
+guest's own bookkeeping matters — Windows being the obvious candidate — this is
+the first thing to reconsider. The entry point is `MVOS_BASE + 0x950e0`, called
+with no arguments, after `Start` returns and before the video hold.
+
 ### Game-space addresses in the host
 
 **Resolved by name — done (2026-07-27).** Four singleton pointers (`VVC`
@@ -234,7 +262,7 @@ deliberately, with the reasoning recorded rather than left implicit:
 If the game surface ever needs to be addressed properly, the answer is a
 signature scan or a per-build address table — not another bare constant. Full
 context: [../subsystems/dev-console.md](../subsystems/dev-console.md).
-- **`kMvosCloseSubsystems = 0x950e0`** (libmvos file offset) is declared in `main.cpp` but never used — teardown never calls it. Whether that matters is untested.
+- **Teardown deliberately skips `CloseSubsystems`** — decided 2026-07-27, see below.
 - **`Machine::install_traps` vs `add_code_traps`.** The header calls `install_traps` a "back-compat shim". Both are live; `install_traps` is used only for the import window.
 - **`Video::keep_open_for`** presents outside the frame counter, which is why `stop_watchdog()` must be called before it. That ordering is a real coupling, not a stylistic one.
 - **Trap-window sizing.** `add_code_traps` maps `(nslots + 0xfff) & ~0xfff` bytes, minimum one page. With ~119 HLE symbols today that is one page; a build whose import set crossed 4096 symbols would need the page maths re-checked against `TRAP_BASE`'s neighbours (`VT_TRAP_BASE` is `0x01000000` above, so there is ample room — but nothing asserts it).

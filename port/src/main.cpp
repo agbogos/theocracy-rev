@@ -29,7 +29,8 @@ static const char* kFlagNames[] = {
 
 // libmvos file VAs (ET_DYN base 0) — see docs + main disassembly.
 constexpr uint32_t kMvosOpenSubsystems  = 0x94f20;
-constexpr uint32_t kMvosCloseSubsystems = 0x950e0;
+// libmvos's CloseSubsystems (file 0x950e0) is deliberately NOT called — see
+// docs/porting/host-architecture.md, "Why teardown skips CloseSubsystems".
 
 
 // Walk the g++ 2.95 EBP frame chain and print a labelled guest backtrace.
