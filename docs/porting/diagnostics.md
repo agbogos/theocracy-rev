@@ -1,6 +1,6 @@
 # Diagnostics: the instruments, and the method they encode
 
-This is the single catalogue of every diagnostic the port carries — the ~35
+This is the single catalogue of every diagnostic the port carries — the ~37
 `THEOC_*` environment knobs, the instruments that are always on and are not env
 knobs at all, and the debugging method the whole set exists to serve.
 
@@ -8,8 +8,9 @@ Everything here was read out of `port/src/` (`traps.cpp`, `main.cpp`,
 `machine.cpp`, `video.cpp`, `guestlink.cpp`, `blit.cpp`, `mvos.cpp`) and
 cross-checked against the commit history (`python3 tools/dump_commit_log.py`
 → `data/commit-log.md`, which is untracked and regenerated on demand). Defaults
-and units are taken from the code, not from prose. Nothing in this document was
+and units are taken from the code, not from prose. Almost nothing here was
 verified by running the game — it needs a display and the copyrighted data tree.
+The exceptions are `THEOC_CONSOLE` and `THEOC_EDIT`, both exercised live.
 
 ---
 
@@ -51,7 +52,7 @@ one run. When a claim is about guest state, read guest state.
 
 ## The complete `THEOC_*` catalogue
 
-35 variables. **A note on parsing that bites:** most are gated on *presence*
+37 variables. **A note on parsing that bites:** most are gated on *presence*
 only, so `THEOC_WATCHDOG=0` still turns the watchdog on. The only three that
 inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
 leading `0`), `THEOC_FULLSCREEN` and `THEOC_NO_HIDPI` (off when unset, empty, or
@@ -118,6 +119,7 @@ Not diagnostics, but they shape every run and belong in one list.
 | `THEOC_VIDEO_HOLD` | seconds | **2** | How long the window is held open after `Start` returns, so a final frame can be read. Previously visible only inside a sample command line. |
 | `THEOC_FULLSCREEN` | set, non-empty, not `"0"` | off | Borderless fullscreen at the desktop resolution (`FULLSCREEN_DESKTOP`, never an exclusive mode switch); 4:3 is preserved with pillarbox bars. Falls back to windowed if creation fails. `Alt+Enter` (⌥Return) toggles at runtime. |
 | `THEOC_CONSOLE` | presence | off | Arms the in-game developer console — **Alt+V** opens, **Alt+C** closes, on both the realm and province screens. No game patching: Alt+V is captured in the SDL hook and serviced at the next present as a guest call to `Edit__10cVOConsole(g_LogConsole)`, through the same one-redirect-per-present path the timer and sound slices use. Refused unless a `cShell` is attached (`g_LogConsole+0x38`), which is true exactly while a game screen is live. Skipped for headless images. Full chain: [../subsystems/dev-console.md](../subsystems/dev-console.md). |
+| `THEOC_EDIT` | presence | off | Forces the game's own **edit mode** on (`g_GameSession+0x50`, the byte `cGameSession.md` used to call `bPaused`). The mode exists in the binary but no shipped path selects it — every `SetupGame` call site passes normal. **It freezes the simulation**, which is what edit mode *is*, and is what makes the console `save` command legal. Re-applied per present because the game builds a new `cGameSession` on every load and re-initialises the flag; 65 sites read it and none writes it back, so stamping is sufficient. Independent of `THEOC_CONSOLE`, though `save` is the main reason to want it. See [../subsystems/dev-console.md](../subsystems/dev-console.md#edit-mode). |
 
 ---
 

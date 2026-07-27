@@ -324,10 +324,22 @@ The other 63 read sites are not individually characterised.
 scenario-start path (`FUN_08145550`) is called with `(2, 0)`. Nothing in the
 shipped menus selects mode 1.
 
-**Enabling it.** Because the flag is read live everywhere, writing
-`g_GameSession+0x50 = 1` at runtime turns edit mode on with no patching — the same
-shape as the console hook. Note that this necessarily freezes the simulation:
-edit mode *is* the frozen-sim state, not a cheat mode layered on normal play.
+**Enabling it — `THEOC_EDIT=1`.** Because the flag is read live everywhere and
+nothing writes it back, the host simply stamps it: `TrapLayer::apply_edit_mode`
+reads `g_GameSession` and sets `+0x50 = 1`. No patching.
+
+Applied per present rather than once, because the game builds a **new**
+`cGameSession` on every scenario load and re-initialises `+0x50` from `LoadGame`'s
+`editFlag` — a one-shot stamp would survive only until the next load. It logs
+once per session:
+
+```
+[edit] edit mode on for session 0x6020b030 (sim frozen; console `save` now allowed)
+```
+
+Note this necessarily **freezes the simulation** — edit mode *is* the frozen-sim
+state, not a cheat layered on normal play. Verified by driving into a scenario
+with `THEOC_AUTO_PROVINCE=1`.
 
 ## Cheats
 
@@ -387,9 +399,6 @@ Alt+C closes, and the command sets respond on realm and province.
 - **Province command classification.** 57 literals vs 36 advertised, with no
   reliable split between top-level commands and sub-arguments. Needs disassembly,
   not decompile.
-- **`g_GameSession+0x50` naming.** [../structs/cGameSession.md](../structs/cGameSession.md)
-  calls it `bPaused`; it is the edit-mode flag, set once at load and never written
-  at runtime. That doc still needs the correction.
 - **`0x84c9125`.** The third cheat byte `onlycheat` toggles; readers not traced.
 
 ## Cross-references

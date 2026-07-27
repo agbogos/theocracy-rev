@@ -48,6 +48,11 @@ public:
     // is a host-driven guest call. See docs/subsystems/dev-console.md.
     void enable_dev_console();
 
+    // THEOC_EDIT=1: force the game's edit mode on (g_GameSession+0x50). Freezes
+    // the simulation by design — that is what edit mode is. Enables the console
+    // `save` command. See docs/subsystems/dev-console.md#edit-mode.
+    void enable_edit_mode();
+
     // Guest trap address for an imported symbol (TRAP_BASE + slot), or 0 if the
     // symbol isn't imported. Lets the host invoke an import handler directly.
     uint32_t trap_addr(const std::string& name) const {
@@ -234,6 +239,11 @@ private:
     bool console_open_pending_ = false;
     bool console_key_swallow_ = false;
     bool maybe_redirect_console(Machine& m, uint32_t esp);
+    // THEOC_EDIT: re-applied per present, because the game builds a *new*
+    // cGameSession on every load and writes the flag from LoadGame's editFlag.
+    bool edit_mode_ = false;
+    uint32_t edit_applied_to_ = 0;   // session we last stamped (log once each)
+    void apply_edit_mode(Machine& m);
     std::chrono::steady_clock::time_point next_sound_slice_{};
     void patch_sound_main_oneshot(Machine& m);
     // If a soft thread needs a slice, rewrite trap return into Entry(arg).

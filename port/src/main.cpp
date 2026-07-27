@@ -164,6 +164,11 @@ int main(int argc, char** argv) {
     if (L.traps && !headless && std::getenv("THEOC_CONSOLE"))
         L.traps->enable_dev_console();
 
+    // THEOC_EDIT=1: force the game's edit mode on. Independent of the console,
+    // though `save` is the main reason to want it.
+    if (L.traps && !headless && std::getenv("THEOC_EDIT"))
+        L.traps->enable_edit_mode();
+
     // libmvos DT_INIT + .ctors, then game .ctors --------------------------------
     if (L.mvos_init) {
         std::printf("\ncalling libmvos DT_INIT @ %#x ...\n", L.mvos_init);

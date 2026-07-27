@@ -3445,11 +3445,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         //   SwapBuffers__4cVVC (us), AfterSwapBuffer (restore under-cursor).
         // So the real cSprite is already composited onto the LFB here.
         if (video_.is_open()) {
-            // THEOC_CONSOLE: mirror whatever cShell the game has attached to the
-            // log console onto the command console, so a typed line actually
-            // reaches cShell::Parser instead of being dropped by the null check
-            // in cConsole::Process. Re-done per present because the attached
-            // shell is per-screen and is cleared again by RestoreShell.
+            apply_edit_mode(m);   // THEOC_EDIT (no-op unless armed)
             // Keep VVC GD slots alive (Refresh__7cSprite reads +0x10).
             if (gd_ && mvos_base_) {
                 uint32_t vvc = m.r32(mvos_base_ + 0xaefcc);
@@ -3735,6 +3731,49 @@ void TrapLayer::enable_dev_console() {
     console_enabled_ = true;
     std::printf("  [console] THEOC_CONSOLE: dev console armed "
                 "(Alt+V opens, Alt+C closes; realm and province)\n");
+}
+
+// THEOC_EDIT=1 — force the game's own edit mode on.
+//
+// Edit mode is g_GameSession+0x50. The game sets it once, at session
+// construction, from LoadGame's editFlag: SetupGame(1) -> edit, SetupGame(2) ->
+// normal. Every shipped call site passes normal, so the mode exists in the
+// binary but nothing ever selects it.
+//
+// 65 sites read that flag and none writes it through g_GameSession, so simply
+// stamping it is enough — no game code will clear it back.
+//
+// Re-applied per present rather than once, because the game builds a *new*
+// cGameSession on every scenario load and re-initialises +0x50 from the editFlag;
+// a one-shot stamp would survive only until the next load. Cost is one read and
+// a conditional byte write per frame.
+//
+// This FREEZES THE SIMULATION: RealmGameLoop steps SimulationUpdate only while
+// +0x50 == 0. That is not a side effect to be fixed — a frozen world is what
+// edit mode *is*, and it is what makes the console `save` command legal.
+void TrapLayer::enable_edit_mode() {
+    edit_mode_ = true;
+    std::printf("  [edit] THEOC_EDIT: forcing g_GameSession+0x50 = 1 "
+                "(edit mode — the simulation stays frozen)\n");
+}
+
+void TrapLayer::apply_edit_mode(Machine& m) {
+    if (!edit_mode_) return;
+    constexpr uint32_t kGameSession = 0x084c9610;  // cGameSession* (game .bss)
+    constexpr uint32_t kEditField   = 0x50;        // cGameSession+0x50 bEditMode
+    uint32_t sess = 0;
+    try { sess = m.r32(kGameSession); } catch (...) { return; }
+    if (!sess) return;                             // no session yet (menus)
+    uint8_t v = 0;
+    try { m.read(sess + kEditField, &v, 1); } catch (...) { return; }
+    if (v) { edit_applied_to_ = sess; return; }    // already set (or we set it)
+    v = 1;
+    m.write(sess + kEditField, &v, 1);
+    if (edit_applied_to_ != sess) {
+        edit_applied_to_ = sess;
+        std::printf("  [edit] edit mode on for session %#x "
+                    "(sim frozen; console `save` now allowed)\n", sess);
+    }
 }
 
 // Service a pending Alt+V by rewriting the trap return into a guest call of

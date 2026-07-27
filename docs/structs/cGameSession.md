@@ -15,7 +15,7 @@ The single-player/multiplayer session controller. Global **`g_GameSession`** @ `
 | `0x40` | `cArray<char*>* [2]` | `textTable` | Two localized string tables, each built by `LoadTextArrayFromFile` (reads a locale text file, one `strdup`'d line per entry). |
 | `0x48` | `cGameInfo*` | `gameInfo` | Scenario data, loaded from `scenarioID` (`FUN_0817ad90`; `"cGameInfo::cGameInfo (Scenario invalid)"`). `NULL` when `scenarioID < 0`. |
 | `0x4c` | `i32` | `scenarioID` | **`-1`** = MP battle (no scenario), **`0`** = SP campaign, **`>0`** = specific scenario. |
-| `0x50` | `u8` | `bPaused` | Simulation runs only when `0` (the `RealmGameLoop` gate). |
+| `0x50` | `u8` | `bEditMode` | **Edit mode**, and as a side effect the simulation gate — `RealmGameLoop` steps `SimulationUpdate` only when this is `0`. Set **once, at session construction** (`GameSession_Construct`'s `startPaused` param, and `FUN_0817b610` from `LoadGame(path, editFlag)`); **65 reads and zero writes** through `g_GameSession` in the whole binary, so it never toggles at runtime. `SetupGame(1)` → edit, `SetupGame(2)` → normal ("Scenario edit mode" / "Scenario normal mode"). Console `save` refuses unless set; console `edit` only *reports* it. Unreachable as shipped — every call site passes normal mode. See [../subsystems/dev-console.md](../subsystems/dev-console.md#edit-mode). |
 | `0x51` | `i32` | `gameSpeed` | Loaded from **`.gamesettings`** by `GameSession_LoadSettings` (default `0x50` = 80). Packed/unaligned at 0x51. |
 | `0x55` | `u8 [3]` | `_pad1` | tail padding → 0x58 |
 
@@ -31,7 +31,7 @@ struct cGameSession {          // 0x58
     cArray<char*>* textTable[2];    // 0x40
     cGameInfo*     gameInfo;        // 0x48
     int32_t        scenarioID;      // 0x4c
-    uint8_t        bPaused;         // 0x50
+    uint8_t        bEditMode;       // 0x50  (was named bPaused; see the table)
     int32_t        gameSpeed;       // 0x51 (unaligned/packed)
     uint8_t        _pad1[3];        // 0x55
 };
@@ -40,4 +40,4 @@ struct cGameSession {          // 0x58
 ## Notes
 - The MCP can't create a Ghidra struct type; this layout is mirrored in a decompiler comment on `GameSession_Construct`. Apply it as a real struct in the Ghidra UI (Data Type Manager) if desired, then retype `g_GameSession`.
 - **`cTribe`** side-finding: relationship state is a per-other-tribe array at `cTribe + 8 + otherId*4` (`cTribe_CloseBorders` writes `1` = borders open/known; Fatal `"These tribes ain't known by each other"`). Worth its own struct pass later.
-- Consumers worth knowing: `cProvince_Do` (`0x81da420`) reads `bMultiplayerBattle`/`localTribe`/`scenarioID`/`bPaused`; `SimulationStep`/`SimulationUpdate` gate on `bPaused`; `InGame_HandleKeyCommand` gates the console on `bMultiplayerBattle`.
+- Consumers worth knowing: `cProvince_Do` (`0x81da420`) reads `bMultiplayerBattle`/`localTribe`/`scenarioID`/`bEditMode`; `SimulationStep`/`SimulationUpdate` gate on `bEditMode`; `InGame_HandleKeyCommand` gates the console on `bMultiplayerBattle`.
