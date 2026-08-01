@@ -283,6 +283,20 @@ private:
     uint32_t longrun_heap_start_ = 0;   // frontier when the harness armed
     size_t   longrun_rss_base_ = 0;
     uint64_t longrun_underrun_base_ = 0;
+    // Guest work per interval. Without it a slow sample is unattributable: 11
+    // fps with the blocks/frame of a normal frame is the host falling behind,
+    // the same 11 fps at three times the blocks/frame is the guest doing three
+    // times the work (a crowded battle). Base is taken on the first tick, not in
+    // enable_longrun(), which has no Machine to ask.
+    uint64_t longrun_blocks_base_ = 0;
+    bool     longrun_blocks_init_ = false;
+    // Alt+M during a long run stamps a numbered marker into the log and forces
+    // the [health] sample out early, so the interval boundary lands on the event
+    // rather than wherever the timer happened to be. Same swallow discipline as
+    // Alt+Enter / Alt+V: 'M' is a live game key.
+    bool     mark_pending_ = false;
+    bool     mark_key_swallow_ = false;
+    uint32_t mark_seq_ = 0;
     void longrun_tick(Machine& m);
     static int frame_cap_ms();          // THEOC_FRAME_MS, read once
 

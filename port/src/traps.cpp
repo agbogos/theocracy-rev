@@ -2522,10 +2522,19 @@ bool TrapLayer::rl_allow(const char* key, uint32_t burst,
 
 void TrapLayer::longrun_tick(Machine& m) {
     if (!longrun_) return;
+    if (!longrun_blocks_init_) {
+        longrun_blocks_init_ = true;
+        longrun_blocks_base_ = m.exec_blocks();
+    }
     ++longrun_frames_;
     ++longrun_frames_total_;
     auto now = std::chrono::steady_clock::now();
-    if (now - longrun_last_ < longrun_every_) return;
+    // A marker forces the sample out early. That is the point of it: the
+    // interval boundary then lands on the event the operator just marked, so
+    // the samples either side of it each cover one activity instead of
+    // straddling the transition. A trial's first interval after a marker is
+    // short — read its per-1k-frames figure, not its per-hour one.
+    if (!mark_pending_ && now - longrun_last_ < longrun_every_) return;
 
     double secs = std::chrono::duration<double>(now - longrun_last_).count();
     double uptime = std::chrono::duration<double>(now - longrun_t0_).count();
@@ -2550,6 +2559,12 @@ void TrapLayer::longrun_tick(Machine& m) {
     double per_hour    = secs > 0 ? grown_mb * 3600.0 / secs : 0.0;
     double per_kframe  = longrun_frames_ ? grown_mb * 1000.0 / longrun_frames_ : 0.0;
     double fps         = secs > 0 ? longrun_frames_ / secs : 0.0;
+    // Guest work, so a slow interval can be classified rather than guessed at.
+    // Reads 0 if the block counter was never armed (see main.cpp).
+    uint64_t blocks_now = m.exec_blocks();
+    uint64_t blocks     = blocks_now - longrun_blocks_base_;
+    double blk_per_s    = secs > 0 ? blocks / secs : 0.0;
+    double blk_per_f    = longrun_frames_ ? (double)blocks / longrun_frames_ : 0.0;
     // Interval rates are wild during a scenario load (tens of MB in one
     // interval extrapolates to thousands of MB/h). The since-start figures are
     // the ones to read for a slow leak; the interval ones catch a sudden onset.
@@ -2559,7 +2574,15 @@ void TrapLayer::longrun_tick(Machine& m) {
     // the end of the arena — so report it from the frontier, not from live.
     double front_grown  = (double)(heap_next_ - longrun_heap_start_) / 1048576.0;
     double front_per_h  = uptime > 0 ? front_grown * 3600.0 / uptime : 0.0;
-    double headroom_h   = front_per_h > 0.01
+    // Both since-start figures above are dominated by the one-time ~27 MB
+    // scenario load, and on a ten-minute trial that never washes out: the first
+    // samples of trial 1 (2026-08-01) reported "+6498 MB/h -> 0.0 h headroom"
+    // while the live set was in fact perfectly flat. An alarming number that is
+    // pure warm-up is worse than no number, so headroom is withheld until there
+    // is enough uptime for the load to stop dominating.
+    const double kSettled = 1800.0;    // 0.5 h, the figure diagnostics.md gives
+    bool settled        = uptime >= kSettled;
+    double headroom_h   = (settled && front_per_h > 0.01)
                         ? (guestmap::HEAP_SIZE / 1048576.0 - frontier_mb) / front_per_h
                         : 0.0;
 
@@ -2580,19 +2603,40 @@ void TrapLayer::longrun_tick(Machine& m) {
     { std::time_t t = std::time(nullptr); std::tm tmv{};
       if (localtime_r(&t, &tmv)) std::strftime(clock, sizeof clock, "%H:%M:%S", &tmv); }
 
+    char headroom[32];
+    if (settled && headroom_h > 0.0)
+        std::snprintf(headroom, sizeof headroom, "%.1f h headroom", headroom_h);
+    else
+        std::snprintf(headroom, sizeof headroom, "headroom n/a (warm-up)");
+
+    // The marker goes out first and blank-line-separated, so a trial boundary is
+    // findable by eye in a two-hour log, and the [health] sample it forced sits
+    // directly under it.
+    if (mark_pending_) {
+        mark_pending_ = false;
+        std::fprintf(stderr, "\n[mark] #%u %s | up %.2fh | frames %llu\n",
+                     mark_seq_, clock, uptime / 3600.0,
+                     (unsigned long long)longrun_frames_total_);
+    }
+
     std::fprintf(stderr,
-        "[health] %s | up %.2fh | %.1f fps (cap %dms) | frames %llu\n"
+        "[health] %s | up %.2fh | %.1f fps (cap %dms) | frames %llu | "
+        "%.2fM blk/s (%.3fM/frame)\n"
         "         heap live %.2f MB | grew %+.3f MB total (avg %+.3f MB/h) | "
         "interval %+.3f MB/h, %+.4f MB/1k frames\n"
-        "         frontier %.2f MB of %.0f MB arena (+%.3f MB/h -> %.1f h headroom) | "
+        "         frontier %.2f MB of %.0f MB arena (+%.3f MB/h -> %s) | "
         "rss %.1f MB (%+.1f since start)\n"
         "         esp %#x | stubs %u B | fds %zu | audio q=%.2fs "
         "underrun-frames %llu | logs suppressed %llu\n",
         clock, uptime / 3600.0, fps, frame_cap_ms(),
         (unsigned long long)longrun_frames_total_,
+        blk_per_s / 1e6, blk_per_f / 1e6,
         heap_live_ / 1048576.0, total_mb, avg_per_hour, per_hour, per_kframe,
-        frontier_mb, guestmap::HEAP_SIZE / 1048576.0, front_per_h, headroom_h,
-        rss / 1048576.0, (double)(rss - longrun_rss_base_) / 1048576.0,
+        frontier_mb, guestmap::HEAP_SIZE / 1048576.0, front_per_h, headroom,
+        // Signed subtraction, in double. As size_t this underflowed to
+        // +17592186044408.9 the moment RSS dipped below its first sample, which
+        // is exactly what a ten-minute trial does after the load settles.
+        rss / 1048576.0, ((double)rss - (double)longrun_rss_base_) / 1048576.0,
         esp, stub_next_ ? stub_next_ - guestmap::STUB_CODE : 0u, fds_.size(),
         qdepth / 44100.0, (unsigned long long)under_frames,
         (unsigned long long)rl_suppressed_total_);
@@ -2601,6 +2645,7 @@ void TrapLayer::longrun_tick(Machine& m) {
     longrun_last_ = now;
     longrun_frames_ = 0;
     longrun_live_base_ = heap_live_;
+    longrun_blocks_base_ = blocks_now;
 }
 
 void TrapLayer::fps_tick(Machine& m) {
@@ -2795,19 +2840,26 @@ void TrapLayer::report() const {
         if (have) { impl++; impl_hits += hits_[i]; }
         else      { todo++; todo_hits += hits_[i]; todos.push_back({names_[i], hits_[i]}); }
     }
-    std::printf("\n=== trap report ===\n");
-    std::printf("  implemented imports hit: %u  (%llu calls)\n", impl,
-                (unsigned long long)impl_hits);
-    std::printf("  UNIMPLEMENTED hit:       %u  (%llu calls)\n", todo,
-                (unsigned long long)todo_hits);
-    std::printf("  guest heap:              %.1f MB live, %.1f MB frontier, "
-                "%.0f MB arena (%zu free blocks)\n",
-                heap_live_ / 1048576.0, (heap_next_ - HEAP_BASE) / 1048576.0,
-                HEAP_SIZE / 1048576.0, free_addr_.size());
+    // stderr, not stdout: this is the end-of-run allocator state, and the
+    // documented capture recipe for a session is `2>session.log`. On stdout it
+    // went to the terminal and was gone with the scrollback — the 2026-07-31
+    // two-hour session ended normally and still has no final heap figure.
+    // Everything else diagnostic ([health], [fps], [watchdog], faults) is
+    // already on stderr; this was the one instrument that was not.
+    std::fprintf(stderr, "\n=== trap report ===\n");
+    std::fprintf(stderr, "  implemented imports hit: %u  (%llu calls)\n", impl,
+                 (unsigned long long)impl_hits);
+    std::fprintf(stderr, "  UNIMPLEMENTED hit:       %u  (%llu calls)\n", todo,
+                 (unsigned long long)todo_hits);
+    std::fprintf(stderr, "  guest heap:              %.1f MB live, %.1f MB frontier, "
+                 "%.0f MB arena (%zu free blocks)\n",
+                 heap_live_ / 1048576.0, (heap_next_ - HEAP_BASE) / 1048576.0,
+                 HEAP_SIZE / 1048576.0, free_addr_.size());
     std::sort(todos.begin(), todos.end(),
               [](auto& a, auto& b) { return a.second > b.second; });
     for (auto& [nm, n] : todos)
-        std::printf("    %6llu  %s\n", (unsigned long long)n, nm.c_str());
+        std::fprintf(stderr, "    %6llu  %s\n", (unsigned long long)n, nm.c_str());
+    std::fflush(stderr);
 }
 
 uint32_t TrapLayer::make_device(Machine& m, const char* kind) {
@@ -3328,10 +3380,13 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
             uint32_t intu = intuition_obj();
             uint32_t scr = 0;
             if (intu && machine_) { try { scr = machine_->r32(intu + 0x24); } catch (...) {} }
-            std::printf("  [click] %d,%d  btn=%u  win=%dx%d  screen=%#x\n",
-                        mouse_x_, mouse_y_, (unsigned)bit,
-                        video_.width(), video_.height(), scr);
-            std::fflush(stdout);
+            // stderr, for the reason given at the Alt+Enter handler: operator
+            // actions have to line up against the [health] samples, and a
+            // session is captured with `2>`.
+            std::fprintf(stderr, "  [click] %d,%d  btn=%u  win=%dx%d  screen=%#x\n",
+                         mouse_x_, mouse_y_, (unsigned)bit,
+                         video_.width(), video_.height(), scr);
+            std::fflush(stderr);
         }
         static int nlog;
         if (nlog++ < 16)
@@ -3356,8 +3411,13 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
             e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER) {
             if (e.type == SDL_KEYDOWN && (e.key.keysym.mod & KMOD_ALT) && !e.key.repeat) {
                 fs_toggle_swallow_ = true;
-                std::printf("  [video] Alt+Enter → %s\n",
-                            video_.is_fullscreen() ? "windowed" : "fullscreen");
+                // stderr: this is a record of what the operator did, so it
+                // belongs in the same stream as the [health] samples it has to
+                // be lined up against. On stdout a `2>trial.log` capture kept
+                // the allocation step and lost the toggle that caused it.
+                std::fprintf(stderr, "  [video] Alt+Enter → %s\n",
+                             video_.is_fullscreen() ? "windowed" : "fullscreen");
+                std::fflush(stderr);
                 video_.toggle_fullscreen();
                 return;
             }
@@ -3380,6 +3440,30 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
             }
             if (e.type == SDL_KEYUP && console_key_swallow_) {
                 console_key_swallow_ = false;
+                return;
+            }
+        }
+        // Alt+M stamps a numbered marker into the log. Both long sessions so far
+        // were confounded the same way: the activities were in a paper notebook
+        // and the samples were in the log, and lining them up after the fact
+        // meant guessing which 60s interval a battle started in. A marker puts
+        // the boundary in the data. It also forces the next [health] out
+        // immediately (longrun_tick), so the interval boundary is the event.
+        //
+        // Live only while the long-session harness is armed — outside a measured
+        // run Alt+M is the game's, and Alt is a modifier the game itself uses
+        // (Alt+A selects all units), so claiming a key unconditionally is not
+        // free. Swallowed down and up for the Alt+Enter reason: eKey for 'M' is
+        // a live game key, and an unpaired release is the G16 stale-key class.
+        if (longrun_ && e.key.keysym.scancode == SDL_SCANCODE_M) {
+            if (e.type == SDL_KEYDOWN && (e.key.keysym.mod & KMOD_ALT) && !e.key.repeat) {
+                mark_pending_ = true;
+                mark_key_swallow_ = true;
+                ++mark_seq_;
+                return;
+            }
+            if (e.type == SDL_KEYUP && mark_key_swallow_) {
+                mark_key_swallow_ = false;
                 return;
             }
         }

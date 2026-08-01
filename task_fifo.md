@@ -11,10 +11,60 @@ All three host cleanups surfaced by the 2026-07-26 documentation pass (reading
 `port/src` structurally rather than chronologically — see
 `docs/porting/host-architecture.md`) are now closed: the hardcoded game
 singletons, the `CloseSubsystems` teardown question, and the trap-window page
-maths. See Done below. What remains under playability is a test, not a change.
+maths. See Done below. What remains under playability is mostly measurement —
+the leak is real but unattributed. The instruments are built and proven on real
+runs now; four trials have eliminated four candidates without finding it.
 
-1. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
-   itself is yours.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
+1. **Controlled leak experiments** — *four run, four eliminations; see
+   [docs/porting/heap-growth-trials.md](docs/porting/heap-growth-trials.md) for
+   the results, the reference numbers and the seven instrument defects they
+   turned up.* Idling allocates nothing on either screen, the window mode
+   allocates nothing, and the realm↔province sawtooth saturates at ~8 KB/cycle.
+   The +7–11 MB/h of sustained play is still unattributed.
+
+   Protocol, the same for every trial: boot → load the **same** save → do only
+   that one thing → exit **via the menu**. `THEOC_LONGRUN=15 THEOC_FRAME_MS=50`,
+   stderr to a file. **`Alt+M`** once the activity has settled and again when it
+   ends — the segment between two marks is the measurement, and
+   `tools/plot_health.py --table` prints one row per segment. Read **`moves` and
+   `max Δ`, not the fitted slope**, and compare on **MB/1k frames**.
+
+   1. **As many battles as one session allows** — ***run this next.*** The
+      suspected heavy allocator, the only trial where fps is expected to move,
+      and the leading candidate by elimination: battles are the largest thing
+      the two long sessions were doing that the trials have not yet ruled out.
+
+      Mark on entering a battle and again on leaving it, every time, so each
+      battle is its own segment — they will differ in size and length, and
+      `MB/1k frames` is what makes them comparable. Sit 2 min on the map at the
+      end. Watch `blk/frame` too: the 2026-07-31 fps-11.5 battle is still
+      unexplained, and this is the trial that says whether it was saturation.
+   2. **Reload → menu → reload → menu, 5 min** — the load path, and there is only
+      one: the game has **no in-game load**, a save can only be loaded after
+      quitting to the menu. `THEOC_SOAK` measures its scripted twin at
+      +18 KB/cycle; this is the human version, with the UI in the loop. The
+      load itself costs **+21.9 MB**, so a 15 s sample resolves it cleanly.
+   3. **Open/close each UI panel ×20** (diplomacy, tribe, …) — the last of the
+      cheap screen-transition candidates, and the trial that also covers the
+      pure input path dropped from the original list.
+   4. **One activity at two frame caps** (`THEOC_FRAME_MS=83` then `=50`) — the
+      discriminator. Growth constant per 1k frames ⇒ the leak is per sim tick
+      (guest); constant per hour ⇒ it is host- or wall-clock-driven. That halves
+      the search space before any attribution work. Needs an activity that
+      actually grows, so it is downstream of trial 1.
+
+   Read **host RSS** alongside guest live in every trial: it grew +99 MB over the
+   2026-07-31 session and nothing attributes it. Cutscenes are the obvious host-side
+   suspect (SMPEG decodes a whole movie to RGB565 host-side and frees on delete)
+   but cannot be made into a trial — they fire on random events or a victory, so
+   there is no way to loop them.
+
+   Only after the trials, the allocation-site histogram — they may well have
+   named the culprit first.
+
+2. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
+   itself is yours. Now downstream of the experiments above: it is a soak, not a
+   measurement.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
    snapshot, rate-limits the repeatable log lines so an overnight session cannot
    fill the disk, arms the watchdog, and lifts the `Start()` wall-clock budget.
    All on stderr, so `2>session.log` captures everything.
@@ -62,6 +112,11 @@ maths. See Done below. What remains under playability is a test, not a change.
    per-activity rates can be separated. Then the allocation-site histogram,
    which is the only way to attribute it.
 
+3. **Fixing remaining buttons and shortcuts** — some shortcuts still don't seem
+   to function in the game, but from testing I couldn't identify a structure to it.
+   For example, Alt+A (⌥A on macOS) worked for selecting all units, but Alt+U
+   didn't work for selecting idle workers.
+
 ## Modernisation (deferred — after playability)
 
 2. **Decouple sim from render (frame-tied engine)** — the engine steps
@@ -92,6 +147,22 @@ maths. See Done below. What remains under playability is a test, not a change.
    a 3× render target, then linear to screen — also wins back the ~5% area integer
    scaling costs) plus an optional scanline knob. Full assessment, including the two
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
+
+6. **Fixing the game saves** — the save files store the world state in an appending
+   fashion with a pre-baked structure. The underlying data structure is likely an
+   array, with a separately stored index that points to the latest save. But they
+   didn't safeguard from overflow, meaning that if you save more times than the
+   array was initialized to (~56) the save process overwrites regions of the save
+   it's not supposed to, thus corrupting the save file. Manually editing the index
+   allows continuing to use the save file. I suspect this was done for debug tests
+   (after all the game version is 0.6.x) and we should simply fix that index to
+   always be 0.
+
+   **Save ×60 is the repro**, and it doubles as a leak trial (see Playability #1):
+   saving sixty times in one session walks the index past the ~56-entry array
+   deterministically, and with `THEOC_LONGRUN=15` running the same session also
+   measures allocation per save. Do it here rather than as a separate experiment —
+   the corruption is the point, the leak figure is the by-product.
 
 ## Done
 

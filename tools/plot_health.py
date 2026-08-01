@@ -25,7 +25,10 @@ from pathlib import Path
 # block and the original three-line one (which reported growth off the frontier
 # — see the harness comment in port/src/traps.cpp for why that was wrong).
 HEAD = re.compile(r"^\[health\] (?:(\d\d:\d\d:\d\d) \| )?up ([\d.]+)h \| "
-                  r"([\d.]+) fps \(cap (\d+)ms\) \| frames (\d+)")
+                  r"([\d.]+) fps \(cap (\d+)ms\) \| frames (\d+)"
+                  # Guest work per interval — absent from logs written before it
+                  # was added, hence optional.
+                  r"(?: \| ([\d.]+)M blk/s \(([\d.]+)M/frame\))?")
 N = r"([+-]?[\d.]+)"
 FIELDS = [
     (re.compile(rf"heap live {N} MB"),                       ["heap_live"]),
@@ -33,7 +36,10 @@ FIELDS = [
     (re.compile(rf"frontier {N} MB of {N} MB arena"),        ["heap_frontier", "arena"]),
     (re.compile(rf"grew {N} MB total \(avg {N} MB/h\)"),     ["grew_total", "avg_mbh"]),
     (re.compile(rf"interval {N} MB/h, {N} MB/1k frames"),    ["interval_mbh", "mb_per_1k"]),
-    (re.compile(rf"\({N} MB/h -> {N} h headroom\)"),         ["front_mbh", "headroom_h"]),
+    # Headroom reads "n/a (warm-up)" until the scenario load stops dominating
+    # the since-start frontier rate, so it is matched separately from the rate.
+    (re.compile(rf"\({N} MB/h -> "),                         ["front_mbh"]),
+    (re.compile(rf"-> {N} h headroom\)"),                    ["headroom_h"]),
     (re.compile(rf"rss {N} MB \({N} since start\)"),         ["rss", "rss_delta"]),
     (re.compile(r"esp (0x[0-9a-f]+)"),                       ["esp"]),
     (re.compile(r"stubs (\d+) B \| fds (\d+)"),              ["stubs", "fds"]),
@@ -45,6 +51,13 @@ INT_KEYS = {"stubs", "fds", "underrun", "suppressed", "frames", "cap_ms"}
 # A movie starting is the one session event with a visible resource signature
 # (SMPEG decodes the whole file up front), so it is worth marking on the axes.
 MOVIE = re.compile(r"^\[swscaler .*colorspace conversion")
+# Alt+M markers. The operator puts these where the activity changed, which is
+# the only thing in the log that knows what the session was actually doing.
+# The frame count is what segment boundaries are cut on: `up 0.01h` is a 36 s
+# quantum, so an hours-based boundary silently swallowed up to two samples
+# before the marker — on trial 6 (2026-08-01) that pulled the +21.9 MB save load
+# into the first segment and turned a +6.3 MB result into +30.7.
+MARK = re.compile(r"^\[mark\] #(\d+) \S+ \| up [\d.]+h \| frames (\d+)")
 
 # Reference categorical palette, slots 1/2/6/7 — the ones that clear the
 # light-surface contrast floor. Dark steps are the same hues re-stepped.
@@ -54,12 +67,13 @@ SERIES = {
     "fps":      ("#008300", "#008300"),   # slot 6 green
     "rss":      ("#4a3aa7", "#9085e9"),   # slot 7 violet
     "underrun": ("#e34948", "#e66767"),   # slot 8 red
+    "blocks":   ("#0f7d7d", "#2fa8a8"),   # slot 4 teal, re-stepped for contrast
 }
 
 
 def parse(path):
-    """-> (rows, movie_times). Each row is one [health] block, flattened."""
-    rows, movies, cur = [], [], None
+    """-> (rows, movie_times, marks). Each row is one [health] block, flattened."""
+    rows, movies, marks, cur, pending_mark = [], [], [], None, None
 
     def flush():
         # A block needs at least the two series every panel depends on.
@@ -73,6 +87,20 @@ def parse(path):
             flush()
             cur = dict(clock=m[1], hours=float(m[2]), fps=float(m[3]),
                        cap_ms=int(m[4]), frames=int(m[5]))
+            if m[6]:
+                cur["blk_per_s"], cur["blk_per_frame"] = float(m[6]), float(m[7])
+            # A marker forces the sample that follows it, so it belongs at that
+            # sample's time, not at the one before it.
+            if pending_mark is not None:
+                marks.append(dict(seq=pending_mark[0], frames=pending_mark[1],
+                                  hours=cur["hours"]))
+                pending_mark = None
+            continue
+        mk = MARK.match(line)
+        if mk:
+            flush()
+            cur = None
+            pending_mark = (int(mk[1]), int(mk[2]))
             continue
         if cur is not None and line.startswith(" "):
             for rx, keys in FIELDS:
@@ -89,7 +117,7 @@ def parse(path):
             # No timestamp on the line itself; place it at the last sample.
             movies.append(rows[-1]["hours"])
     flush()
-    return rows, movies
+    return rows, movies, marks
 
 
 def reloads(rows, drop_mb=5.0):
@@ -102,6 +130,51 @@ def reloads(rows, drop_mb=5.0):
     for a, b in zip(rows, rows[1:]):
         if a["heap_live"] - b["heap_live"] >= drop_mb:
             out.append((b["hours"], a["heap_live"] - b["heap_live"]))
+    return out
+
+
+def segments(rows, marks):
+    """The stretch after each Alt+M marker, up to the next one.
+
+    This is what the marker exists for. A controlled trial is one segment, and
+    the two figures that make trials comparable are its fitted slope and its
+    growth per 1k frames — per-hour rates are not comparable across trials run
+    at different frame caps, because the engine is frame-tied.
+    """
+    if not marks:
+        return []
+    # Cut on frames, not hours — see the MARK comment.
+    edges = [m["frames"] for m in marks] + [float("inf")]
+    out = []
+    for m, f1 in zip(marks, edges[1:]):
+        h0, seq, f0 = m["hours"], m["seq"], m["frames"]
+        seg = [r for r in rows if f0 <= r["frames"] < f1]
+        if len(seg) < 3:      # two samples fit a line through noise
+            continue
+        # A double-tapped marker produces two marks in the same second, and the
+        # forced samples between them look like a segment with three samples and
+        # no duration. Anything under 30 s cannot carry a rate; drop it rather
+        # than print a row of zeroes that reads like a measured null.
+        if (seg[-1]["hours"] - seg[0]["hours"]) * 3600 < 30:
+            continue
+        mbh, _ = fit(seg, "heap_live", 0.0)
+        fps = sum(r["fps"] for r in seg) / len(seg)
+        # A fitted slope cannot tell "leaks steadily" from "flat, then one step"
+        # — and one step at a segment boundary drags the fit hard. Trial 2
+        # (2026-08-01) was 38 identical samples plus a single +1.08 MB step as
+        # the trial ended, which the slope alone reported as +0.88 MB/h of
+        # province idle. So count the moves and show the largest.
+        deltas = [b["heap_live"] - a["heap_live"] for a, b in zip(seg, seg[1:])]
+        moves = [d for d in deltas if abs(d) >= 0.05]
+        out.append(dict(
+            seq=seq, t0=h0, mins=(seg[-1]["hours"] - seg[0]["hours"]) * 60,
+            n=len(seg), fps=fps, mbh=mbh,
+            moves=len(moves),
+            big=max(deltas, key=abs, default=0.0),
+            mb1k=mbh * 1000 / (fps * 3600) if fps else 0.0,
+            net=seg[-1]["heap_live"] - seg[0]["heap_live"],
+            blk=(sum(r["blk_per_frame"] for r in seg) / len(seg)
+                 if all("blk_per_frame" in r for r in seg) else None)))
     return out
 
 
@@ -148,7 +221,7 @@ def nice_ticks(lo, hi, want=4):
     return out or [lo, hi]
 
 
-def panel(rows, movies, idx, title, note, series, x_of, fmt="{:.0f}"):
+def panel(rows, movies, marks, idx, title, note, series, x_of, fmt="{:.0f}"):
     """One stacked panel: shared x, own y. `series` is [(key, label, role)]."""
     top = TOP + idx * (PANEL_H + PANEL_GAP)
     bot = top + PANEL_H
@@ -174,6 +247,16 @@ def panel(rows, movies, idx, title, note, series, x_of, fmt="{:.0f}"):
     for h in movies:  # recessive event rules, behind the data
         o.append(f'<line class="movie" x1="{x_of(h):.1f}" y1="{top}" x2="{x_of(h):.1f}" y2="{bot}"/>')
 
+    # Markers are the operator's own partition of the session, so they read
+    # stronger than a movie rule — but still behind the series. Numbered on the
+    # top panel only; repeating the label four times is noise.
+    for mk in marks:
+        x = x_of(mk["hours"])
+        o.append(f'<line class="mark" x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{bot}"/>')
+        if idx == 0:
+            o.append(f'<text class="marklab" x="{x:.1f}" y="{top - 4}" '
+                     f'text-anchor="middle">{mk["seq"]}</text>')
+
     for key, label, role in series:
         c = f"var(--{role})"
         pts = " ".join(f"{x_of(r['hours']):.1f},{y_of(r[key]):.1f}" for r in rows)
@@ -186,8 +269,12 @@ def panel(rows, movies, idx, title, note, series, x_of, fmt="{:.0f}"):
     return "\n".join(o), y_of
 
 
-def render(rows, movies, slope, since):
+def render(rows, movies, marks, slope, since):
     span = rows[-1]["hours"] or 1.0
+    # Not hardcoded 60: a trial is run at THEOC_LONGRUN=15. Averaged over the
+    # whole span rather than taken per-sample, because uptime prints to 0.01h —
+    # a 36s quantum, which makes every individual delta 36 or 72.
+    interval_s = span * 3600 / max(1, len(rows) - 1)
     x_of = lambda h: PAD_L + (h / span) * (W - PAD_L - PAD_R)
     panels = [
         ("Guest heap", "live vs frontier (high-water) — MB", [
@@ -196,9 +283,16 @@ def render(rows, movies, slope, since):
         ("Frame rate", "fps against the 50 ms cap", [("fps", "fps", "fps")], "{:.1f}"),
         ("Audio underruns", "frames per interval", [("underrun", "underruns", "underrun")], "{:.0f}"),
     ]
+    # Guest work sits under the frame rate: together they say whether a slow
+    # stretch was the guest doing more work or the host falling behind. Only
+    # plotted if every sample has it — a log that predates the field would
+    # otherwise draw a panel with holes in it.
+    if all("blk_per_frame" in r for r in rows):
+        panels.insert(3, ("Guest work", "million basic blocks per frame",
+                          [("blk_per_frame", "blk/frame", "blocks")], "{:.2f}"))
     body, last_y = [], None
     for i, (title, note, series, fmt) in enumerate(panels):
-        svg, y_of = panel(rows, movies, i, title, note, series, x_of, fmt)
+        svg, y_of = panel(rows, movies, marks, i, title, note, series, x_of, fmt)
         body.append(svg)
         if i == 0:  # trend line on the headline panel only
             a, b = slope, fit(rows, "heap_live", since)[1]
@@ -225,7 +319,9 @@ def render(rows, movies, slope, since):
               f'<rect x="{PAD_L + 92}" y="{LEGEND_Y}" width="10" height="10" rx="2" fill="var(--frontier)"/>'
               f'<text class="leg" x="{PAD_L + 108}" y="{LEGEND_Y + 9}">frontier</text>'
               f'<line x1="{PAD_L + 186}" y1="{LEGEND_Y + 5}" x2="{PAD_L + 206}" y2="{LEGEND_Y + 5}" class="movie"/>'
-              f'<text class="leg" x="{PAD_L + 212}" y="{LEGEND_Y + 9}">movie start</text></g>')
+              f'<text class="leg" x="{PAD_L + 212}" y="{LEGEND_Y + 9}">movie start</text>'
+              f'<line x1="{PAD_L + 290}" y1="{LEGEND_Y + 5}" x2="{PAD_L + 310}" y2="{LEGEND_Y + 5}" class="mark"/>'
+              f'<text class="leg" x="{PAD_L + 316}" y="{LEGEND_Y + 9}">Alt+M marker</text></g>')
 
     css = """
   .bg{fill:var(--surface-1)}
@@ -242,6 +338,8 @@ def render(rows, movies, slope, since):
   .ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
   .dot{stroke:var(--surface-1);stroke-width:2}
   .movie{stroke:var(--text-muted);stroke-width:1;stroke-dasharray:2 4;opacity:.75}
+  .mark{stroke:var(--text-secondary);stroke-width:1.25;opacity:.55}
+  .marklab{font-size:10.5px;font-weight:600;fill:var(--text-secondary)}
   .trend{stroke:var(--text-secondary);stroke-width:1.5;stroke-dasharray:5 4;opacity:.9}
   .trendlab{font-size:11.5px;font-weight:600;fill:var(--text-secondary)}
 """
@@ -262,7 +360,7 @@ def render(rows, movies, slope, since):
 {css}</style>
 <rect class="bg" x="0" y="0" width="{W}" height="{h_total}"/>
 <text class="title" x="{PAD_L}" y="34">Theocracy long-session health — {span:.2f} h, {len(rows)} samples</text>
-<text class="sub" x="{PAD_L}" y="54">{len(rows)} × 60 s [health] intervals · {rows[-1]['frames']:,} frames · cap {rows[-1]['cap_ms']} ms</text>
+<text class="sub" x="{PAD_L}" y="54">{len(rows)} × {interval_s:.0f} s [health] intervals · {rows[-1]['frames']:,} frames · cap {rows[-1]['cap_ms']} ms</text>
 {legend}
 {chr(10).join(body)}
 {chr(10).join(axis)}
@@ -272,17 +370,26 @@ def render(rows, movies, slope, since):
 
 # ---- text ------------------------------------------------------------------
 
-def table(rows, slope, since, fslope):
+def table(rows, marks, slope, since, fslope):
     out = [f"{len(rows)} samples over {rows[-1]['hours']:.2f} h "
            f"({rows[-1]['frames']:,} frames, cap {rows[-1]['cap_ms']} ms)", ""]
     stamped = any(r.get("clock") for r in rows)
+    blocked = all("blk_per_frame" in r for r in rows)
+    at_mark = {m["frames"] for m in marks}
     hdr = (f"{'clock':>9} " if stamped else "") + \
-          f"{'t/h':>6} {'fps':>6} {'live':>8} {'front':>8} {'rss':>8} {'under':>8} {'esp':>12}"
+          f"{'t/h':>6} {'fps':>6} " + (f"{'blk/f':>7} " if blocked else "") + \
+          f"{'live':>8} {'front':>8} {'rss':>8} {'under':>8} {'esp':>12}"
     out += [hdr, "-" * len(hdr)]
     for r in rows:
+        # A marked sample is called out in the table too — the segment summary
+        # below is the point, but you still want to find the boundary by eye.
+        tag = " <" if r["frames"] in at_mark else ""
         out.append((f"{r.get('clock') or '':>9} " if stamped else "") +
-                   f"{r['hours']:6.2f} {r['fps']:6.1f} {r['heap_live']:8.2f} "
-                   f"{r['heap_frontier']:8.2f} {r['rss']:8.1f} {r['underrun']:8d} {r['esp']:>12}")
+                   f"{r['hours']:6.2f} {r['fps']:6.1f} " +
+                   (f"{r['blk_per_frame']:7.3f} " if blocked else "") +
+                   f"{r['heap_live']:8.2f} "
+                   f"{r['heap_frontier']:8.2f} {r['rss']:8.1f} {r['underrun']:8d} "
+                   f"{r['esp']:>12}{tag}")
     last = rows[-1]
     # Headroom is set by the frontier, not by live: OOM is the bump frontier
     # running out of arena, and the frontier is what the live set drags upward.
@@ -299,6 +406,22 @@ def table(rows, slope, since, fslope):
     if rl:
         out.append("live-set drops (teardown / save reload): " +
                    ", ".join(f"{h:.2f}h -{d:.1f} MB" for h, d in rl))
+    segs = segments(rows, marks)
+    if segs:
+        out += ["", "marked segments (Alt+M -> next marker):",
+                f"  {'#':>3} {'from':>6} {'mins':>6} {'n':>4} {'fps':>6} " +
+                (f"{'blk/f':>7} " if all(s["blk"] is not None for s in segs) else "") +
+                f"{'net MB':>8} {'MB/h':>8} {'MB/1k fr':>9} {'moves':>6} {'max Δ':>7}"]
+        for s in segs:
+            out.append(f"  {s['seq']:>3} {s['t0']:6.2f} {s['mins']:6.1f} {s['n']:4d} "
+                       f"{s['fps']:6.1f} " +
+                       (f"{s['blk']:7.3f} " if s["blk"] is not None else "") +
+                       f"{s['net']:+8.2f} {s['mbh']:+8.3f} {s['mb1k']:+9.4f} "
+                       f"{s['moves']:6d} {s['big']:+7.2f}")
+        out.append("  MB/1k frames is the cross-trial figure; MB/h only compares "
+                   "trials at the same frame cap.")
+        out.append("  moves = samples that changed live by >=0.05 MB. Few moves with a "
+                   "big max Δ means steps, not a leak — read the column, not the slope.")
     return "\n".join(out)
 
 
@@ -313,17 +436,17 @@ def main():
                          "(default 0.35 — the scenario load dominates before that)")
     a = ap.parse_args()
 
-    rows, movies = parse(a.log)
+    rows, movies, marks = parse(a.log)
     if len(rows) < 2:
         sys.exit(f"{a.log}: found {len(rows)} [health] samples — run with THEOC_LONGRUN=60")
 
     slope, _ = fit(rows, "heap_live", a.since)
     fslope, _ = fit(rows, "heap_frontier", a.since)
-    print(table(rows, slope, a.since, fslope))
+    print(table(rows, marks, slope, a.since, fslope))
     if a.table:
         return
     out = Path(a.out or (Path(a.log).with_suffix("").name + "-health.svg"))
-    out.write_text(render(rows, movies, slope, a.since))
+    out.write_text(render(rows, movies, marks, slope, a.since))
     print(f"\nwrote {out}")
 
 

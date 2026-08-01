@@ -66,7 +66,7 @@ then falls into whatever that variable's zero case is.
 | `THEOC_FPS` | presence | off | Per-second `[fps]` line on stderr: fps, guest blocks/s and blocks/frame (the saturation check), heartbeat and mixer redirect rates, `usleep` ms/s and call count, `gettimeofday`/s, `select`/s, audio queue depth in seconds and underruns/s, guest heap live MB and frontier growth MB/s. The tool that split throughput-bound from timing-bound; its heap column also caught the G14 `cIntuition` corruption. |
 | `THEOC_PROFILE` | presence | off | Size-weighted guest basic-block histogram (Σ instruction bytes ≈ work), rolling top-15 dumped every 3s so the window tracks whatever is on screen. Host trap/stub/scratch pages (≥ `0x50000000`) are excluded; addresses are labelled `game 0x…` / `mvos+0x…` for the two Ghidra DBs. Armed just before `Start`, so boot and `.ctors` are not in the sample. Found the hot blit functions. |
 | `THEOC_TRACE` | presence | off | 32-entry ring of the last basic-block entries, dumped (oldest-first, labelled) when `Start` faults. Essential exactly when the EBP walk cannot help: at `eip=0` the frame pointer is usually 0 too, and this is then the only thing that shows how control got there. |
-| `THEOC_WATCHDOG` | seconds | off; **10s** when the value is ≤ 1 | Host thread, armed on the first present. Polls the present counter every 250ms; after the given stall it samples `exec_blocks` and the trap sequence over 500ms and reports uptime, stall length, guest running/not-running, the last guest EIP, the last trap name and live heap. |
+| `THEOC_WATCHDOG` | seconds | off; **10s** when the value is ≤ 1 | Host thread, armed on the first present. Polls the present counter every 250ms; after the given stall it samples `exec_blocks` and the trap sequence over 500ms and reports uptime, stall length, guest running/not-running, the last guest EIP, the last trap name and live heap. **Arms the guest block counter itself** — its whole verdict is read off `exec_blocks`, and that counter used to be armed by `THEOC_FPS` alone (see "A counter nobody armed" below). |
 | `THEOC_WATCHDOG_SAMPLE` | path | off | On a **host-side** stall only (guest not executing), shells out to `sample <pid> 1 -file <path>` to capture a native stack of exactly that moment. An aggregate profile over a 40s run cannot isolate a 1.5s window. |
 | `THEOC_SLOWLOG` | milliseconds | off; **250ms** when the value is ≤ 1 | Prints `[slow] <section> took N ms` for any host-side section that blocks the emulation thread past the threshold. Covers every trap dispatch, every plugin dispatch, `OpenDisplay` and `present`. The deliberate frame-cap sleep is credited out, or every capped frame would report as an 83ms "slow" section and bury the real ones. |
 | `THEOC_REPORT_CLICKS` | presence | off | Logs every mouse-button-down as `[click] x,y btn= win=WxH screen=0x…`, in a form that pastes straight into a `THEOC_CLICKS` path. The active `cScreen*` (`Intuition+0x24`) doubles as a screen identity — clicks sharing that value are on the same screen. |
@@ -86,7 +86,7 @@ then falls into whatever that variable's zero case is.
 | `THEOC_SHOT_DIR` | path | `.` | Destination directory for the above. |
 | `THEOC_AUTO_PROVINCE` | presence | off | Self-drives menu → Prophecy (80,260) → OK (466,537) into province view on a wall clock (steps at 1.5/1.7/1.9s and 3.5/3.7/3.9s), for unattended timing tests. Wall-clock rather than frame-counted because fps varies wildly across screens. One-way trip — it cannot cycle; that is what `THEOC_SOAK` is for. |
 | `THEOC_AUTO_MENU` | presence | off | Bring-up driver: once an 800×600 menu has presented 45 frames, synthesizes aim/down/up on the Single Player button (80,260; `menu.cfg` "single 20 250") at frames 45/50/55. Guarded on `width()==800` so it cannot fire on another screen. |
-| `THEOC_LONGRUN` | seconds | off; **60s** when the value parses ≤ 0 | The multi-hour session harness. Prints a four-line `[health]` snapshot on that interval — wall-clock time (so an out-of-band note like "reloaded a save at 21:44" can be lined up against the samples), uptime, fps and the frame cap in effect, **live-set growth** since start and per interval, the frontier as a level with its own rate and the resulting arena headroom, host RSS delta, guest ESP, stub bytes, open fds, audio queue depth and underrun frames, and how many log lines have been suppressed. Also **rate-limits repeatable log lines** (`[slow]`, ignored aborts: a burst of 5 then one per 60s, with the dropped count surfaced in `[health]`), so a stuck condition cannot write gigabytes overnight. Arms `THEOC_WATCHDOG=30` and lifts `THEOC_START_SEC` to unlimited, each unless set explicitly — the Start budget's 600s default otherwise caps a multi-hour session at ten minutes. Everything goes to **stderr**, like every other instrument, so `2>log` captures the whole session. |
+| `THEOC_LONGRUN` | seconds | off; **60s** when the value parses ≤ 0 | The multi-hour session harness. Prints a four-line `[health]` snapshot on that interval — wall-clock time (so an out-of-band note like "reloaded a save at 21:44" can be lined up against the samples), uptime, fps and the frame cap in effect, **guest blocks/s and blocks/frame** (the same saturation check `[fps]` gives, so a slow interval can be classified rather than guessed at), **live-set growth** since start and per interval, the frontier as a level with its own rate and the resulting arena headroom (**withheld as `n/a (warm-up)` for the first 0.5 h**, because the since-start frontier rate is dominated by the one-time ~27 MB scenario load: a ten-minute trial otherwise reports a terrifying "+6498 MB/h -> 0.0 h headroom" while the live set is dead flat), host RSS delta, guest ESP, stub bytes, open fds, audio queue depth and underrun frames, and how many log lines have been suppressed. Also **rate-limits repeatable log lines** (`[slow]`, ignored aborts: a burst of 5 then one per 60s, with the dropped count surfaced in `[health]`), so a stuck condition cannot write gigabytes overnight. **`Alt+M` stamps a numbered `[mark]` line into the log** and forces the next `[health]` out immediately, so an interval boundary lands on the event instead of wherever the timer was; the hotkey is live only while this harness is armed, because Alt is a modifier the game itself uses. Arms `THEOC_WATCHDOG=30` and lifts `THEOC_START_SEC` to unlimited, each unless set explicitly — the Start budget's 600s default otherwise caps a multi-hour session at ten minutes. Everything goes to **stderr**, like every other instrument, so `2>log` captures the whole session. |
 | `THEOC_AUTO_KEYS` | presence | off | Taps SPACE (down, then up 0.2s later) every 6s through the real SDL event path, from both present sites so it also fires during cutscenes. The mouse self-drivers never press a key, so the keyboard half of the input path had no unattended coverage — and SPACE is exactly the key that wedged `cIntuition::PushKeyInput`. |
 | `THEOC_SERVER` | presence | off (boots `data/cd/linux/theocracy.real`) | Boots the shipped dedicated server `data/cd/linux/server` instead — same host, same linker, same HLE. Headless is *derived*, not declared: `server` carries no `_12cApplication.Video` requirement flag, so video/input/blit bring-up is skipped automatically. |
 | `THEOC_START_ANYWAY` | presence | off | Calls `Start__12cApplication` even when `OpenSubsystems` did not return cleanly. For bringing up a boot path that dies in subsystem open, when you want to see how far the game itself gets. Previously undocumented. |
@@ -133,8 +133,9 @@ Not diagnostics, but they shape every run and belong in one list.
 | **It crashed at `eip=0`.** | The zero-GOT scan (always on) is already in the log — if it says 0 slots, it is *not* an unresolved import. Then `THEOC_TRACE=1`, because at `eip=0` the frame pointer is normally 0 and the EBP backtrace prints "no frame pointer". `eip=0` with `EBP=0` means a smashed frame; look for who wrote past a buffer. |
 | **Audio stutters.** | `THEOC_FPS=1` — `underrun=N/s` counts callback samples pulled from an empty queue, and `audio q=` is the current depth in seconds. Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
 | **A visual bug.** | Frames, not logs. `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` to capture (it covers cutscenes too), `THEOC_CLICKS="x,y;x,y"` to drive to the screen, `THEOC_MOUSE_SWEEP=1` when the bug needs a moving pointer across consecutive frames. Lift the coordinates with `THEOC_REPORT_CLICKS=1` first. For geometry and scaling, read the `[video]` line before looking at the screen. |
-| **A multi-hour session.** | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. **Growth per 1k frames is the figure to compare across runs**, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
+| **A multi-hour session.** | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. **Press `Alt+M` whenever the activity changes** — battle, reload, panel, idle. Without markers a session is one undifferentiated slope and every segment boundary is a guess; with them the tool prints a per-segment table (fitted MB/h, MB/1k frames, mean fps and blk/frame between one marker and the next) and rules them onto the chart. A controlled trial is one marked segment. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. **Growth per 1k frames is the figure to compare across runs**, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
 | **It leaks over a long session.** | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. **Watch `live`, not `frontier`** — see the note below. Note there is no allocation-site histogram; attributing a slow leak would need one built. |
+| **A missing import.** | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
 
 ### Live set vs. frontier — why the growth figures moved
 
@@ -160,7 +161,35 @@ level with its own rate — because headroom against the 128 MB arena genuinely
 **The general lesson**, which is the same one `frame-timing.md` teaches about
 clocks: when an instrument reads exactly zero, confirm it *can* be non-zero
 before believing it.
-| **A missing import.** | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
+
+### A counter nobody armed
+
+The same lesson, caught again on 2026-08-01 and worth its own note because the
+zero this time was in the *other* direction — an instrument that always gave the
+same confident answer rather than an obviously dead one.
+
+`Machine::exec_blocks()` only counts if a block hook was installed, and the hook
+was installed by `THEOC_FPS` alone. Three instruments read the counter:
+
+- `[fps]` — armed it itself, so it was always right.
+- `[health]` — did not report it at all, which is why the 2026-07-31 session
+  cannot say whether its 11.5 fps battle was the guest doing more work or the
+  host falling behind. It reports it now.
+- **the watchdog** — its entire verdict is `db ? "STILL RUNNING (spinning)" :
+  "NOT EXECUTING (stuck host-side)"`. With the counter unarmed, `db` is 0 every
+  time. A `THEOC_WATCHDOG=30`-only run — the documented first reach on "it froze"
+  — would therefore have called *every* stall host-side, whatever the guest was
+  doing, and sent the reader to `THEOC_SLOWLOG` for a handler that was not the
+  problem. No stall has fired on such a run yet, so nothing was misdiagnosed;
+  the bug was found by reading the code, not by being burned by it.
+
+`THEOC_LONGRUN` and `THEOC_WATCHDOG` now arm the counter themselves. It costs one
+relaxed increment per basic block, and that does cost frames — which is the
+standing reason growth is reported per 1k frames as well as per hour.
+
+**The lesson to carry:** a shared instrument reads state that something *else*
+switched on. Check the arming path from every consumer, not just the one you
+built it for.
 
 ---
 
@@ -193,7 +222,10 @@ is itself the finding: go to `THEOC_TRACE`.
 hit, split into implemented (with total calls) and **UNIMPLEMENTED** (with total
 calls, then listed by name, most-called first), followed by guest heap live MB,
 frontier MB, arena MB and free-block count. `0 unimplemented` is the standing
-regression bar for every commit. `Mvos::report` adds a vtable-slots-hit line in
+regression bar for every commit. **On stderr**, like every other instrument — it
+was on stdout until 2026-08-01, which meant the documented `2>session.log`
+capture recipe dropped it: the 2026-07-31 two-hour session exited normally and
+still has no end-of-run allocator state, because it went to a terminal. `Mvos::report` adds a vtable-slots-hit line in
 the legacy layer. `main` prints the matching `.ctors` tally (ok / aborted /
 no-return / faulted).
 

@@ -343,7 +343,17 @@ int main(int argc, char** argv) {
         // boot/ctors aren't in the sample.
         if (std::getenv("THEOC_TRACE")) m.enable_block_trace();
         if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
-        else if (std::getenv("THEOC_FPS")) m.enable_block_counter();
+        // Three instruments read exec_blocks(), not one: [fps], the [health]
+        // line, and the watchdog's "guest spinning vs stuck host-side" verdict.
+        // Arming the counter for THEOC_FPS alone left the other two reading a
+        // frozen zero, so a watchdog-only run — the documented first reach on
+        // "it froze" — called every stall "NOT EXECUTING" no matter what the
+        // guest was doing. It costs one relaxed increment per basic block, and
+        // that does cost frames; growth is reported per 1k frames as well as per
+        // hour precisely so a session with it on stays comparable to one without.
+        else if (std::getenv("THEOC_FPS") || std::getenv("THEOC_LONGRUN") ||
+                 std::getenv("THEOC_WATCHDOG"))
+            m.enable_block_counter();
 
         // Native overrides for the hot LFB16 software rasterizer (province view
         // was CPU-bound emulating these pixel loops). THEOC_NATIVE_BLIT=0 falls
