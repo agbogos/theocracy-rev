@@ -3545,11 +3545,19 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
                 if (held(0x3f) || held(0x41)) q |= 8;   // meta
                 m.write(intu + 0xb0, &q, 1);
             }
+            // 24 events is enough to see the input path come up at boot, and
+            // useless for "does this one chord reach the guest?" — the budget
+            // is gone long before you get in-game. THEOC_KEYLOG=1 logs every
+            // key for the whole session, with the qualifier byte, so a chord
+            // that never arrives can be told from one that arrives and is
+            // ignored. Those need opposite fixes and look identical on screen.
+            static const bool keylog = std::getenv("THEOC_KEYLOG") != nullptr;
             static int klog;
-            if (klog++ < 24)
-                std::fprintf(stderr, "  [input] key eKey=%#x %s sc=%d\n",
+            if (keylog || klog++ < 24)
+                std::fprintf(stderr, "  [input] key eKey=%#x %s sc=%d quals=%#x\n",
                             code, down ? "down" : "up",
-                            (int)e.key.keysym.scancode);
+                            (int)e.key.keysym.scancode,
+                            (unsigned)(e.key.keysym.mod & (KMOD_ALT | KMOD_SHIFT | KMOD_CTRL)));
         }
     } else if (e.type == SDL_WINDOWEVENT &&
                e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
