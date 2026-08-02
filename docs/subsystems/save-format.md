@@ -130,6 +130,18 @@ what makes this a non-issue, and with the host hook active it never gets close
 
 ### Verified
 
+**End-to-end, in the game (2026-08-02).** A bloated save (save2, 6 groups per
+list, 603,723 B) was loaded, played and saved to a new slot. The hook fired on
+close: **588,678 bytes, 0 collapsible runs left** — byte-for-byte the size the
+offline tool predicted, with every list back to one group. The result differs
+from the prediction by 4,893 bytes (0.83%), the same magnitude as ordinary
+save-to-save variance (4,894 between two saves of the same state), i.e. real
+game state and the uninitialised header, not structure. **The collapsed save
+then loaded correctly**, which is the direction that actually proves one group
+is sufficient. The round trip is closed.
+
+Also:
+
 - Three real saves and one synthetic 64-save overflow.
 - Healthy files: lossless (repaired save2 differs from repaired save1 by 4,891
   bytes, against 4,894 for the originals — only duplicates removed), and

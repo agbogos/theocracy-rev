@@ -62,8 +62,12 @@ Item 1 is by far the biggest and needs game-logic surgery; 2 and 3 are small.
   three guards fire. Already-overflowed saves are **detected and reported, not
   repaired** — the counter is the only thing that fixes the phase.
 
-  Verified on three real saves plus a synthetic 64-save overflow: lossless,
-  idempotent, and **the C++ and Python agree byte-for-byte on all four**.
+  **Verified end-to-end in the game:** a 6-group save was loaded, played and
+  saved — the hook produced exactly the 588,678 bytes the offline tool predicted,
+  0 runs left, and **the collapsed save then loaded correctly**, which is the
+  direction that proves one group is enough. Also verified on three real saves
+  plus a synthetic 64-save overflow: lossless, idempotent, and **the C++ and
+  Python agree byte-for-byte on all four**.
   Format, the save call chain, and the separate finding that the 72-byte header
   is 54 bytes of uninitialised stack (written to disk with live guest pointers
   in it): [docs/subsystems/save-format.md](docs/subsystems/save-format.md).
