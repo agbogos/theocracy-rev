@@ -139,7 +139,7 @@ void Video::log_geometry(int depth_code) {
     SDL_GetRendererOutputSize((SDL_Renderer*)ren_, &ow, &oh);  // pixels
     SDL_GetWindowSize((SDL_Window*)win_, &pw, &ph);            // points
     if (!fullscreen_) {
-        std::printf("  [video] window %dx%d (%dx%d px, hidpi %s, %s) depth-code %d"
+        std::fprintf(stderr, "  [video] window %dx%d (%dx%d px, hidpi %s, %s) depth-code %d"
                     " (RGB565 framebuffer)\n",
                     w_, h_, ow, oh, (ow > pw ? "on" : "off"),
                     crisp_ ? "crisp" : "smooth", depth_code);
@@ -149,7 +149,7 @@ void Video::log_geometry(int depth_code) {
     // Match SDL: integer scale floors the factor, so report what is actually drawn.
     if (crisp_) s = std::max(1.0, std::floor(s));
     int vw = (int)(w_ * s), vh = (int)(h_ * s);
-    std::printf("  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
+    std::fprintf(stderr, "  [video] FULLSCREEN %dx%d px (%dx%d pt, hidpi %s), guest %dx%d"
                 " scaled %.2fx %s -> %dx%d (pillarbox %d px, letterbox %d px) depth-code %d\n",
                 ow, oh, pw, ph, (ow > pw ? "on" : "off"), w_, h_, s,
                 crisp_ ? "crisp/integer+nearest" : "smooth/fit+linear", vw, vh,

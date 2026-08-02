@@ -17,7 +17,7 @@ runs now; four trials have eliminated four candidates without finding it.
 
 1. **Controlled leak experiments** — *four run, four eliminations; see
    [docs/porting/heap-growth-trials.md](docs/porting/heap-growth-trials.md) for
-   the results, the reference numbers and the seven instrument defects they
+   the results, the reference numbers and the eight instrument defects they
    turned up.* Idling allocates nothing on either screen, the window mode
    allocates nothing, and the realm↔province sawtooth saturates at ~8 KB/cycle.
    The +7–11 MB/h of sustained play is still unattributed.
@@ -39,6 +39,19 @@ runs now; four trials have eliminated four candidates without finding it.
       `MB/1k frames` is what makes them comparable. Sit 2 min on the map at the
       end. Watch `blk/frame` too: the 2026-07-31 fps-11.5 battle is still
       unexplained, and this is the trial that says whether it was saturation.
+
+      **Shape agreed 2026-08-02, three phases in two runs.** Run A, console
+      off: 3 real battles with existing units, reloading between, then 3
+      auto-resolve battles the same way. Run B, `THEOC_CONSOLE=1`: 3 synthetic
+      battles, units spawned for both sides, no reloads — the stress test.
+      Two runs because `allcheat` changes bare-key behaviour in province for the
+      rest of the process. Two things fall out of that shape for free: the
+      reloads make live heap after each load directly comparable, which says
+      whether anything survives world teardown (and covers the reload path,
+      #1.2); and auto-resolve against real battles separates the battle *view*
+      from the battle *resolution*. Segments need 3 samples and 30 s to appear
+      in the table at all, so anything brief wants padding with idle — which is
+      free, since trials 1 and 2 proved idle allocates nothing.
    2. **Reload → menu → reload → menu, 5 min** — the load path, and there is only
       one: the game has **no in-game load**, a save can only be loaded after
       quitting to the menu. `THEOC_SOAK` measures its scripted twin at

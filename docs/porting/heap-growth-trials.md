@@ -2,7 +2,7 @@
 
 *State of play: 2026-08-01, four trials run. The leak is real and still
 unattributed; what follows is the elimination, the reference numbers it produced,
-and the seven instrument defects it exposed.*
+and the eight instrument defects it exposed.*
 
 ## The question, and why a fifth long session would not answer it
 
@@ -137,7 +137,7 @@ in trial 2 and 0.83–0.86 in trial 3** — 4× for nominally the same activity.
 
 ## The instrument defects these trials found
 
-Seven, in four sessions. Recorded because the pattern is the point: an
+Eight, in four sessions. Recorded because the pattern is the point: an
 instrument's *first real use* is when its defects surface, and five of these
 produce plausible wrong numbers rather than obvious failures.
 
@@ -165,6 +165,20 @@ produce plausible wrong numbers rather than obvious failures.
 7. **A double-tapped marker produced zero-duration segments** — three forced
    samples in the same second, printing a row of zeroes that reads exactly like
    a measured null. Segments under 30 s are dropped.
+8. **…and the drop was silent** (2026-08-02) — the fix for #7 was a bare
+   `continue`, so a segment too short to carry a rate simply produced **no row**.
+   To the operator that is indistinguishable from a segment that measured
+   nothing, and the two call for opposite responses: *re-run it longer* versus
+   *believe the null*. `segments()` now returns its drops and the table lists
+   them with the sample count, the duration and the reason. The floor is **three
+   samples and 30 s** — at `THEOC_LONGRUN=15` that means a segment shorter than
+   about 45 s does not exist as far as the table is concerned, which is worth
+   knowing before bracketing anything brief.
+
+The stream defects (#2, #3) were finally fixed as a class rather than one site at
+a time — all 115 host `printf` sites in `port/src` now go to stderr, and only
+guest output stays on stdout. See [diagnostics.md](diagnostics.md), "Which
+stream: stdout is the guest's, stderr is ours".
 
 The general lesson, which is [diagnostics.md](diagnostics.md)'s lesson again from
 the other side: an instrument that reads *exactly zero* deserves suspicion, and

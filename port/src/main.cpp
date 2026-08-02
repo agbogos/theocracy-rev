@@ -68,7 +68,7 @@ static uint32_t run_ctors(Machine& m, uint32_t addr, uint32_t nwords, const char
         ctors.push_back(fn);
     }
     std::reverse(ctors.begin(), ctors.end());
-    std::printf("\n%s .ctors: %zu constructors @ %#x\n", tag, ctors.size(), addr);
+    std::fprintf(stderr, "\n%s .ctors: %zu constructors @ %#x\n", tag, ctors.size(), addr);
 
     uint32_t ok = 0, failed = 0, timed = 0, aborted = 0;
     for (size_t i = 0; i < ctors.size(); ++i) {
@@ -97,7 +97,7 @@ static uint32_t run_ctors(Machine& m, uint32_t addr, uint32_t nwords, const char
             break;
         }
     }
-    std::printf("%s .ctors done: %u ok, %u aborted, %u no-return, %u faulted (of %zu)\n",
+    std::fprintf(stderr, "%s .ctors done: %u ok, %u aborted, %u no-return, %u faulted (of %zu)\n",
                 tag, ok, aborted, timed, failed, ctors.size());
     return failed;
 }
@@ -116,8 +116,8 @@ int main(int argc, char** argv) {
     if (argc > 1) game_path = argv[1];
     if (argc > 2) mvos_path = argv[2];
 
-    std::printf("=== Theocracy guest-libmvos host ===\n");
-    std::printf("exe:  %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
+    std::fprintf(stderr, "=== Theocracy guest-libmvos host ===\n");
+    std::fprintf(stderr, "exe:  %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
 
     elf32::Image game(game_path);
     elf32::Image mvos(mvos_path);
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
     // both, and we skip video/input/blit bring-up when it cannot be wanted.
     const bool headless = flag_addr("Video") == 0;
     if (headless)
-        std::printf("  [headless] no _12cApplication.Video in this image — "
+        std::fprintf(stderr, "  [headless] no _12cApplication.Video in this image — "
                     "skipping video/input/blit bring-up\n");
 
     m.map(STACK_TOP - STACK_SIZE, STACK_SIZE, UC_PROT_READ | UC_PROT_WRITE);
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
     // here (arena mapped, nothing allocated yet) and leaves it fragmented, so it
     // deliberately does not continue into boot.
     if (std::getenv("THEOC_HEAP_TEST") && L.traps) {
-        std::printf("\n=== guest heap self-test ===\n");
+        std::fprintf(stderr, "\n=== guest heap self-test ===\n");
         return L.traps->heap_selftest() ? 0 : 1;
     }
 
@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
         for (const char* n : {"VVC", "VKeyboard", "VMouse", "Intuition"})
             if (uint32_t a = game_sym(n)) globs[n] = a;
         L.traps->set_game_globals(globs);
-        std::printf("  [link] game singleton globals resolved by name: %zu/4\n",
+        std::fprintf(stderr, "  [link] game singleton globals resolved by name: %zu/4\n",
                     globs.size());
     }
 
@@ -209,10 +209,10 @@ int main(int argc, char** argv) {
 
     // libmvos DT_INIT + .ctors, then game .ctors --------------------------------
     if (L.mvos_init) {
-        std::printf("\ncalling libmvos DT_INIT @ %#x ...\n", L.mvos_init);
+        std::fprintf(stderr, "\ncalling libmvos DT_INIT @ %#x ...\n", L.mvos_init);
         try {
             m.call(L.mvos_init, {}, /*timeout_us=*/5'000'000);
-            std::printf("DT_INIT %s\n", m.last_returned() ? "returned" : "(timeout)");
+            std::fprintf(stderr, "DT_INIT %s\n", m.last_returned() ? "returned" : "(timeout)");
         } catch (const std::exception& e) {
             std::fprintf(stderr, "DT_INIT FAULTED: %s\n", e.what());
         }
@@ -227,17 +227,17 @@ int main(int argc, char** argv) {
     // libmvos IdentifyFileSystem / load mvos.cfg (main calls this before Init).
     {
         uint32_t id = guestlink::MVOS_BASE + 0x94640;
-        std::printf("\ncalling mvos.cfg loader @ %#x ...\n", id);
+        std::fprintf(stderr, "\ncalling mvos.cfg loader @ %#x ...\n", id);
         try {
             m.call(id, {}, /*timeout_us=*/10'000'000);
-            std::printf("mvos.cfg loader %s\n",
+            std::fprintf(stderr, "mvos.cfg loader %s\n",
                         m.last_aborted() ? "aborted" :
                         m.last_returned() ? "returned" : "(timeout)");
         } catch (const std::exception& e) {
             std::fprintf(stderr, "mvos.cfg loader FAULTED: %s\n", e.what());
         }
         if (uint32_t es = game_sym("EnvSystem"))
-            std::printf("  EnvSystem head after cfg = %#x\n", m.r32(es));
+            std::fprintf(stderr, "  EnvSystem head after cfg = %#x\n", m.r32(es));
     }
 
     if (L.game_ctors) run_ctors(m, L.game_ctors, L.game_ctors_n, "game");
@@ -249,24 +249,24 @@ int main(int argc, char** argv) {
 
     bool init_ok = false;
     if (L.init_app) {
-        std::printf("\ncalling Init__12cApplication @ %#x ...\n", L.init_app);
+        std::fprintf(stderr, "\ncalling Init__12cApplication @ %#x ...\n", L.init_app);
         try {
             m.call(L.init_app, {SCRATCH}, /*timeout_us=*/10'000'000);
             init_ok = m.last_returned();
-            std::printf("Init returned%s\n", init_ok ? "" : " (timeout/early stop)");
+            std::fprintf(stderr, "Init returned%s\n", init_ok ? "" : " (timeout/early stop)");
         } catch (const std::exception& e) {
             std::fprintf(stderr, "Init FAULTED: %s\n", e.what());
         }
     }
 
-    std::printf("\n=== cApplication subsystem flags (pre-Init -> post-Init) ===\n");
+    std::fprintf(stderr, "\n=== cApplication subsystem flags (pre-Init -> post-Init) ===\n");
     for (size_t i = 0; i < flags.size(); ++i) {
         if (!flags[i].addr) {
-            std::printf("  %-10s : not in this image\n", flags[i].name);
+            std::fprintf(stderr, "  %-10s : not in this image\n", flags[i].name);
             continue;
         }
         uint8_t v; m.read(flags[i].addr, &v, 1);
-        std::printf("  %-10s @ %#010x : %u -> %u%s\n", flags[i].name, flags[i].addr,
+        std::fprintf(stderr, "  %-10s @ %#010x : %u -> %u%s\n", flags[i].name, flags[i].addr,
                     before[i], v, (before[i] != v) ? "   <- set by Init" : "");
     }
 
@@ -278,11 +278,11 @@ int main(int argc, char** argv) {
     bool open_ok = false;
     if (init_ok) {
         uint32_t open_ss = guestlink::MVOS_BASE + kMvosOpenSubsystems;
-        std::printf("\ncalling OpenSubsystems @ %#x ...\n", open_ss);
+        std::fprintf(stderr, "\ncalling OpenSubsystems @ %#x ...\n", open_ss);
         try {
             m.call(open_ss, {}, /*timeout_us=*/15'000'000);
             open_ok = m.last_returned() && !m.last_aborted();
-            std::printf("OpenSubsystems %s\n",
+            std::fprintf(stderr, "OpenSubsystems %s\n",
                         m.last_aborted() ? "aborted" :
                         m.last_returned() ? "returned" : "(timeout)");
         } catch (const std::exception& e) {
@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
         for (const char* n : {"VVC", "VKeyboard", "VMouse", "Intuition", "SoundCard",
                               "VCD", "SystemMemory", "IPCSystem", "LocaleDataBase"})
             if (uint32_t g = game_sym(n))
-                std::printf("  %s (exe) = %#x\n", n, m.r32(g));
+                std::fprintf(stderr, "  %s (exe) = %#x\n", n, m.r32(g));
 
         // Mirror libmvos main: if Intuition required, construct cIntuition
         // (sizeof 0xb4) and publish the global pointer. Start reads
@@ -322,16 +322,16 @@ int main(int argc, char** argv) {
             std::vector<uint8_t> z(0xb4, 0);
             m.write(obj, z.data(), 0xb4);
             uint32_t ctor = guestlink::MVOS_BASE + 0x8d370;  // __10cIntuition
-            std::printf("\ncalling cIntuition ctor @ %#x (this=%#x) ...\n", ctor, obj);
+            std::fprintf(stderr, "\ncalling cIntuition ctor @ %#x (this=%#x) ...\n", ctor, obj);
             try {
                 m.call(ctor, {obj}, /*timeout_us=*/5'000'000);
-                std::printf("cIntuition ctor %s\n",
+                std::fprintf(stderr, "cIntuition ctor %s\n",
                             m.last_returned() ? "returned" : "(timeout/abort)");
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "cIntuition ctor FAULTED: %s\n", e.what());
             }
             m.w32(intu_glob, obj);   // shared COPY storage → libmvos sees it too
-            std::printf("  Intuition = %#x\n", obj);
+            std::fprintf(stderr, "  Intuition = %#x\n", obj);
         }
     }
 
@@ -365,7 +365,7 @@ int main(int argc, char** argv) {
         m.write(argv_str, kArg0, sizeof kArg0);
         m.w32(argv_arr, argv_str);
         m.w32(argv_arr + 4, 0);
-        std::printf("\ncalling Start__12cApplication @ %#x ...\n", L.start_app);
+        std::fprintf(stderr, "\ncalling Start__12cApplication @ %#x ...\n", L.start_app);
         try {
             // Host wall-clock budget for the entire Start() call (intros + menu +
             // play). Not an in-game menu timer. Override with THEOC_START_SEC;
@@ -376,14 +376,14 @@ int main(int argc, char** argv) {
             if (sec < 0) sec = 0;
             uint64_t timeout_us = sec == 0 ? 0 : (uint64_t)sec * 1'000'000ull;
             if (sec == 0)
-                std::printf("  [start] THEOC_START_SEC unlimited\n");
+                std::fprintf(stderr, "  [start] THEOC_START_SEC unlimited\n");
             else
-                std::printf("  [start] THEOC_START_SEC=%d (host timeout for Start)\n", sec);
+                std::fprintf(stderr, "  [start] THEOC_START_SEC=%d (host timeout for Start)\n", sec);
             m.call(L.start_app, {SCRATCH, 1, argv_arr}, timeout_us);
             start_ok = m.last_returned() && !m.last_aborted();
             bool host_timeout = !start_ok && !m.last_aborted() && !m.last_returned()
                                 && L.traps && L.traps->video().is_open();
-            std::printf("Start %s\n",
+            std::fprintf(stderr, "Start %s\n",
                         m.last_aborted() ? "aborted" :
                         m.last_returned() ? "returned" :
                         host_timeout ? "(host Start timeout — still in game; raise THEOC_START_SEC or use 0)" :
@@ -420,14 +420,14 @@ int main(int argc, char** argv) {
 
     if (L.traps) L.traps->stop_watchdog();  // frames stop legitimately now
     if (L.traps) L.traps->report();
-    std::printf("\nGuest-libmvos: Init=%s OpenSub=%s Start=%s\n",
+    std::fprintf(stderr, "\nGuest-libmvos: Init=%s OpenSub=%s Start=%s\n",
                 init_ok ? "ok" : "fail",
                 open_ok ? "ok" : "fail",
                 start_ok ? "ok" : "n/a");
 
     if (L.traps && L.traps->video().is_open()) {
         int hold = std::getenv("THEOC_VIDEO_HOLD") ? atoi(std::getenv("THEOC_VIDEO_HOLD")) : 2;
-        std::printf("video window open — holding %ds\n", hold);
+        std::fprintf(stderr, "video window open — holding %ds\n", hold);
         L.traps->video().keep_open_for(hold);
     }
     return init_ok ? 0 : 1;

@@ -140,22 +140,32 @@ def segments(rows, marks):
     the two figures that make trials comparable are its fitted slope and its
     growth per 1k frames — per-hour rates are not comparable across trials run
     at different frame caps, because the engine is frame-tied.
+
+    Returns (kept, dropped). A segment too short to carry a rate is dropped —
+    but *reported*, because on the operator's side a dropped row and a segment
+    that measured nothing look identical, and the two call for opposite
+    responses: re-run it longer, versus believe the null. That confusion is the
+    same one defect #7 caused from the other direction, when a zero-duration
+    segment printed a row of zeroes that read like a measured null.
     """
     if not marks:
-        return []
+        return [], []
     # Cut on frames, not hours — see the MARK comment.
     edges = [m["frames"] for m in marks] + [float("inf")]
-    out = []
+    out, dropped = [], []
     for m, f1 in zip(marks, edges[1:]):
         h0, seq, f0 = m["hours"], m["seq"], m["frames"]
         seg = [r for r in rows if f0 <= r["frames"] < f1]
+        secs = (seg[-1]["hours"] - seg[0]["hours"]) * 3600 if seg else 0.0
         if len(seg) < 3:      # two samples fit a line through noise
+            dropped.append((seq, h0, len(seg), secs, "under 3 samples"))
             continue
         # A double-tapped marker produces two marks in the same second, and the
         # forced samples between them look like a segment with three samples and
         # no duration. Anything under 30 s cannot carry a rate; drop it rather
         # than print a row of zeroes that reads like a measured null.
-        if (seg[-1]["hours"] - seg[0]["hours"]) * 3600 < 30:
+        if secs < 30:
+            dropped.append((seq, h0, len(seg), secs, "under 30 s"))
             continue
         mbh, _ = fit(seg, "heap_live", 0.0)
         fps = sum(r["fps"] for r in seg) / len(seg)
@@ -175,7 +185,7 @@ def segments(rows, marks):
             net=seg[-1]["heap_live"] - seg[0]["heap_live"],
             blk=(sum(r["blk_per_frame"] for r in seg) / len(seg)
                  if all("blk_per_frame" in r for r in seg) else None)))
-    return out
+    return out, dropped
 
 
 def fit(rows, key, since):
@@ -406,7 +416,12 @@ def table(rows, marks, slope, since, fslope):
     if rl:
         out.append("live-set drops (teardown / save reload): " +
                    ", ".join(f"{h:.2f}h -{d:.1f} MB" for h, d in rl))
-    segs = segments(rows, marks)
+    segs, dropped = segments(rows, marks)
+    if dropped:
+        out += ["", "dropped segments (too short to carry a rate — re-run these "
+                    "longer; they are not nulls):"]
+        for seq, t0, n, secs, why in dropped:
+            out.append(f"  #{seq} at {t0:.2f}h: {n} sample(s), {secs:.0f} s — {why}")
     if segs:
         out += ["", "marked segments (Alt+M -> next marker):",
                 f"  {'#':>3} {'from':>6} {'mins':>6} {'n':>4} {'fps':>6} " +

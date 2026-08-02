@@ -240,6 +240,38 @@ request size against live, frontier and arena. `[slow]`, `[soak]`, `[watchdog]`,
 the soak driver switches stdout to line buffering on start so guest prints and
 our stderr diagnostics interleave in the right order.
 
+### Which stream: stdout is the guest's, stderr is ours
+
+Settled 2026-08-02, after the same defect surfaced a third time.
+
+- **stdout** — the *guest's* output, and nothing else. Four sites, all in
+  `traps.cpp`: the `puts` and `printf` handlers, and the two write paths that
+  honour the guest's own fd (`fd == 2 ? stderr : stdout`).
+- **stderr** — everything the *port* says: every `[tag]` line, the boot
+  narrative, the `.ctors` tally, the trap report.
+
+The rule exists because the documented way to capture a session is
+`2>session.log`, so anything of ours on stdout is **absent from the log the
+analysis is done on** — while still being visible on the terminal during the
+run, which is exactly what makes it easy to miss. It has now cost three
+measurements:
+
+| When | What was lost |
+|---|---|
+| 2026-07-31 | `TrapLayer::report()` — the two-hour session exited normally and has no end-of-run allocator state |
+| 2026-08-01 | `[video]` and `[click]` — trial 2's +1.08 MB step could not be attributed to a fullscreen toggle from the log; the operator had to remember it |
+| 2026-08-02 | `[console]` and `[edit]` — would have made console use invisible during the battle trials |
+
+The first two were fixed one site at a time, which is why there was a third. All
+115 host `printf` sites across `port/src` now write to stderr, and the split is
+stated in `traps.cpp` above `register_builtins` so the next diagnostic starts on
+the right stream. Verified with `THEOC_HEAP_TEST=1`, which needs no display:
+**stdout is 0 bytes**.
+
+The general form is the same as "A counter nobody armed" above — an instrument
+is only as good as the path that delivers it, and that path is worth checking
+from the consumer's end rather than the author's.
+
 ---
 
 ## Lessons the instruments encode

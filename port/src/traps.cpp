@@ -204,7 +204,7 @@ void TrapLayer::auto_keys_tick() {
         SDL_Event ev{};
         ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
         ev.key.keysym.scancode = SDL_SCANCODE_SPACE;
-        std::printf("  [input] AUTO_KEYS space %s @%.1fs\n", down ? "down" : "up", t);
+        std::fprintf(stderr, "  [input] AUTO_KEYS space %s @%.1fs\n", down ? "down" : "up", t);
         on_sdl_event(ev);
     };
     if (!held && t >= 6.0 * (fired + 1)) { tap(true);  held = true; }
@@ -578,7 +578,7 @@ void TrapLayer::ensure_audio() {
         return;
     }
     SDL_PauseAudioDevice(audio_dev_, 0);
-    std::printf("  [audio] SDL device %u @ %d Hz %d ch\n",
+    std::fprintf(stderr, "  [audio] SDL device %u @ %d Hz %d ch\n",
                 audio_dev_, have.freq, have.channels);
 }
 
@@ -685,7 +685,7 @@ constexpr uint32_t kGuestAfInet = 2;   // AF_INET agrees, but check it explicitl
 // not AF_INET — we deliberately do not guess at IPX/unix addresses.
 bool guest_to_host_sin(Machine& m, uint32_t gaddr, uint32_t glen, sockaddr_in& out) {
     if (!gaddr || glen < 8) {
-        std::printf("  [net] bad sockaddr: ptr=%#x len=%u\n", gaddr, glen);
+        std::fprintf(stderr, "  [net] bad sockaddr: ptr=%#x len=%u\n", gaddr, glen);
         return false;
     }
     uint16_t fam = 0, port = 0;
@@ -704,9 +704,9 @@ bool guest_to_host_sin(Machine& m, uint32_t gaddr, uint32_t glen, sockaddr_in& o
         // mystery "-1" three layers up in guest code.
         uint8_t raw[16] = {0};
         m.read(gaddr, raw, glen < 16 ? glen : 16);
-        std::printf("  [net] bad sockaddr family=%u len=%u raw=", fam, glen);
-        for (int i = 0; i < 16; ++i) std::printf("%02x ", raw[i]);
-        std::printf("\n");
+        std::fprintf(stderr, "  [net] bad sockaddr family=%u len=%u raw=", fam, glen);
+        for (int i = 0; i < 16; ++i) std::fprintf(stderr, "%02x ", raw[i]);
+        std::fprintf(stderr, "\n");
         return false;
     }
     std::memset(&out, 0, sizeof out);
@@ -810,10 +810,10 @@ bool TrapLayer::heap_selftest() {
     auto check_overlap = [&](uint32_t p) {
         uint32_t ps = alloc_sz_.count(p) ? alloc_sz_[p] : 0;
         for (uint32_t q : live) {
-            if (q == p) { std::printf("  [heaptest] FAIL: %#x handed out twice\n", p); return false; }
+            if (q == p) { std::fprintf(stderr, "  [heaptest] FAIL: %#x handed out twice\n", p); return false; }
             uint32_t qs = alloc_sz_.count(q) ? alloc_sz_[q] : 0;
             if (p < q + qs && q < p + ps) {
-                std::printf("  [heaptest] FAIL: %#x+%u overlaps %#x+%u\n", p, ps, q, qs);
+                std::fprintf(stderr, "  [heaptest] FAIL: %#x+%u overlaps %#x+%u\n", p, ps, q, qs);
                 return false;
             }
         }
@@ -830,12 +830,12 @@ bool TrapLayer::heap_selftest() {
             } else {                                            // alloc
                 uint32_t want = 1 + rnd() % 6000;
                 uint32_t p = bump_alloc(want);
-                if (!p) { std::printf("  [heaptest] FAIL: OOM (round %d)\n", round); errors++; break; }
+                if (!p) { std::fprintf(stderr, "  [heaptest] FAIL: OOM (round %d)\n", round); errors++; break; }
                 if (!check_overlap(p)) { errors++; break; }
                 live.push_back(p);
             }
         }
-        std::printf("  [heaptest] round %d: %zu live, %.2f MB live, "
+        std::fprintf(stderr, "  [heaptest] round %d: %zu live, %.2f MB live, "
                     "%.2f MB frontier, %zu free blocks\n",
                     round, live.size(), heap_live_ / 1048576.0,
                     (heap_next_ - HEAP_BASE) / 1048576.0, free_addr_.size());
@@ -844,22 +844,22 @@ bool TrapLayer::heap_selftest() {
     uint32_t frontier_after_churn = heap_next_;
     for (uint32_t p : live) guest_free(p);
     live.clear();
-    std::printf("  [heaptest] all freed: %u B live, %.2f MB frontier, %zu free blocks\n",
+    std::fprintf(stderr, "  [heaptest] all freed: %u B live, %.2f MB frontier, %zu free blocks\n",
                 heap_live_, (heap_next_ - HEAP_BASE) / 1048576.0, free_addr_.size());
 
     // Everything returned => zero live bytes, and coalescing should have merged
     // the arena back into (nearly) one block rather than leaving thousands.
-    if (heap_live_ != 0) { std::printf("  [heaptest] FAIL: %u bytes leaked\n", heap_live_); errors++; }
-    if (free_addr_.size() > 4) { std::printf("  [heaptest] FAIL: poor coalescing\n"); errors++; }
+    if (heap_live_ != 0) { std::fprintf(stderr, "  [heaptest] FAIL: %u bytes leaked\n", heap_live_); errors++; }
+    if (free_addr_.size() > 4) { std::fprintf(stderr, "  [heaptest] FAIL: poor coalescing\n"); errors++; }
     // Re-allocating after a full free must reuse, not extend the frontier.
     for (int i = 0; i < 500; ++i) if (!bump_alloc(4096)) { errors++; break; }
     if (heap_next_ > frontier_after_churn) {
-        std::printf("  [heaptest] FAIL: frontier grew on reuse (%.2f -> %.2f MB)\n",
+        std::fprintf(stderr, "  [heaptest] FAIL: frontier grew on reuse (%.2f -> %.2f MB)\n",
                     (frontier_after_churn - HEAP_BASE) / 1048576.0,
                     (heap_next_ - HEAP_BASE) / 1048576.0);
         errors++;
     }
-    std::printf("  [heaptest] %s\n", errors ? "FAILED" : "PASSED");
+    std::fprintf(stderr, "  [heaptest] %s\n", errors ? "FAILED" : "PASSED");
     return errors == 0;
 }
 
@@ -952,6 +952,19 @@ std::string TrapLayer::format(Machine& m, const std::string& fmt, uint32_t esp,
     return out;
 }
 
+// Which stream gets what, and why it matters:
+//
+//   stdout — the *guest's* output. `puts`, `printf`, and the two write paths
+//            that honour the guest's own fd. Four sites, all in this file.
+//   stderr — everything the *port* says. Every [tag] line, the boot narrative,
+//            the trap report.
+//
+// The documented way to capture a session is `2>session.log`, so anything of
+// ours on stdout is absent from the log the analysis is done on. That has now
+// cost three separate measurements: TrapLayer::report()'s end-of-run allocator
+// state, the [video]/[click] lines during the fullscreen trial, and [console]
+// during the battle trials. Each was fixed on its own; the split is written
+// down here so the next diagnostic starts on the right stream.
 void TrapLayer::register_builtins() {
     auto& t = table_;
 
@@ -1070,6 +1083,8 @@ void TrapLayer::register_builtins() {
         return tok;
     };
 
+    // Guest output, not ours: stays on stdout. See the stream split above
+    // register_builtins — stdout is the game's, stderr is the port's.
     t["puts"] = [](Machine& m, uint32_t esp) {
         std::printf("%s\n", m.cstr(arg(m, esp, 0)).c_str());
         return 1u;
@@ -1311,7 +1326,7 @@ void TrapLayer::register_builtins() {
         // where guest code never asked.
         ::setsockopt(hfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
         int gfd = adopt_host_fd(hfd);
-        std::printf("  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
+        std::fprintf(stderr, "  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
         return (uint32_t)gfd;
     };
 
@@ -1324,18 +1339,18 @@ void TrapLayer::register_builtins() {
         uint16_t port = ntohs(sa.sin_port);
         static const bool real_lock = std::getenv("THEOC_REAL_LOCK") != nullptr;
         if (port == 5043 && !real_lock) {
-            std::printf("  [net] bind(:5043) faked OK — single-instance lock "
+            std::fprintf(stderr, "  [net] bind(:5043) faked OK — single-instance lock "
                         "(THEOC_REAL_LOCK=1 to honour it)\n");
             return 0;
         }
         if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
         if (::bind(hfd, (sockaddr*)&sa, sizeof sa) < 0) {
             int e = errno;
-            std::printf("  [net] bind(:%u) failed: %s\n", port, std::strerror(e));
+            std::fprintf(stderr, "  [net] bind(:%u) failed: %s\n", port, std::strerror(e));
             set_errno(m, to_linux_errno(e));
             return (uint32_t)-1;
         }
-        std::printf("  [net] bind(:%u) ok\n", port);
+        std::fprintf(stderr, "  [net] bind(:%u) ok\n", port);
         return 0;
     };
 
@@ -1359,7 +1374,7 @@ void TrapLayer::register_builtins() {
         if (c < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         host_to_guest_sin(m, gaddr, glen_ptr, peer);
         int gfd = adopt_host_fd(c);
-        std::printf("  [net] accept -> guest fd %d from %s:%u\n", gfd,
+        std::fprintf(stderr, "  [net] accept -> guest fd %d from %s:%u\n", gfd,
                     inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
         return (uint32_t)gfd;
     };
@@ -1374,12 +1389,12 @@ void TrapLayer::register_builtins() {
         int r = ::connect(hfd, (sockaddr*)&sa, sizeof sa);
         if (r < 0) {
             int e = errno;
-            std::printf("  [net] connect(%s:%u) -> %s\n", inet_ntoa(sa.sin_addr),
+            std::fprintf(stderr, "  [net] connect(%s:%u) -> %s\n", inet_ntoa(sa.sin_addr),
                         ntohs(sa.sin_port), std::strerror(e));
             set_errno(m, to_linux_errno(e));
             return (uint32_t)-1;
         }
-        std::printf("  [net] connect(%s:%u) ok\n", inet_ntoa(sa.sin_addr),
+        std::fprintf(stderr, "  [net] connect(%s:%u) ok\n", inet_ntoa(sa.sin_addr),
                     ntohs(sa.sin_port));
         return 0;
     };
@@ -1511,14 +1526,14 @@ void TrapLayer::register_builtins() {
         std::string hp = resolve_path(gp);
         DIR* d = ::opendir(hp.c_str());
         if (!d) {
-            std::printf("  [dir] opendir('%s' -> '%s') failed\n", gp.c_str(), hp.c_str());
+            std::fprintf(stderr, "  [dir] opendir('%s' -> '%s') failed\n", gp.c_str(), hp.c_str());
             set_errno(m, 2 /*ENOENT*/);
             return 0;
         }
         uint32_t h = next_dir_++;
         uint32_t ent = guest_alloc(0x120);          // dirent incl. 256-byte name
         dirs_[h] = HostDir{(void*)d, ent};
-        std::printf("  [dir] opendir('%s') -> handle %#x\n", gp.c_str(), h);
+        std::fprintf(stderr, "  [dir] opendir('%s') -> handle %#x\n", gp.c_str(), h);
         return h;
     };
     t["readdir"] = [this](Machine& m, uint32_t esp) -> uint32_t {
@@ -1669,7 +1684,7 @@ void TrapLayer::register_builtins() {
                     ip = ((sockaddr_in*)res->ai_addr)->sin_addr.s_addr;
                     freeaddrinfo(res);
                 } else {
-                    std::printf("  [net] gethostbyname('%s') failed\n", host.c_str());
+                    std::fprintf(stderr, "  [net] gethostbyname('%s') failed\n", host.c_str());
                     return 0;   // guest prints perror() and gives up, as designed
                 }
             }
@@ -1692,7 +1707,7 @@ void TrapLayer::register_builtins() {
         m.w32(he + 0x08, kGuestAfInet);   // h_addrtype = AF_INET
         m.w32(he + 0x0c, 4);              // h_length
         m.w32(he + 0x10, addrlst);
-        std::printf("  [net] gethostbyname('%s') -> %s\n", host.c_str(),
+        std::fprintf(stderr, "  [net] gethostbyname('%s') -> %s\n", host.c_str(),
                     inet_ntoa(in_addr{ip}));
         return he;
     };
@@ -1713,7 +1728,7 @@ void TrapLayer::register_builtins() {
         uint32_t h = arg(m, esp, 1);       // 0 = SIG_DFL, 1 = SIG_IGN, else handler
         if (sig == 13 /*SIGPIPE on both Linux and BSD*/ && h == 1) {
             ::signal(SIGPIPE, SIG_IGN);
-            std::printf("  [net] SIGPIPE ignored (guest requested)\n");
+            std::fprintf(stderr, "  [net] SIGPIPE ignored (guest requested)\n");
         }
         // Other signals stay stubbed: the guest's SIGALRM timer is delivered by
         // our own scheduler, not by real host signals.
@@ -1749,7 +1764,7 @@ void TrapLayer::register_builtins() {
         if (timer_value_.count() == 0 && timer_interval_.count() == 0) {
             timer_armed_ = false;
             static int n;
-            if (n++ < 4) std::printf("  [timer] setitimer disarmed\n");
+            if (n++ < 4) std::fprintf(stderr, "  [timer] setitimer disarmed\n");
             return 0;
         }
         // One-shot value; reload from interval after each fire (POSIX).
@@ -1762,7 +1777,7 @@ void TrapLayer::register_builtins() {
             sigalrm_handler_ = mvos_base_ + 0x922e0;  // _TimerFunction__Fi
         static int n;
         if (n++ < 6)
-            std::printf("  [timer] setitimer value=%lld us interval=%lld us handler=%#x\n",
+            std::fprintf(stderr, "  [timer] setitimer value=%lld us interval=%lld us handler=%#x\n",
                         (long long)timer_value_.count(),
                         (long long)timer_interval_.count(),
                         sigalrm_handler_);
@@ -1780,7 +1795,7 @@ void TrapLayer::register_builtins() {
                 sigalrm_handler_ = h;
                 static int n;
                 if (n++ < 4)
-                    std::printf("  [timer] sigaction SIGALRM handler=%#x\n", h);
+                    std::fprintf(stderr, "  [timer] sigaction SIGALRM handler=%#x\n", h);
             }
         }
         return 0;
@@ -1801,7 +1816,7 @@ void TrapLayer::register_builtins() {
             patch_sound_main_oneshot(m);
             static int n;
             if (n++ < 6)
-                std::printf("  [thread] soft-thread entry=%#x arg=%#x (n=%zu)\n",
+                std::fprintf(stderr, "  [thread] soft-thread entry=%#x arg=%#x (n=%zu)\n",
                             entry, targ, soft_threads_.size());
         }
         return 0;  // success — Launch keeps cThread.running = 1
@@ -1828,7 +1843,7 @@ void TrapLayer::register_builtins() {
         }
         if (!exists && !skip) {
             smpeg_error_ = "no movie found " + file + " (host " + host + ")";
-            std::printf("  [smpeg] SMPEG_new FAIL '%s' -> %s\n",
+            std::fprintf(stderr, "  [smpeg] SMPEG_new FAIL '%s' -> %s\n",
                         file.c_str(), host.c_str());
             return 0;
         }
@@ -1845,7 +1860,7 @@ void TrapLayer::register_builtins() {
                     w = mov->width; ht = mov->height; fps = mov->fps;
                 }
             } else {
-                std::printf("  [smpeg] decode failed, will skip frames\n");
+                std::fprintf(stderr, "  [smpeg] decode failed, will skip frames\n");
             }
         }
         if (info) {
@@ -1858,7 +1873,7 @@ void TrapLayer::register_builtins() {
             m.w32(info + 24, 0);
             m.write(info + 28, &fps, 8);
         }
-        std::printf("  [smpeg] SMPEG_new OK '%s'%s\n",
+        std::fprintf(stderr, "  [smpeg] SMPEG_new OK '%s'%s\n",
                     file.c_str(), skip ? " [THEOC_SKIP_MOVIES]" : "");
         return h;
     };
@@ -2037,7 +2052,7 @@ void TrapLayer::register_builtins() {
                 size_t n = target - mov->audio_pos;
                 audio_push(mov->audio.data() + mov->audio_pos, n * sizeof(int16_t));
                 if (mov->audio_pos == 0)
-                    std::printf("  [audio] cutscene sound: %zu samp @ %d Hz\n",
+                    std::fprintf(stderr, "  [audio] cutscene sound: %zu samp @ %d Hz\n",
                                 mov->audio.size() / chans, mov->samplerate);
                 mov->audio_pos = target;
             }
@@ -2101,7 +2116,7 @@ void TrapLayer::register_builtins() {
         }
         static int n;
         if (n++ < 6)
-            std::printf("  [HLE] cDisplay @%#x fb=%#x %ux%u pitch=%u bpp=%u\n",
+            std::fprintf(stderr, "  [HLE] cDisplay @%#x fb=%#x %ux%u pitch=%u bpp=%u\n",
                         self, addr, w, h, pitch, bpp);
         return self;  // g++ 2.95 ctor returns this
     };
@@ -2119,7 +2134,7 @@ void TrapLayer::register_builtins() {
         uint32_t h = next_dl_handle_++;
         dl_handles_[h] = path;
         last_dlerror_.clear();
-        std::printf("  [dlopen] '%s' -> handle %#x (synthetic)\n", path.c_str(), h);
+        std::fprintf(stderr, "  [dlopen] '%s' -> handle %#x (synthetic)\n", path.c_str(), h);
         return h;
     };
     t["dlclose"] = [this](Machine& m, uint32_t esp) -> uint32_t {
@@ -2294,7 +2309,7 @@ void TrapLayer::register_builtins() {
             if (is_dsp) ensure_audio();
             fds_[gfd] = HostFile{nullptr, -1, true, is_dsp, false};
             if (is_dsp)
-                std::printf("  [audio] open '%s' -> guest fd %d\n", path.c_str(), gfd);
+                std::fprintf(stderr, "  [audio] open '%s' -> guest fd %d\n", path.c_str(), gfd);
             return (uint32_t)gfd;
         }
         std::string host = resolve_path(path);
@@ -2360,7 +2375,7 @@ void TrapLayer::register_builtins() {
             audio_push(b.data(), n);
             static int nlog;
             if (nlog++ < 8)
-                std::printf("  [audio] write %u bytes to dsp (q≈%zu samp)\n",
+                std::fprintf(stderr, "  [audio] write %u bytes to dsp (q≈%zu samp)\n",
                             n, audio_q_.size());
             return n;
         }
@@ -2727,7 +2742,7 @@ bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     fps_timer_fires_++;
     static int nlog;
     if (nlog++ < 8)
-        std::printf("  [timer] redirect _TimerFunction (skipped schedule %d)\n", skipped);
+        std::fprintf(stderr, "  [timer] redirect _TimerFunction (skipped schedule %d)\n", skipped);
     return true;
 }
 
@@ -2746,7 +2761,7 @@ void TrapLayer::patch_sound_main_oneshot(Machine& m) {
         uint8_t nops[2] = {0x90, 0x90};
         m.write(mvos_base_ + 0x92b8e, nops, 2);
         sound_main_patched_ = true;
-        std::printf("  [audio] SoundCard Main patched to one-shot mix\n");
+        std::fprintf(stderr, "  [audio] SoundCard Main patched to one-shot mix\n");
     } catch (...) {
         std::fprintf(stderr, "  [audio] failed to patch SoundCard Main\n");
     }
@@ -2800,7 +2815,7 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     fps_sound_fires_++;
     static int nred;
     if (nred++ < 4)
-        std::printf("  [audio] green-run Entry=%#x arg=%#x\n", pick->entry, pick->arg);
+        std::fprintf(stderr, "  [audio] green-run Entry=%#x arg=%#x\n", pick->entry, pick->arg);
     m.redirect_guest(pick->entry, sp);
     return true;
 }
@@ -3005,10 +3020,10 @@ uint32_t TrapLayer::make_device(Machine& m, const char* kind) {
         for (uint32_t i = 0; i < 16; ++i) m.w32(vt + 4 * i, noop);
         if (setmode) m.w32(vt + 0xc, setmode);
         m.w32(obj + 0x28, vt);
-        std::printf("  [plugin] Create*%sDevice -> obj %#x vt %#x\n", kind, obj, vt);
+        std::fprintf(stderr, "  [plugin] Create*%sDevice -> obj %#x vt %#x\n", kind, obj, vt);
         return obj;
     }
-    std::printf("  [plugin] Create*%sDevice -> obj %#x (input shell)\n", kind, obj);
+    std::fprintf(stderr, "  [plugin] Create*%sDevice -> obj %#x (input shell)\n", kind, obj);
     return obj;
 }
 
@@ -3390,7 +3405,7 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
         }
         static int nlog;
         if (nlog++ < 16)
-            std::printf("  [input] mouse btn mask=%u→%u at %d,%d (Intuition pipe)\n",
+            std::fprintf(stderr, "  [input] mouse btn mask=%u→%u at %d,%d (Intuition pipe)\n",
                         prev, mouse_buttons_, mouse_x_, mouse_y_);
     } else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
         // Alt+Enter (⌥Return on macOS — SDL maps Option to KMOD_ALT) toggles
@@ -3532,7 +3547,7 @@ void TrapLayer::on_sdl_event(const SDL_Event& e) {
             }
             static int klog;
             if (klog++ < 24)
-                std::printf("  [input] key eKey=%#x %s sc=%d\n",
+                std::fprintf(stderr, "  [input] key eKey=%#x %s sc=%d\n",
                             code, down ? "down" : "up",
                             (int)e.key.keysym.scancode);
         }
@@ -3595,7 +3610,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             m.w32(self + 0x24, (uint32_t)h);
             m.w32(self + 0x1c, (uint32_t)d);
         }
-        std::printf("  [plugin] SetVideoMode %dx%d depth %d -> %s\n",
+        std::fprintf(stderr, "  [plugin] SetVideoMode %dx%d depth %d -> %s\n",
                     w, h, d, ok ? "ok" : "FAIL");
         return ok ? 1 : 0;
     }
@@ -3613,7 +3628,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         { SlowSection s1(this, "OpenDisplay:video_.open");
           ok = video_.open(w, h, d); }
         if (!ok) {
-            std::printf("  [HLE] OpenDisplay %dx%d depth %d -> FAIL (SDL)\n", w, h, d);
+            std::fprintf(stderr, "  [HLE] OpenDisplay %dx%d depth %d -> FAIL (SDL)\n", w, h, d);
             return 0;
         }
         uint32_t pitch = (uint32_t)w * 2;  // RGB565
@@ -3650,7 +3665,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         m.w32(gd + 0x10, pitch);
         m.w32(gd + 0x14, vt);
         (void)dim;  // kept for future real-ctor path
-        std::printf("  [HLE] cGD_LFB16 @%#x fb=%#x %dx%d pitch=%u vt=%#x\n",
+        std::fprintf(stderr, "  [HLE] cGD_LFB16 @%#x fb=%#x %dx%d pitch=%u vt=%#x\n",
                     gd, GUEST_FB_BASE, w, h, pitch, vt);
 
         if (self) {
@@ -3671,7 +3686,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             m.write(self + 0x19, &one, 1);
         }
         gd_ = gd;
-        std::printf("  [HLE] OpenDisplay %dx%d depth %d -> ok\n", w, h, d);
+        std::fprintf(stderr, "  [HLE] OpenDisplay %dx%d depth %d -> ok\n", w, h, d);
         return 1;
     }
     if (name == "HLE_SwapBuffers") {
@@ -3715,7 +3730,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             if (!spr) draw_software_cursor();
             static int clog;
             if (clog++ < 3)
-                std::printf("  [cursor] present spr=%#x gd=%#x timer=%s\n",
+                std::fprintf(stderr, "  [cursor] present spr=%#x gd=%#x timer=%s\n",
                             spr, gd_, timer_armed_ ? "on" : "off");
             { SlowSection s3(this, "present");
               video_.present(); }  // pumps SDL
@@ -3740,17 +3755,17 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                     mouse_x_ = ax; mouse_y_ = ay;
                     update_intuition_pointer(ax, ay, 0);
                     push_intuition_move(ax, ay);
-                    std::printf("  [input] AUTO_MENU aim %d,%d\n", ax, ay);
+                    std::fprintf(stderr, "  [input] AUTO_MENU aim %d,%d\n", ax, ay);
                 } else if (menu_frames == 50) {
                     push_intuition_button_edges(0, 1);  // L down
                     update_intuition_pointer(mouse_x_, mouse_y_, 1);
                     mouse_buttons_ = 1;
-                    std::printf("  [input] AUTO_MENU L-down\n");
+                    std::fprintf(stderr, "  [input] AUTO_MENU L-down\n");
                 } else if (menu_frames == 55) {
                     push_intuition_button_edges(1, 0);  // L up
                     update_intuition_pointer(mouse_x_, mouse_y_, 0);
                     mouse_buttons_ = 0;
-                    std::printf("  [input] AUTO_MENU L-up\n");
+                    std::fprintf(stderr, "  [input] AUTO_MENU L-up\n");
                 }
             }
 
@@ -3785,7 +3800,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                         update_intuition_pointer(mouse_x_, mouse_y_, 0);
                         mouse_buttons_ = 0;
                     }
-                    std::printf("  [auto-prov] stage %d act %d at %d,%d (t=%.1fs)\n",
+                    std::fprintf(stderr, "  [auto-prov] stage %d act %d at %d,%d (t=%.1fs)\n",
                                 auto_prov_stage_, s.act, s.x, s.y, t);
                     auto_prov_stage_++;
                 }
@@ -3872,7 +3887,7 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
             0xFF, 0xE0
         };
         m.write(at, stub, sizeof stub);
-        std::printf("  [HLE] patched %s @%#x -> trap %#x\n", tag, at, hle);
+        std::fprintf(stderr, "  [HLE] patched %s @%#x -> trap %#x\n", tag, at, hle);
     };
     // OpenDisplay: skip plugin SetVideoMode / cGD_X; install cGD_LFB16 ourselves.
     patch_jmp(0x85ce0, "HLE_OpenDisplay", "OpenDisplay");
@@ -3915,7 +3930,7 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
         if (!std::getenv("THEOC_LEGACY_SPRITE")) {
             m.write(swap_at, jmp, sizeof jmp);
             m.write(mvos_base + 0x8b6ec, nops, sizeof nops);
-            std::printf("  [HLE] cSprite::AfterSwapBuffer -> single-buffer restore "
+            std::fprintf(stderr, "  [HLE] cSprite::AfterSwapBuffer -> single-buffer restore "
                         "(no slot swap; THEOC_LEGACY_SPRITE=1 to revert)\n");
         }
     }
@@ -3925,7 +3940,7 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
         uint32_t at = mvos_base + 0x8df10;  // PushMouseInput__Fv
         const uint8_t ret = 0xC3;
         m.write(at, &ret, 1);
-        std::printf("  [HLE] nop'd PushMouseInput @%#x (SDL owns Intuition pipe)\n", at);
+        std::fprintf(stderr, "  [HLE] nop'd PushMouseInput @%#x (SDL owns Intuition pipe)\n", at);
     }
 }
 
@@ -3961,7 +3976,7 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
 // Closing chord is the object's own: SetExitKey(0x0e, mask 2) = Alt+C.
 void TrapLayer::enable_dev_console() {
     console_enabled_ = true;
-    std::printf("  [console] THEOC_CONSOLE: dev console armed "
+    std::fprintf(stderr, "  [console] THEOC_CONSOLE: dev console armed "
                 "(Alt+V opens, Alt+C closes; realm and province)\n");
 }
 
@@ -3985,7 +4000,7 @@ void TrapLayer::enable_dev_console() {
 // edit mode *is*, and it is what makes the console `save` command legal.
 void TrapLayer::enable_edit_mode() {
     edit_mode_ = true;
-    std::printf("  [edit] THEOC_EDIT: forcing g_GameSession+0x50 = 1 "
+    std::fprintf(stderr, "  [edit] THEOC_EDIT: forcing g_GameSession+0x50 = 1 "
                 "(edit mode — the simulation stays frozen)\n");
 }
 
@@ -4003,7 +4018,7 @@ void TrapLayer::apply_edit_mode(Machine& m) {
     m.write(sess + kEditField, &v, 1);
     if (edit_applied_to_ != sess) {
         edit_applied_to_ = sess;
-        std::printf("  [edit] edit mode on for session %#x "
+        std::fprintf(stderr, "  [edit] edit mode on for session %#x "
                     "(sim frozen; console `save` now allowed)\n", sess);
     }
 }
@@ -4025,7 +4040,7 @@ bool TrapLayer::maybe_redirect_console(Machine& m, uint32_t esp) {
     uint32_t shell = 0;
     try { shell = m.r32(kLogConsole + kShellField); } catch (...) { return false; }
     if (!shell) {
-        std::printf("  [console] Alt+V ignored — no shell attached "
+        std::fprintf(stderr, "  [console] Alt+V ignored — no shell attached "
                     "(not in a realm/province game screen)\n");
         return false;
     }
@@ -4036,6 +4051,6 @@ bool TrapLayer::maybe_redirect_console(Machine& m, uint32_t esp) {
     sp -= 4; m.w32(sp, kLogConsole);      // cdecl arg0 = this
     sp -= 4; m.w32(sp, ret);              // return address
     m.redirect_guest(fn, sp);
-    std::printf("  [console] Alt+V → Edit(g_LogConsole) shell=%#x\n", shell);
+    std::fprintf(stderr, "  [console] Alt+V → Edit(g_LogConsole) shell=%#x\n", shell);
     return true;
 }

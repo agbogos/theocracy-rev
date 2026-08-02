@@ -76,7 +76,7 @@ const uint16_t* MpegMovie::fit_frame(const std::vector<uint16_t>& fr,
         // must happen on every geometry change, or a previous movie's bars survive.
         fit.assign((size_t)dst_w * (size_t)dst_h, 0);
         build_axis(width, inner_w, map_x0, map_x1, map_wx);
-        std::printf("  [mpeg] fit %dx%d -> %dx%d at +%d,+%d in %dx%d"
+        std::fprintf(stderr, "  [mpeg] fit %dx%d -> %dx%d at +%d,+%d in %dx%d"
                     " (%s %d px)\n",
                     width, height, inner_w, inner_h, inner_x, inner_y, dst_w, dst_h,
                     inner_h < dst_h ? "letterbox" : (inner_w < dst_w ? "pillarbox"
@@ -298,7 +298,7 @@ bool MpegStore::load(uint32_t handle, const std::string& host_path) {
         std::fprintf(stderr, "  [mpeg] no frames in '%s'\n", host_path.c_str());
         return false;
     }
-    std::printf("  [mpeg] decoded '%s' %dx%d %zu frames @ %.1f fps, audio %zu samp (%.1fs)\n",
+    std::fprintf(stderr, "  [mpeg] decoded '%s' %dx%d %zu frames @ %.1f fps, audio %zu samp (%.1fs)\n",
                 host_path.c_str(), mov.width, mov.height, mov.frames.size(), mov.fps,
                 mov.audio.size() / (size_t)kOutChannels,
                 mov.has_audio ? (double)(mov.audio.size() / kOutChannels) / kOutRate : 0.0);

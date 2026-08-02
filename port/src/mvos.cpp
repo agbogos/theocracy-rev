@@ -104,7 +104,7 @@ void Mvos::apply_copyrelocs() {
                           return dispatch_vtable(mm, slot, esp);
                       });
 
-    std::printf("mvos copyrelocs: %u vtables (%u copyreloc slots + %u pool), "
+    std::fprintf(stderr, "mvos copyrelocs: %u vtables (%u copyreloc slots + %u pool), "
                 "%u singletons wired, %u other left zero\n", nvt, copyreloc_vt_slots_,
                 vt_slot_count_ - copyreloc_vt_slots_, nsingle, nother);
 
@@ -377,7 +377,7 @@ void Mvos::register_handlers() {
             uint32_t req  = T::arg_at(m, esp, 1);
             int w = (int)m.r32(req + 0), h = (int)m.r32(req + 4);
             int depth = (int)m.r32(req + 8);
-            std::printf("  [cVVC::OpenDisplay] request %dx%d depth-code %d\n", w, h, depth);
+            std::fprintf(stderr, "  [cVVC::OpenDisplay] request %dx%d depth-code %d\n", w, h, depth);
             bool ok = video_.open(w, h, depth);
             if (ok && self) {
                 m.w32(self + 0x1c, (uint32_t)depth);
@@ -532,7 +532,7 @@ void Mvos::paint_node(uint32_t node, int depth, bool dump) {
     uint32_t vt = m_.r32(node + VO_VTABLE);
     bool visible = (w > 0 && h > 0);
     if (dump)
-        std::printf("  %*s node %08x vt %08x  x=%d y=%d w=%d h=%d%s\n",
+        std::fprintf(stderr, "  %*s node %08x vt %08x  x=%d y=%d w=%d h=%d%s\n",
                     depth * 2, "", node, vt, l, t, w, h,
                     visible ? "" : " (empty)");
     if (visible && video_.is_open()) {
@@ -564,7 +564,7 @@ void Mvos::paint_tree(uint32_t root) {
     static bool dumped = false;
     bool dump = false;
     if (!dumped && std::getenv("THEOC_TREE")) { dump = true; dumped = true; }
-    if (dump) std::printf("[paint_tree] root %08x\n", root);
+    if (dump) std::fprintf(stderr, "[paint_tree] root %08x\n", root);
     paint_node(root, 0, dump);
 }
 
@@ -572,6 +572,6 @@ void Mvos::report() const {
     uint32_t hit = 0; uint64_t calls = 0;
     for (uint32_t i = 0; i < vt_hits_.size(); ++i)
         if (vt_hits_[i]) { hit++; calls += vt_hits_[i]; }
-    std::printf("  vtable slots hit: %u / %u  (%llu calls)\n", hit,
+    std::fprintf(stderr, "  vtable slots hit: %u / %u  (%llu calls)\n", hit,
                 vt_slot_count_, (unsigned long long)calls);
 }
