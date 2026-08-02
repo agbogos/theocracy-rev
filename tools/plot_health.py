@@ -51,6 +51,13 @@ INT_KEYS = {"stubs", "fds", "underrun", "suppressed", "frames", "cap_ms"}
 # A movie starting is the one session event with a visible resource signature
 # (SMPEG decodes the whole file up front), so it is worth marking on the axes.
 MOVIE = re.compile(r"^\[swscaler .*colorspace conversion")
+# The game prints this when it loads a scenario — which is what a save reload
+# is. Read from the guest's own output because inferring it from the live set
+# does not work: a quit-to-menu frees the world and the load allocates it back
+# inside a single 15 s sample, so the two cancel and no drop is visible. On
+# trial 7 that made six real reloads read as none. Requires the run to capture
+# stdout as well (`>|log 2>&1`); with `2>log` alone the guest's output is absent.
+SCENARIO = re.compile(r"^\*\*\* Scenario Load \*\*\*")
 # Alt+M markers. The operator puts these where the activity changed, which is
 # the only thing in the log that knows what the session was actually doing.
 # The frame count is what segment boundaries are cut on: `up 0.01h` is a 36 s
@@ -72,8 +79,8 @@ SERIES = {
 
 
 def parse(path):
-    """-> (rows, movie_times, marks). Each row is one [health] block, flattened."""
-    rows, movies, marks, cur, pending_mark = [], [], [], None, None
+    """-> (rows, movie_times, marks, loads). Each row is one [health] block."""
+    rows, movies, marks, loads, cur, pending_mark = [], [], [], [], None, None
 
     def flush():
         # A block needs at least the two series every panel depends on.
@@ -116,8 +123,12 @@ def parse(path):
         if MOVIE.match(line) and rows:
             # No timestamp on the line itself; place it at the last sample.
             movies.append(rows[-1]["hours"])
+        elif SCENARIO.match(line) and rows:
+            # Same placement. idx is the row that follows the load, so the
+            # report can show live either side of it.
+            loads.append(dict(hours=rows[-1]["hours"], idx=len(rows)))
     flush()
-    return rows, movies, marks
+    return rows, movies, marks, loads
 
 
 def reloads(rows, drop_mb=5.0):
@@ -380,7 +391,7 @@ def render(rows, movies, marks, slope, since):
 
 # ---- text ------------------------------------------------------------------
 
-def table(rows, marks, slope, since, fslope):
+def table(rows, marks, slope, since, fslope, loads=()):
     out = [f"{len(rows)} samples over {rows[-1]['hours']:.2f} h "
            f"({rows[-1]['frames']:,} frames, cap {rows[-1]['cap_ms']} ms)", ""]
     stamped = any(r.get("clock") for r in rows)
@@ -412,6 +423,17 @@ def table(rows, marks, slope, since, fslope):
             f"fds {min(r['fds'] for r in rows)}-{max(r['fds'] for r in rows)}, "
             f"suppressed {max(r['suppressed'] for r in rows)}",
             f"distinct esp: {', '.join(sorted({r['esp'] for r in rows}))}"]
+    if loads:
+        out += ["", f"scenario loads ({len(loads)}) — live before -> after each one:"]
+        for i, ld in enumerate(loads, 1):
+            j = ld["idx"]
+            before = rows[j - 1]["heap_live"] if j > 0 else float("nan")
+            after = rows[j]["heap_live"] if j < len(rows) else float("nan")
+            out.append(f"  load {i} at {ld['hours']:5.2f}h: "
+                       f"{before:6.2f} -> {after:6.2f} MB")
+        out.append("  A load rebuilds the world from the file. Loading the same save "
+                   "twice should land on the same live figure;")
+        out.append("  anything higher the second time was kept across the rebuild.")
     rl = reloads(rows)
     if rl:
         out.append("live-set drops (teardown / save reload): " +
@@ -451,13 +473,13 @@ def main():
                          "(default 0.35 — the scenario load dominates before that)")
     a = ap.parse_args()
 
-    rows, movies, marks = parse(a.log)
+    rows, movies, marks, loads = parse(a.log)
     if len(rows) < 2:
         sys.exit(f"{a.log}: found {len(rows)} [health] samples — run with THEOC_LONGRUN=60")
 
     slope, _ = fit(rows, "heap_live", a.since)
     fslope, _ = fit(rows, "heap_frontier", a.since)
-    print(table(rows, marks, slope, a.since, fslope))
+    print(table(rows, marks, slope, a.since, fslope, loads))
     if a.table:
         return
     out = Path(a.out or (Path(a.log).with_suffix("").name + "-health.svg"))
