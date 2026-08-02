@@ -125,10 +125,28 @@ runs now; four trials have eliminated four candidates without finding it.
    per-activity rates can be separated. Then the allocation-site histogram,
    which is the only way to attribute it.
 
-3. **Fixing remaining buttons and shortcuts** — some shortcuts still don't seem
-   to function in the game, but from testing I couldn't identify a structure to it.
-   For example, Alt+A (⌥A on macOS) worked for selecting all units, but Alt+U
-   didn't work for selecting idle workers.
+3. **Fixing remaining buttons and shortcuts** — *cause found and fixed
+   2026-08-02, awaiting confirmation on a run.* The reason no structure was
+   visible is that there were two unrelated things going on, and one of them was
+   the **macOS keyboard layout**:
+
+   - **Alt+I, Alt+U, Alt+N never reached the guest.** SDL2 turns text input on
+     at window creation, which enables the macOS dead-key composer; ⌥E ⌥I ⌥N ⌥U
+     ⌥`` ` `` begin a diacritic and are never delivered as key-downs. ⌥A is not a
+     dead key, which is why it worked and the rest looked random. Fixed with
+     `SDL_StopTextInput()` in `video.cpp` — we never read `SDL_TEXTINPUT`.
+   - **Eight letters have no handler in the game at all: C E G K O R X Z.** Not
+     our bug and not fixable; they fall to the default case and return.
+
+   Full dispatcher table (all 28 keys, read off the jump table at `0x838a764`)
+   and the reasoning: [docs/subsystems/dev-console.md](docs/subsystems/dev-console.md),
+   "The full Alt+key table". **To confirm:** ⌥I, ⌥U and ⌥N should now all
+   respond in a province. Still open if they don't — and `THEOC_KEYLOG=1` then
+   says whether the chord arrives, which separates a host input bug from a game
+   gate.
+
+   Not decoded: what event subcodes 0–13 actually *do*. Only needed if a key
+   arrives and still behaves wrongly.
 
 ## Modernisation (deferred — after playability)
 

@@ -96,6 +96,19 @@ bool Video::open(int w, int h, int depth_code) {
         }
         win_ = win;
         ren_ = ren;
+        // SDL2 enables text input at window creation, which switches on the
+        // platform input method. On macOS that runs the dead-key composer:
+        // Option+E/I/N/U (and Option+`) begin a diacritic, so the OS holds the
+        // event waiting for the character to accent and no key-down is ever
+        // delivered. Three of those are real in-game shortcuts — Alt+I, Alt+U
+        // and Alt+N all reach the game's dispatcher on the original — and they
+        // simply never arrived here, while Alt+A (plain 'å', not a dead key)
+        // always worked. That difference is what named the cause.
+        //
+        // We never consume SDL_TEXTINPUT: every key is translated from the raw
+        // scancode by sdl_scancode_to_ekey and pushed to the Intuition ring, so
+        // the input method buys us nothing and costs five keys.
+        SDL_StopTextInput();
         // Ask SDL what we actually got, rather than assuming the request stuck.
         fullscreen_ = (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
         SDL_ShowCursor(SDL_DISABLE);

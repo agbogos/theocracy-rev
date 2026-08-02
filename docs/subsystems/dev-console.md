@@ -341,6 +341,73 @@ Note this necessarily **freezes the simulation** — edit mode *is* the frozen-s
 state, not a cheat layered on normal play. Verified by driving into a scenario
 with `THEOC_AUTO_PROVINCE=1`.
 
+## The full Alt+key table, and why three of them did nothing on macOS
+
+`InGame_HandleKeyCommand` is also the game's whole in-game shortcut surface, so
+the switch decoded above doubles as the definitive list. Read off the jump table
+at `0x838a764`, confirmed against the instruction stream:
+
+```
+081e1aa9  LEA EAX,[EDX-0x2]   ; eKey - 2
+081e1aac  CMP EAX,0x9
+081e1aaf  JA  ...             ; 0x02..0x0b -> quick path FUN_081d0e20
+081e1ad3  LEA EAX,[EDX-0xc]
+081e1ad6  CMP EAX,0x45
+081e1ad9  JA  0x081e20da      ; outside 0x0c..0x51 -> return
+081e1adf  JMP [EAX*4 + 0x838a764]
+```
+
+eKey is a dense enum, not a PC scancode: digits `1`–`0` are `0x02`–`0x0b`, `A`–`Z`
+are `0x0c`–`0x25`, and Space is `0x51`.
+
+| Key | eKey | Action |
+|---|---|---|
+| `1`–`9`, `0` | 0x02–0x0b | `FUN_081d0e20(world, faction, digit)` — separate path, not the event pipe |
+| A | 0x0c | subcode **0** (and the only one that hardcodes the shift byte to 0) |
+| B | 0x0d | hide `g_CmdConsole` if shown |
+| D F H J L M N P S T U W Y | — | subcodes **5 7 8 4 1 c d a b 9 2 3 6** respectively |
+| I | 0x14 | inline unit selection — walks `world+0x40bb0`, adds matches to the selection at `world+0x40de4`. Early-returns in battle mode |
+| Q | 0x1c | `FUN_081d81d0`, gated on ProvCheat |
+| V | 0x21 | `Edit__10cVOConsole(g_CmdConsole)`, gated on battle mode (above) |
+| Space | 0x51 | `FUN_081c03d0` → `FUN_081c0b20` → `FUN_081d0cd0` |
+| **C E G K O R X Z** | — | **no handler at all** — these fall to the default and return |
+
+The fourteen ordinary keys all build the same 5-byte event `{5, 0xe, subcode,
+shiftFlag}`, push it to the pipe at `0x8645360`, and then send message `0x2b` to
+the province view via `cProvince::SendMessage` (`0x81e0460`). **What subcodes
+0–13 mean is not decoded**: that pipe is not the sim's order queue
+(`g_World+0x83c`, see [simulation-step.md](simulation-step.md)) and it is drained
+through a virtual dispatch chain. Naming them means tracing that chain or
+matching each subcode against the ~19 UI handlers that push the same shape.
+
+**None of this works on the realm screen**, for the reason in the previous
+section: only the province view's widget routes Alt+key here.
+
+### The dead-key bug (fixed 2026-08-02)
+
+Alt+I, Alt+U and Alt+N are all implemented above and all did nothing under the
+port, while Alt+A worked. The cause was **not** in the game.
+
+SDL2 enables text input when the window is created, which switches on the
+platform input method. On macOS, **Option+E/I/N/U and Option+`` ` `` are dead
+keys** — they begin a diacritic, so the OS holds the event waiting for the
+character to accent, and no key-down is ever delivered. Option+A is not a dead
+key (it is just `å`), which is exactly why it kept working and named the cause.
+Three of the five collide with real shortcuts; Option+E would have too, but the
+game never implemented `E`.
+
+Fixed by calling `SDL_StopTextInput()` after window creation (`video.cpp`). We
+never consume `SDL_TEXTINPUT` — every key is translated from the raw scancode by
+`sdl_scancode_to_ekey` and pushed to the Intuition ring — so the input method
+bought nothing and cost five keys. The fullscreen toggle reuses the window
+(`SDL_SetWindowFullscreen`), so one call covers the session.
+
+**The lesson is the platform one:** a host that translates raw scancodes is not
+thereby immune to the host's input method. The composer sits *above* the key
+event, so the port loses the keystroke before any of its own translation runs —
+and it fails on a set of keys defined by the keyboard layout, which is why the
+failures looked patternless until the letters were listed out.
+
 ## Cheats
 
 Three bytes in `.data`, all zero-initialised:
