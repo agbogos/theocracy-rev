@@ -4,6 +4,7 @@
 #include <mach/mach.h>
 #endif
 #include <algorithm>
+#include <set>
 #include <cctype>
 #include <cerrno>
 #include <csignal>
@@ -2211,7 +2212,10 @@ void TrapLayer::register_builtins() {
         }
         uint32_t gp = bump_alloc(128);
         if (gp) { std::vector<uint8_t> z(128, 0); m.write(gp, z.data(), 128); }
-        files_[gp] = HostFile{fp, -1, false, false, false};
+        files_[gp] = HostFile{fp, -1, false, false, false, host,
+                              mode.find('w') != std::string::npos ||
+                              mode.find('a') != std::string::npos ||
+                              mode.find('+') != std::string::npos};
         return gp;
     };
 
@@ -2219,8 +2223,16 @@ void TrapLayer::register_builtins() {
         uint32_t gp = arg(m, esp, 0);
         auto it = files_.find(gp);
         if (it == files_.end()) return (uint32_t)-1;
+        std::string path = it->second.host_path;
+        bool wrote = it->second.wrote;
         if (it->second.fp) std::fclose(it->second.fp);
         files_.erase(it);
+        // Normalise the save the moment it is complete and closed — see
+        // collapse_save_file. Done here rather than at write time because the
+        // fix needs the whole file, and here it is on disk and consistent.
+        if (wrote && path.size() > 4 &&
+            path.compare(path.size() - 4, 4, ".tsg") == 0)
+            collapse_save_file(path);
         return 0;
     };
 
@@ -3982,6 +3994,112 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
 // print target, so input, echo and output all land in one visible box.
 //
 // Closing chord is the object's own: SetExitKey(0x0e, mask 2) = Alt+C.
+// Collapse the duplicate per-province groups in a .tsg save, right after the
+// game closes it.
+//
+// The defect is the game's, and it is fatal to long campaigns. Every save
+// appends a **byte-identical copy** of a small group of records to a list at
+// the end of each province's data. Each list stores its length in a *single
+// byte*, counting 17-byte units: most provinces add 4 units (68 bytes) per
+// save, one (map23) adds 5. So the counter climbs 4-5 per save and dies at 255
+// — map23 first, at 51 saves. Past that the byte wraps, the loader reads the
+// wrong length, and every byte after it is misparsed. That is the "save
+// corrupts after ~50 saves" bug, and the reason hand-deleting the duplicates
+// recovers a file: the copies carry nothing.
+//
+// We fix it at the file boundary rather than by patching the game, because the
+// write site is behind two layers of virtual dispatch and a byte-patch into
+// logic we do not fully understand is the riskier change. Here the whole file
+// is on disk and consistent, and the edit is verifiable against real saves —
+// tools/fix_save.py is the same algorithm and is what it was developed against.
+//
+// **Anchored on the counter, never on the repetition.** Once a list holds many
+// identical groups the periodicity also holds at offsets *inside* a group, so
+// scanning for the repeat can lock onto a shifted phase and write the counter
+// over a data byte. That produces a save that does not load. Instead each byte
+// is read as a candidate count and checked against the layout it claims — the
+// count fixes the phase exactly.
+//
+// Refuses to touch anything it does not fully recognise: every province gets
+// one group per save, so an intact file has the *same* group count in every
+// list. Disagreement means the parse is wrong, and nothing is written.
+// THEOC_NO_SAVE_FIX=1 disables the whole thing.
+void TrapLayer::collapse_save_file(const std::string& path) {
+    static const bool disabled = std::getenv("THEOC_NO_SAVE_FIX") != nullptr;
+    if (disabled) return;
+
+    constexpr size_t kUnit = 17;            // four LE u32 + one trailing byte
+    static const size_t kGroups[] = {4, 5}; // units appended per save
+
+    std::vector<uint8_t> d;
+    {
+        FILE* f = std::fopen(path.c_str(), "rb");
+        if (!f) return;
+        std::fseek(f, 0, SEEK_END);
+        long n = std::ftell(f);
+        std::fseek(f, 0, SEEK_SET);
+        if (n <= 0) { std::fclose(f); return; }
+        d.resize((size_t)n);
+        size_t got = std::fread(d.data(), 1, d.size(), f);
+        std::fclose(f);
+        if (got != d.size()) return;
+    }
+
+    struct Run { size_t off, group, reps; };
+    std::vector<Run> runs;
+    for (size_t i = 0; i + 1 < d.size();) {
+        size_t count = d[i], hit_g = 0, hit_r = 0;
+        for (size_t g : kGroups) {
+            if (count < g * 2 || count % g) continue;
+            size_t r = count / g, span = g * kUnit, body = i + 1;
+            if (body + count * kUnit > d.size()) continue;
+            // Reject flat fill: long zero runs repeat trivially and mean nothing.
+            std::set<uint8_t> distinct(d.begin() + body, d.begin() + body + span);
+            if (distinct.size() < 4) continue;
+            bool same = true;
+            for (size_t k = 1; k < r && same; ++k)
+                same = std::equal(d.begin() + body, d.begin() + body + span,
+                                  d.begin() + body + k * span);
+            if (same) { hit_g = g; hit_r = r; break; }
+        }
+        if (hit_g) { runs.push_back({i, hit_g, hit_r}); i += 1 + hit_g * hit_r * kUnit; }
+        else       { ++i; }
+    }
+    if (runs.empty()) return;
+
+    std::set<size_t> reps;
+    size_t worst = 0;
+    for (const Run& r : runs) { reps.insert(r.reps); worst = std::max(worst, r.group * r.reps); }
+    if (reps.size() != 1 || runs.size() < 30 || runs.size() > 60) {
+        std::fprintf(stderr, "  [save] %s: not collapsing — %zu lists, %zu distinct "
+                     "group counts (expected ~44 and 1). Left untouched.\n",
+                     path.c_str(), runs.size(), reps.size());
+        return;
+    }
+    if (*reps.begin() < 2) return;          // already one group each
+
+    std::vector<uint8_t> out;
+    out.reserve(d.size());
+    size_t prev = 0;
+    for (const Run& r : runs) {
+        out.insert(out.end(), d.begin() + prev, d.begin() + r.off);
+        out.push_back((uint8_t)r.group);    // counter = exactly one group
+        out.insert(out.end(), d.begin() + r.off + 1,
+                   d.begin() + r.off + 1 + r.group * kUnit);
+        prev = r.off + 1 + r.group * r.reps * kUnit;
+    }
+    out.insert(out.end(), d.begin() + prev, d.end());
+
+    FILE* f = std::fopen(path.c_str(), "wb");
+    if (!f) return;
+    bool ok = std::fwrite(out.data(), 1, out.size(), f) == out.size();
+    std::fclose(f);
+    std::fprintf(stderr, "  [save] collapsed %zu province lists in %s: "
+                 "%zu -> %zu bytes, counter %zu -> %zu of 255%s\n",
+                 runs.size(), path.c_str(), d.size(), out.size(),
+                 worst, *kGroups, ok ? "" : "  (WRITE FAILED)");
+}
+
 void TrapLayer::enable_dev_console() {
     console_enabled_ = true;
     std::fprintf(stderr, "  [console] THEOC_CONSOLE: dev console armed "

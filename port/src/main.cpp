@@ -109,6 +109,16 @@ int main(int argc, char** argv) {
     // the original binary means the netgame wire protocol never has to be
     // reimplemented. readme.linux says in-game server spawn was broken on the
     // original Linux release too, so a separate process is the intended topology.
+    // THEOC_FIX_SAVE=<path>: repair a .tsg save and exit, without booting the
+    // game. Same code the save path runs, so this is both the offline repair
+    // tool and the way the fix is tested — it needs no display and no data
+    // tree, which is what makes it verifiable at all (cf. THEOC_HEAP_TEST).
+    if (const char* fix = std::getenv("THEOC_FIX_SAVE")) {
+        std::fprintf(stderr, "=== save repair: %s ===\n", fix);
+        TrapLayer::collapse_save_file(fix);
+        return 0;
+    }
+
     const bool want_server = std::getenv("THEOC_SERVER") != nullptr;
     std::string game_path = want_server ? "data/cd/linux/server"
                                         : "data/cd/linux/theocracy.real";

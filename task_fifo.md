@@ -11,8 +11,7 @@ controlled activity saturating, and the last broken shortcuts turned out to be
 the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
-Item 1 is by far the biggest and needs game-logic surgery. Item 4 is the cheap
-one and has a deterministic repro.
+Item 1 is by far the biggest and needs game-logic surgery; 2 and 3 are small.
 
 1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
@@ -34,23 +33,40 @@ one and has a deterministic repro.
 3. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-4. **Fixing the game saves** — the save files store the world state in an appending
-   fashion with a pre-baked structure. The underlying data structure is likely an
-   array, with a separately stored index that points to the latest save. But they
-   didn't safeguard from overflow, meaning that if you save more times than the
-   array was initialized to (~56) the save process overwrites regions of the save
-   it's not supposed to, thus corrupting the save file. Manually editing the index
-   allows continuing to use the save file. I suspect this was done for debug tests
-   (after all the game version is 0.6.x) and we should simply fix that index to
-   always be 0.
-
-   **Save ×60 is the repro**: saving sixty times in one session walks the index
-   past the ~56-entry array deterministically. The leak hunt it used to double as
-   is closed, so the corruption is now the whole point — though running it under
-   `THEOC_LONGRUN=15` still costs nothing and would give a per-save allocation
-   figure for free.
-
 ## Done
+
+- **Save-file corruption after ~50 saves — fixed (2026-08-02).** Every save
+  appended a **byte-identical** copy of a small group to a list at the end of
+  each of the **44 province** blocks. Each list stores its length in a **single
+  byte** counting 17-byte units; most provinces add 4 units (68 B) per save,
+  map23 adds 5. So the counter climbed 4-5 per save and died at 255 — map23
+  first, at **51 saves** — after which the byte wraps, the loader reads the wrong
+  length, and the rest of the file is misparsed.
+
+  Fixed at the file boundary the host owns, not by patching the game: the write
+  site is behind two layers of virtual dispatch and was never pinned, and
+  byte-patching logic we do not fully understand is the riskier change.
+  `TrapLayer::collapse_save_file` collapses every run to one group when the game
+  closes a save it wrote, so the counter is reset to 4 every time and can never
+  approach 255. `tools/fix_save.py` is the same algorithm offline;
+  `THEOC_FIX_SAVE=<path>` runs the host's own copy without booting;
+  `THEOC_NO_SAVE_FIX=1` reverts.
+
+  **Two things make it safe, and both were earned.** It is anchored on the
+  *counter byte*, never on the repetition — once a list holds many identical
+  groups the periodicity also holds at offsets *inside* a group, and the first
+  cut locked onto a shifted phase and corrupted 86 bytes of a 64-group file. And
+  it refuses anything it does not fully recognise: every province gets one group
+  per save, so an intact file has the same group count in every list; on an
+  already-overflowed file the scan finds 125 "lists" with 2-38 groups and all
+  three guards fire. Already-overflowed saves are **detected and reported, not
+  repaired** — the counter is the only thing that fixes the phase.
+
+  Verified on three real saves plus a synthetic 64-save overflow: lossless,
+  idempotent, and **the C++ and Python agree byte-for-byte on all four**.
+  Format, the save call chain, and the separate finding that the 72-byte header
+  is 54 bytes of uninitialised stack (written to disk with live guest pointers
+  in it): [docs/subsystems/save-format.md](docs/subsystems/save-format.md).
 
 - **Upscale filtering — sharp-bilinear + scanlines (2026-08-02).** The
   "it looks aged" item, closed at the ~1–2 h the assessment predicted. The art

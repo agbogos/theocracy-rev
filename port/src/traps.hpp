@@ -32,6 +32,14 @@ public:
     // Print the tally of which imports were hit (implemented vs. TODO).
     void report() const;
 
+    // Collapse the duplicate per-province groups in a .tsg save, in place.
+    // Called after the game closes a save it wrote; also reachable standalone
+    // via THEOC_FIX_SAVE=<path> so it can be tested and used without a display.
+    // Refuses to write anything it does not fully recognise. See the definition
+    // for the format and why it is anchored on the counter byte.
+    // THEOC_NO_SAVE_FIX=1 disables it on the save path.
+    static void collapse_save_file(const std::string& path);
+
     // Disarm the stall watchdog before the run winds down (see definition).
     void stop_watchdog();
 
@@ -226,6 +234,8 @@ private:
         bool  stub = false;     // /dev/* that we fake
         bool  audio = false;    // /dev/dsp → host SDL mixer
         bool  eof = false;
+        std::string host_path;  // resolved path, for post-close normalisation
+        bool  wrote = false;    // opened for writing (see collapse_save_file)
     };
     std::unordered_map<uint32_t, HostFile> files_;   // guest FILE*
     std::unordered_map<int, HostFile> fds_;          // guest fd → host
