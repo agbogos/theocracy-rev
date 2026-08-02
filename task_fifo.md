@@ -125,29 +125,6 @@ runs now; four trials have eliminated four candidates without finding it.
    per-activity rates can be separated. Then the allocation-site histogram,
    which is the only way to attribute it.
 
-3. **Fixing remaining buttons and shortcuts** — *cause found and fixed
-   2026-08-02, awaiting confirmation on a run.* The reason no structure was
-   visible is that there were two unrelated things going on, and one of them was
-   the **macOS keyboard layout**:
-
-   - **Alt+I, Alt+U, Alt+N never reached the guest.** SDL2 turns text input on
-     at window creation, which enables the macOS dead-key composer; ⌥E ⌥I ⌥N ⌥U
-     ⌥`` ` `` begin a diacritic and are never delivered as key-downs. ⌥A is not a
-     dead key, which is why it worked and the rest looked random. Fixed with
-     `SDL_StopTextInput()` in `video.cpp` — we never read `SDL_TEXTINPUT`.
-   - **Eight letters have no handler in the game at all: C E G K O R X Z.** Not
-     our bug and not fixable; they fall to the default case and return.
-
-   Full dispatcher table (all 28 keys, read off the jump table at `0x838a764`)
-   and the reasoning: [docs/subsystems/dev-console.md](docs/subsystems/dev-console.md),
-   "The full Alt+key table". **To confirm:** ⌥I, ⌥U and ⌥N should now all
-   respond in a province. Still open if they don't — and `THEOC_KEYLOG=1` then
-   says whether the chord arrives, which separates a host input bug from a game
-   gate.
-
-   Not decoded: what event subcodes 0–13 actually *do*. Only needed if a key
-   arrives and still behaves wrongly.
-
 ## Modernisation (deferred — after playability)
 
 2. **Decouple sim from render (frame-tied engine)** — the engine steps
@@ -196,6 +173,33 @@ runs now; four trials have eliminated four candidates without finding it.
    the corruption is the point, the leak figure is the by-product.
 
 ## Done
+
+- **Broken Alt+key shortcuts — fixed and confirmed on a run (2026-08-02).**
+  Closes the last playability item. No structure was visible because there were
+  two unrelated causes, and the bigger one was the **macOS keyboard layout**
+  rather than anything in the game:
+  - **⌥I, ⌥U and ⌥N never reached the guest.** SDL2 enables text input at window
+    creation, which switches on the macOS input method, and ⌥E ⌥I ⌥N ⌥U ⌥`` ` ``
+    are **dead keys** — they begin a diacritic, so the OS holds the event and no
+    key-down is delivered. ⌥A is not a dead key (just `å`), which is why it kept
+    working and named the cause. Fixed with `SDL_StopTextInput()` after window
+    creation; we never consume `SDL_TEXTINPUT`, so the input method bought
+    nothing and cost five keys. User-verified: ⌥U and the others now respond.
+  - **Eight letters have no handler in the game at all — C E G K O R X Z.** They
+    fall to the default case and return. Not our bug, nothing to fix.
+
+  The whole dispatcher is now documented — all 28 keys, read off the jump table
+  at `0x838a764` and confirmed against the instruction stream — in
+  [docs/subsystems/dev-console.md](docs/subsystems/dev-console.md), "The full
+  Alt+key table". **Lesson worth keeping:** translating raw scancodes does not
+  make a port immune to the host's input method, because the composer sits
+  *above* the key event — the keystroke is gone before any of our translation
+  runs, and it fails on a set of keys defined by the layout, which is exactly
+  why it looked patternless.
+
+  Not decoded, and only worth doing if a key arrives and still misbehaves: what
+  event subcodes 0–13 mean. The pipe at `0x8645360` is not the sim's order queue
+  and is drained through a virtual dispatch chain.
 
 - **`[health]` growth measured on the live set, not the frontier (2026-07-27)** —
   the frontier is a *high-water mark*. Before G15, when `free()` was a no-op, it
