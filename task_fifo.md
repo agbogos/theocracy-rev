@@ -2,132 +2,19 @@
 
 Tracking only. Not a design doc. Remaining items, top = next. **Single-player
 and multiplayer are both playable and verified end-to-end**, and the manual QA
-pass is complete; see `docs/porting/guest-libmvos.md` for what landed. Order
-below is **playability first, modernisation after**.
+pass is complete; see `docs/porting/guest-libmvos.md` for what landed.
 
 ## Remaining (FIFO — prefer top)
 
-All three host cleanups surfaced by the 2026-07-26 documentation pass (reading
-`port/src` structurally rather than chronologically — see
-`docs/porting/host-architecture.md`) are now closed: the hardcoded game
-singletons, the `CloseSubsystems` teardown question, and the trap-window page
-maths. See Done below. What remains under playability is mostly measurement —
-the leak is real but unattributed. The instruments are built and proven on real
-runs now; four trials have eliminated four candidates without finding it.
+**Playability is closed as of 2026-08-02.** The heap-leak hunt ended with every
+controlled activity saturating, and the last broken shortcuts turned out to be
+the macOS dead-key composer rather than the game. Everything below is
+modernisation, and none of it blocks playing the game.
 
-1. **Controlled leak experiments** — *four run, four eliminations; see
-   [docs/porting/heap-growth-trials.md](docs/porting/heap-growth-trials.md) for
-   the results, the reference numbers and the eight instrument defects they
-   turned up.* Idling allocates nothing on either screen, the window mode
-   allocates nothing, and the realm↔province sawtooth saturates at ~8 KB/cycle.
-   The +7–11 MB/h of sustained play is still unattributed.
+Item 1 is by far the biggest and needs game-logic surgery; 4 and 5 are the cheap
+ones, and 5 has a deterministic repro.
 
-   Protocol, the same for every trial: boot → load the **same** save → do only
-   that one thing → exit **via the menu**. `THEOC_LONGRUN=15 THEOC_FRAME_MS=50`,
-   stderr to a file. **`Alt+M`** once the activity has settled and again when it
-   ends — the segment between two marks is the measurement, and
-   `tools/plot_health.py --table` prints one row per segment. Read **`moves` and
-   `max Δ`, not the fitted slope**, and compare on **MB/1k frames**.
-
-   1. **As many battles as one session allows** — ***run this next.*** The
-      suspected heavy allocator, the only trial where fps is expected to move,
-      and the leading candidate by elimination: battles are the largest thing
-      the two long sessions were doing that the trials have not yet ruled out.
-
-      Mark on entering a battle and again on leaving it, every time, so each
-      battle is its own segment — they will differ in size and length, and
-      `MB/1k frames` is what makes them comparable. Sit 2 min on the map at the
-      end. Watch `blk/frame` too: the 2026-07-31 fps-11.5 battle is still
-      unexplained, and this is the trial that says whether it was saturation.
-
-      **Shape agreed 2026-08-02, three phases in two runs.** Run A, console
-      off: 3 real battles with existing units, reloading between, then 3
-      auto-resolve battles the same way. Run B, `THEOC_CONSOLE=1`: 3 synthetic
-      battles, units spawned for both sides, no reloads — the stress test.
-      Two runs because `allcheat` changes bare-key behaviour in province for the
-      rest of the process. Two things fall out of that shape for free: the
-      reloads make live heap after each load directly comparable, which says
-      whether anything survives world teardown (and covers the reload path,
-      #1.2); and auto-resolve against real battles separates the battle *view*
-      from the battle *resolution*. Segments need 3 samples and 30 s to appear
-      in the table at all, so anything brief wants padding with idle — which is
-      free, since trials 1 and 2 proved idle allocates nothing.
-   2. **Reload → menu → reload → menu, 5 min** — the load path, and there is only
-      one: the game has **no in-game load**, a save can only be loaded after
-      quitting to the menu. `THEOC_SOAK` measures its scripted twin at
-      +18 KB/cycle; this is the human version, with the UI in the loop. The
-      load itself costs **+21.9 MB**, so a 15 s sample resolves it cleanly.
-   3. **Open/close each UI panel ×20** (diplomacy, tribe, …) — the last of the
-      cheap screen-transition candidates, and the trial that also covers the
-      pure input path dropped from the original list.
-   4. **One activity at two frame caps** (`THEOC_FRAME_MS=83` then `=50`) — the
-      discriminator. Growth constant per 1k frames ⇒ the leak is per sim tick
-      (guest); constant per hour ⇒ it is host- or wall-clock-driven. That halves
-      the search space before any attribution work. Needs an activity that
-      actually grows, so it is downstream of trial 1.
-
-   Read **host RSS** alongside guest live in every trial: it grew +99 MB over the
-   2026-07-31 session and nothing attributes it. Cutscenes are the obvious host-side
-   suspect (SMPEG decodes a whole movie to RGB565 host-side and frees on delete)
-   but cannot be made into a trial — they fire on random events or a victory, so
-   there is no way to loop them.
-
-   Only after the trials, the allocation-site histogram — they may well have
-   named the culprit first.
-
-2. **Multi-hour gameplay stress test** — *harness built (2026-07-27); the run
-   itself is yours. Now downstream of the experiments above: it is a soak, not a
-   measurement.* `THEOC_LONGRUN=60` gives a periodic three-line `[health]`
-   snapshot, rate-limits the repeatable log lines so an overnight session cannot
-   fill the disk, arms the watchdog, and lifts the `Start()` wall-clock budget.
-   All on stderr, so `2>session.log` captures everything.
-
-   ```sh
-   DYLD_LIBRARY_PATH=/opt/homebrew/lib \
-     THEOC_LONGRUN=60 THEOC_FRAME_MS=50 ./port/build/theoc 2>session.log
-   python3 tools/plot_health.py session.log      # -> session-health.svg
-   ```
-
-   Reading it afterwards: plot it rather than reading 137 samples as text — the
-   question is about slope. All growth figures are on the **live set** (the
-   frontier is a high-water mark; see the Done entry below). `interval` catches
-   a sudden onset, `avg` a slow leak (it includes the one-time ~29 MB scenario
-   load, so give it ~30 min), and **growth per 1k frames** is the cross-run
-   figure — the engine is frame-tied, so 20fps steps the sim ~1.67× faster than
-   the 12fps default and allocates proportionally more per wall-clock hour.
-
-   Known baseline to beat: the 20-cycle soak measured **+18 KB/cycle** of guest
-   heap, linear, i.e. ~7000 cycles to exhaust the 128 MB arena. Anything steeper
-   over hours is new. Not yet built, and only worth building if a leak shows up:
-   an allocation-site histogram, which is the only way to attribute one.
-
-   **2.28 h drive (2026-07-27, hand-played, most functions exercised) — a real
-   leak, ~7 MB/h.** 137 samples. Guest heap live **24.6 → 53.5 MB**, and the fit
-   past warm-up is **+7.23 MB/h live / +8.20 MB/h frontier**, dead linear across
-   117 samples — i.e. **~8.9 h before the 128 MB arena is exhausted.** Nothing
-   else moved: fps 19.2–19.6 flat for the whole session, stubs 144 B, fds 2,
-   0 suppressed, no fault, no abort, no watchdog stall. ESP took four values but
-   they recur and return (`0x6fffc240` at 0.03 h *and* 2.12 h), so no stack
-   drift — worth noting the 20-cycle soak's "ESP identical" was an artifact of
-   sampling one point in a scripted loop; across free play it is a game-state
-   indicator, not a leak signal. A host RSS drop of 79 MB at 1.87 h was the
-   user reloading a save, not a buffer lifetime bug.
-
-   **Two lessons, both about being wrong.** First, the 10-minute run this
-   replaced looked like it was *plateauing* and was read that way — it was warm-up,
-   and ten minutes could not tell the two apart. Second, the harness's own growth
-   figures were computed off the frontier and read `+0.000 MB/h` in 105 of the
-   137 samples *while this leak was running*; fixed, and written up in
-   `docs/porting/diagnostics.md`, "Live set vs. frontier".
-
-   Next run should confirm the slope survives the metric fix before anyone
-   chases it — and the reload annotation will partition the session so
-   per-activity rates can be separated. Then the allocation-site histogram,
-   which is the only way to attribute it.
-
-## Modernisation (deferred — after playability)
-
-2. **Decouple sim from render (frame-tied engine)** — the engine steps
+1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
@@ -140,14 +27,14 @@ runs now; four trials have eliminated four candidates without finding it.
    surgery) — the "gradually rewrite the game natively" territory. See
    `docs/porting/frame-timing.md`.
 
-3. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
+2. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-4. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
+3. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-5. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
+4. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
    present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
    the original display. Note there is **no true antialiasing available** (no
    geometry to sample, no higher-res source art), so this is upscale filtering only.
@@ -156,7 +43,7 @@ runs now; four trials have eliminated four candidates without finding it.
    scaling costs) plus an optional scanline knob. Full assessment, including the two
    options deliberately rejected: `docs/porting/upscale-filtering.md`.
 
-6. **Fixing the game saves** — the save files store the world state in an appending
+5. **Fixing the game saves** — the save files store the world state in an appending
    fashion with a pre-baked structure. The underlying data structure is likely an
    array, with a separately stored index that points to the latest save. But they
    didn't safeguard from overflow, meaning that if you save more times than the
@@ -166,13 +53,46 @@ runs now; four trials have eliminated four candidates without finding it.
    (after all the game version is 0.6.x) and we should simply fix that index to
    always be 0.
 
-   **Save ×60 is the repro**, and it doubles as a leak trial (see Playability #1):
-   saving sixty times in one session walks the index past the ~56-entry array
-   deterministically, and with `THEOC_LONGRUN=15` running the same session also
-   measures allocation per save. Do it here rather than as a separate experiment —
-   the corruption is the point, the leak figure is the by-product.
+   **Save ×60 is the repro**: saving sixty times in one session walks the index
+   past the ~56-entry array deterministically. The leak hunt it used to double as
+   is closed, so the corruption is now the whole point — though running it under
+   `THEOC_LONGRUN=15` still costs nothing and would give a per-save allocation
+   figure for free.
 
 ## Done
+
+- **Heap-leak hunt — closed (2026-08-02), five trials, every activity
+  saturates.** Closes the old Playability #1 and #2 together. The full record,
+  with numbers: [docs/porting/heap-growth-trials.md](docs/porting/heap-growth-trials.md).
+
+  Trials 1, 2, 3 and 6 found idling, the window mode and the realm↔province
+  cycle to allocate nothing or to settle at ~8 KB/cycle. **Trial 7** put the
+  leading candidate — battles — through nine battles in three phases: three
+  fought, three auto-resolved, three synthetic with spawned units, with the
+  **same save reloaded between the first six**. Live floor after each reload:
+  `30.97 39.79 42.03 43.01 43.61 43.64` — the sixth reload of the same file
+  costs **30 KB**. It converges. So do the un-reloaded synthetic battles. The
+  frontier sat unmoved at 53.39 MB of 128 MB for the last six minutes.
+
+  Battles do have a price, and it is a **plateau, not a slope**: the settling
+  point rises from 30.72 MB (province cycling alone) to ~43.6 MB once battles are
+  involved. A watched battle costs ~5× an auto-resolved one per frame, so the
+  cost is in the battle *view*, not the resolution.
+
+  Two things fell out: guest work peaked at **9.694M blocks/frame at 2.4 fps**
+  against 0.21–0.86M in province, which settles the 2026-07-31 slow battle as
+  **genuine saturation** rather than a host stall; and the multi-hour harness
+  itself is done and proven, which is what closed #2.
+
+  **Not resolved, and recorded as such:** the two long sessions' +7–11 MB/h was
+  never reproduced under controlled conditions. Three readings remain consistent
+  with the evidence — a warm-up sampled before it flattened, something slower
+  than any trial ran for, or a combination one-activity-per-run cannot reproduce,
+  which is the method's own blind spot. Closed on the grounds that every
+  measurement says a session survives with wide margin. **Reopen on evidence:**
+  an arena actually exhausted, `[heap] OUT OF MEMORY`, or a frontier that climbs
+  without flattening. The allocation-site histogram was never built and is still
+  the only way to attribute a leak if that day comes.
 
 - **Broken Alt+key shortcuts — fixed and confirmed on a run (2026-08-02).**
   Closes the last playability item. No structure was visible because there were

@@ -1,8 +1,10 @@
 # Heap-growth trials — what is *not* leaking
 
-*State of play: 2026-08-01, four trials run. The leak is real and still
-unattributed; what follows is the elimination, the reference numbers it produced,
-and the eight instrument defects it exposed.*
+*State of play: 2026-08-02, five trials run and the hunt closed. **Every
+controlled activity saturates.** Nothing measured threatens the 128 MB arena,
+and the +7–11 MB/h of the two long sessions was never reproduced under
+controlled conditions. What follows is the elimination, the reference numbers it
+produced, and the nine instrument defects it exposed.*
 
 ## The question, and why a fifth long session would not answer it
 
@@ -53,6 +55,7 @@ Everything below is on the same save, at `THEOC_FRAME_MS=50` (≈19.5 fps).
 | 2 | Idle in province, 10 min | **null** — pinned at 30.18 MB across 38 consecutive samples |
 | 3 | Windowed ↔ fullscreen ×45 | **null** — 0 moves on both screens, both directions |
 | 6 | Realm ↔ province ×20 | **warm-up, not a leak** — saturates at 30.72 MB |
+| 7 | 9 battles in 3 phases, 30 min | **warm-up, not a leak** — saturates at ~43.6 MB |
 
 ### 1 & 2 — idling allocates nothing, on either screen
 
@@ -101,6 +104,60 @@ nothing gained.
 So **"~0.97 MB retained per cycle" was an artefact** of a 60 s interval
 containing the cycle *and* everything else being done at the time. Retired.
 
+### 7 — battles: a bigger warm-up, and still a warm-up
+
+The leading candidate by elimination, run 2026-08-02 as **nine battles in three
+phases**, designed by the operator to separate three things at once:
+
+| Phase | Battles | Reloads |
+|---|---|---|
+| 1 | 3 real, fought | quit to menu, load the same save after each |
+| 2 | 3 auto-resolved | same |
+| 3 | 3 synthetic, units spawned for both sides via the console | none |
+
+124 samples over 0.51 h / 22,880 frames, `THEOC_LONGRUN=15 THEOC_FRAME_MS=50`,
+both streams captured. Phase boundaries were double-tapped `Alt+M`; the marks
+were placed **just after each battle**, so a reload never sat on a boundary.
+
+**Reloading the same save converges.** Live floor of each load-to-load cycle:
+
+```
+30.97  39.79  42.03  43.01  43.61  43.64
+       +8.82  +2.24  +0.98  +0.60  +0.03
+```
+
+The world is torn down and rebuilt from the same file each time, so anything the
+second load did not return would show here as a step. By the sixth load it costs
+**30 KB**. Phase 3, with no reloads at all, does the same: floors of 46.62,
+47.32, 47.80 — steps +2.98, +0.70, +0.48. Both series decay.
+
+Per phase, map baseline to map baseline:
+
+| Phase | Live | MB/1k frames |
+|---|---|---|
+| 1 — real, excl. warm-up | 30.97 → 42.62 | **1.208** |
+| 2 — auto-resolve | 42.62 → 43.64 | **0.226** |
+| 3 — synthetic | 43.64 → 47.80 | **0.784** |
+
+So **a watched battle costs ~5× an auto-resolved one per frame**: the allocation
+tracks the battle *view* running, not the resolution. Both still retain more
+than a plain province cycle (~340 KB per auto-resolved battle against ~8 KB).
+
+The session ended flat — 8 consecutive samples at 47.80 MB, 0 moves, and the
+frontier unmoved at 53.39 MB for the last six minutes. Nothing was released
+late. Exit was clean: `0 unimplemented`, no watchdog stall, and **23.1 MB live /
+53.4 MB frontier / 1529 free blocks** — the first session ever to have an
+end-of-run trap report in its log, because that had been going to stdout
+(defect 2).
+
+**Two side results.** Guest work peaked at **9.694M blocks/frame at 2.4 fps**,
+against 0.016M on the map and 0.21–0.86M in province — 11–45× province work per
+frame, with 71–75k audio underrun frames tracking it. That settles the
+2026-07-31 fps-11.5 battle: **genuine saturation, not a host stall.** And the
+"stress test" phase was *lighter* on the engine than the real battles (blk/frame
+0.4–1.2 against 2.7–9.7), so spawning a pile of units does not reproduce
+whatever a real battle does.
+
 ## Reference numbers
 
 Costs, for reading any future log:
@@ -120,24 +177,49 @@ the 2026-07-31 session showed six recurring values, and they are game states, no
 stack drift. The `[health]` line's `esp` field is therefore a free record of
 which screen each sample was taken on — used above to split trial 6 into visits.
 
-## What is eliminated, and what is next
+## Where this landed
 
 Idling allocates nothing (1, 2). The window mode allocates nothing (3). The
-screen cycle saturates (6). The +7–11 MB/h of sustained play still has to come
-from somewhere.
+screen cycle saturates (6). Battles and save reloads saturate (7). **Every
+activity anyone has been able to isolate settles**, and each one settles on the
+same shape: a few large steps, then decay to nothing.
 
-Remaining, in the worklist (`../../task_fifo.md`, Playability #1): **battles**
-(the largest thing those sessions were doing, and the leading candidate by
-elimination), the **reload path**, **UI panels**, and the **two-frame-cap
-discriminator** that would say whether the leak is per sim tick or per wall-clock
-hour. Host RSS is separately unattributed: +99 MB over the 2026-07-31 session.
+What that leaves is a **plateau that depends on what you have done**, not a
+leak: 30.72 MB for realm↔province cycling, ~43.6 MB once battles are in the mix.
+Both are comfortable against a 128 MB arena, and the frontier — which is what
+actually runs into the end of it — was flat at 53.39 MB for the last six minutes
+of the battle session.
+
+**The honest residual.** The two multi-hour sessions measured +7.2 and
++7–11 MB/h, and the 2026-07-27 figure was dead linear across 117 samples. That
+has never been reproduced under controlled conditions, and 30 minutes of battles
+does not produce it. Three readings are consistent with the evidence and this
+work cannot choose between them:
+
+1. Those sessions were a long warm-up sampled before it flattened — plausible
+   for the 2.28 h run, less so for a fit that linear.
+2. Whatever grows is slower than any controlled trial has run for.
+3. It needs a combination — economy, AI, diplomacy and battles concurrently —
+   that one-activity-per-run is constitutionally unable to reproduce. This is
+   the uncomfortable one, because it is the method's own blind spot.
+
+**The hunt is closed anyway, and deliberately.** The question the port needs
+answered is "does a session survive long enough to play", and every measurement
+says yes with wide margin. Reopen it on evidence, not on suspicion: a session
+that actually exhausts the arena, `[heap] OUT OF MEMORY`, or a frontier that
+climbs without flattening. The tool for that day is the allocation-site
+histogram, which was never built and is still the only way to attribute a leak.
+
+Host RSS remains separately unattributed — +99 MB over the 2026-07-31 session,
++60 MB over trial 7's 30 minutes. It is host-side, it is not the guest arena,
+and nothing has been done about it.
 
 Also unexplained, and cheap to notice again: **`blk/frame` in province read 0.21
 in trial 2 and 0.83–0.86 in trial 3** — 4× for nominally the same activity.
 
 ## The instrument defects these trials found
 
-Eight, in four sessions. Recorded because the pattern is the point: an
+Nine, in five sessions. Recorded because the pattern is the point: an
 instrument's *first real use* is when its defects surface, and five of these
 produce plausible wrong numbers rather than obvious failures.
 
@@ -174,6 +256,18 @@ produce plausible wrong numbers rather than obvious failures.
    samples and 30 s** — at `THEOC_LONGRUN=15` that means a segment shorter than
    about 45 s does not exist as far as the table is concerned, which is worth
    knowing before bracketing anything brief.
+
+9. **Reloads were inferred instead of read** (2026-08-02) — `reloads()` looked
+   for a ≥5 MB fall in the live set. A quit-to-menu frees the world and the load
+   allocates it straight back, both inside one 15 s sample, so the two cancel and
+   nothing shows. On trial 7 that reported **six real save reloads as none**, and
+   the session was written up as one continuous game until the operator said
+   otherwise. The game prints `*** Scenario Load ***` on every load and the log
+   already contained seven of them — the instrument was inferring a fact that was
+   sitting in its own input. Now parsed directly. **The lesson is the sharpest
+   one in this file:** prefer the event the system announces over a signature you
+   derive from a sampled series, because the derivation fails silently and
+   quietly rewrites what the session was.
 
 The stream defects (#2, #3) were finally fixed as a class rather than one site at
 a time — all 115 host `printf` sites in `port/src` now go to stderr, and only
