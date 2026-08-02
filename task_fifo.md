@@ -11,8 +11,8 @@ controlled activity saturating, and the last broken shortcuts turned out to be
 the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
-Item 1 is by far the biggest and needs game-logic surgery; 4 and 5 are the cheap
-ones, and 5 has a deterministic repro.
+Item 1 is by far the biggest and needs game-logic surgery. Item 4 is the cheap
+one and has a deterministic repro.
 
 1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
@@ -34,16 +34,7 @@ ones, and 5 has a deterministic repro.
 3. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
    used instead).
 
-4. **Upscale filtering / "it looks aged"** — the art was authored for a CRT and we
-   present integer-scaled nearest, i.e. perfectly hard pixels that never existed on
-   the original display. Note there is **no true antialiasing available** (no
-   geometry to sample, no higher-res source art), so this is upscale filtering only.
-   Assessed at **~1–2 hours**, not really a track item: sharp-bilinear (nearest into
-   a 3× render target, then linear to screen — also wins back the ~5% area integer
-   scaling costs) plus an optional scanline knob. Full assessment, including the two
-   options deliberately rejected: `docs/porting/upscale-filtering.md`.
-
-5. **Fixing the game saves** — the save files store the world state in an appending
+4. **Fixing the game saves** — the save files store the world state in an appending
    fashion with a pre-baked structure. The underlying data structure is likely an
    array, with a separately stored index that points to the latest save. But they
    didn't safeguard from overflow, meaning that if you save more times than the
@@ -60,6 +51,30 @@ ones, and 5 has a deterministic repro.
    figure for free.
 
 ## Done
+
+- **Upscale filtering — sharp-bilinear + scanlines (2026-08-02).** The
+  "it looks aged" item, closed at the ~1–2 h the assessment predicted. The art
+  was authored for a CRT; we were presenting integer-scaled nearest, which is the
+  *opposite* — perfectly square pixels that never existed on the original
+  display. Plain linear was never the answer either (it mushes the UI, which is
+  why G18 chose nearest).
+
+  Sharp-bilinear gets both: guest → a 3× intermediate with nearest, then
+  intermediate → screen with linear. The first step keeps every guest pixel an
+  exact block; the second only softens the boundaries, because it is
+  downsampling something already bigger than the output. Two things fell out —
+  the final blit now fits **fractionally**, recovering the ~5% of image area the
+  integer floor was costing, and scanlines became nearly free and
+  resolution-independent (`THEOC_SCANLINES=N`, off by default).
+  `THEOC_LEGACY_SCALE=1` reverts; so does a renderer without render-target
+  support, automatically and with a log line.
+
+  Verified headlessly against SDL's dummy driver rather than by eye — pass 1
+  produces a pixel-exact 3×3 block, pass 2 lands it dead centre with the
+  expected linear spread. **Worth reusing:** a render change that could produce
+  a black screen is testable without a display if the assertion is about pixel
+  *positions* rather than about it looking right.
+  Full writeup: [docs/porting/upscale-filtering.md](docs/porting/upscale-filtering.md).
 
 - **Heap-leak hunt — closed (2026-08-02), five trials, every activity
   saturates.** Closes the old Playability #1 and #2 together. The full record,

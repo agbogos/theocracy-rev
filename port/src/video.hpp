@@ -49,6 +49,12 @@ public:
     void set_crisp(bool on);
     bool is_crisp() const { return crisp_; }
 
+    // Supersample factor for the sharp-bilinear intermediate. 3 puts an 800x600
+    // guest at 2400x1800, which is at or above every panel we scale to, so the
+    // final blit is always a *downscale* — that is what keeps edges from
+    // shimmering. Higher buys nothing once the intermediate exceeds the output.
+    static constexpr int kSuperSample = 3;
+
     // Keep the window on screen for `seconds`, presenting/pumping, so a human
     // (or a demo run) can see it. Returns early if the window is closed.
     void keep_open_for(int seconds);
@@ -78,12 +84,21 @@ private:
     // mode. Shared by open() and toggle_fullscreen() so both paths log alike.
     void log_geometry(int depth_code);
 
+    // Build/tear down the sharp-bilinear intermediate for the current mode.
+    // Leaves sharp_ false if the renderer cannot do render targets, which is
+    // the whole fallback: everything else keys off sharp_.
+    void rebuild_target();
+
     void* win_ = nullptr;   // SDL_Window*
     void* ren_ = nullptr;   // SDL_Renderer*
     void* tex_ = nullptr;   // SDL_Texture*
+    void* rt_ = nullptr;    // SDL_Texture*, the kSuperSample intermediate
     int w_ = 0, h_ = 0, depth_ = 0;
     bool fullscreen_ = false;   // what we actually got, per SDL_GetWindowFlags
-    bool crisp_ = true;         // integer scale + nearest (see set_crisp)
+    bool crisp_ = true;         // pixel-preserving policy (see set_crisp)
+    bool sharp_ = false;        // sharp-bilinear active (crisp_ && rt_ built)
+    int scanline_a_ = 0;        // THEOC_SCANLINES alpha, 0 = off
     std::vector<uint16_t> fb_;
+    std::vector<SDL_Rect> scan_rects_;
     EventHook event_hook_;
 };
