@@ -2,9 +2,9 @@
 """Theocracy text/config cipher — decrypt/encrypt the `RSA4096`-marked files.
 
 The `RSA4096` header is a joke: the actual cipher is a symmetric XOR against two
-short repeating keys (periods 13 and 17). Ported verbatim from the original
-`XorBuff` (tools/crypt/TheocracyEncDec.cpp), which was recovered from the game
-binary. Only `.cfg`/`.txt`/`.idx`-style config files are encrypted; binary
+short repeating keys (periods 13 and 17). The two keys and the
+indexing were read out of the game's own decrypt routine; this is our own
+implementation of it, verified byte-exact against the shipped files. Only `.cfg`/`.txt`/`.idx`-style config files are encrypted; binary
 assets (`.raw`, sprites, anims, sounds) are plaintext and must NOT be touched.
 
     file layout:  "RSA4096" (7 bytes) + XOR(plaintext)

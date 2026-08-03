@@ -67,8 +67,8 @@ Two independent layers sit *inside* extracted files:
    without the marker (e.g. `hero.cfg`, all binary assets) are plaintext and
    must **not** be XORed. This is the heavy `cTextFile::OpenR/ReadLine`+`sscanf`
    path M1 saw — the game decrypts on read. Tooling: `tools/theocracy_crypt.py`
-   (module + CLI; `phls_extract.py --decrypt` decrypts on extract). Original
-   recovered C++ (`XorBuff`): `tools/crypt/TheocracyEncDec.cpp`.
+   (module + CLI; `phls_extract.py --decrypt` decrypts on extract) — our own
+   implementation, verified byte-exact against the shipped files.
 
    **The port does not decrypt anything.** The superseded pure-HLE layer did port
    `XorBuff` into a native `cTextFile` (`port/src/mvos.cpp`, no longer linked);

@@ -158,6 +158,28 @@ accurate and still cited; the *approach* is not current.
 Reverse-engineering a copy of the game you own, for personal use, is fine.
 *Distributing* a reconstructed port sits in the same grey zone devilutionX lives
 in — Philos Laboratories is defunct and the rights, via Ubisoft, are in limbo.
-Nothing copyrighted is in this repository: `.gitignore` excludes the binaries
-(`data/cd`) and the extracted assets (`data/game`), and they have to be supplied
-out of band.
+
+**Nothing copyrighted by the rights-holder is in this repository**, and that is
+maintained deliberately rather than incidentally. Audited 2026-08-03:
+
+- **No game binaries or assets.** `.gitignore` excludes `data/cd/` (the disc) and
+  `data/game/*` (the extracted tree); both must be supplied out of band. Verified
+  against the tracked file list, not just the ignore rules: 68 files, all source,
+  documentation, or derived reference tables.
+- **The derived tables** (`data/*.tsv`, `data/mvos_api.json`,
+  `include/mvos_api.hpp`) hold **symbol names, addresses and signatures** — the
+  interface facts needed for interoperability, not expressive content, and not
+  usable to reconstruct the game.
+- **`data/game/mvos.cfg` is ours** — 11 lines, hand-authored, normally written by
+  the installer.
+- **Every tool here is our own implementation.** Nothing third-party is vendored.
+- **The port never decrypts anything.** The engine's real `cTextFile` runs as
+  guest code and decrypts on read exactly as it did in 2000; the host only serves
+  bytes, and the canonical data tree stays as-shipped.
+
+Two things a reader should decide for themselves rather than infer from this
+file: the repository carries **no `LICENSE`** (so default "all rights reserved"
+applies to our own code), and `tools/theocracy_crypt.py` implements the game's
+own trivial config obfuscation for reading data you already own — documented in
+[reference/phls-format.md](reference/phls-format.md), and a judgement call worth
+making explicitly if this is ever distributed.
