@@ -1,8 +1,10 @@
 # Other-OS ports — Windows and Linux
 
-**Status: not started.** The port is macOS / Apple Silicon only, and finished as
-a port. This is the structure of the next two, written 2026-08-03 from an audit
-of `port/src` rather than from general porting lore.
+**Status: Linux done, Windows not started.** Linux was brought up on 2026-08-03
+and confirmed by play the same day — see [Confirmed by play](#confirmed-by-play)
+at the end of the Linux material. Windows is still structure only: that section
+was written 2026-08-03 from an audit of `port/src` rather than from general
+porting lore, and none of it has been compiled.
 
 ## The reusable core is bigger than it looks
 
@@ -295,8 +297,36 @@ Two instrument findings fell out:
   there, so host memory has to be watched from outside. On macOS it went
   156.7 → 155.8 MB over the run — *down*, and non-monotonic as documented.
 
-**Not yet exercised on Linux:** anything past the menu (the province limiter and
-the re-entrant sleep it drives), multiplayer beyond the server's accept path, save/load, interactive input, and a full two-client netgame (the server side is now proven, the client side is not).
+### Confirmed by play
+
+Everything the headless work could not reach was then **played on a real Linux
+machine** (2026-08-03): interactive input, save/load, the province limiter and
+the re-entrant sleep it drives, and a full netgame — one dedicated server and
+two clients — which proves the *client* side that the container could only prove
+from the server's accept path. All parts of the game were exercised and none
+misbehaved.
+
+*Provenance: this is the maintainer's report from an interactive session, not an
+instrumented run. It is the right kind of evidence for "does it work" — a human
+playing every part of the game is exactly what the headless harness cannot
+substitute for — and the wrong kind for any number, which is why the paragraph
+below refuses to produce one.*
+
+**Multiplayer felt slower than macOS, and that observation is not usable.** The
+session ran three game instances (server + two clients) inside a VM on a single
+Gentoo host, so the comparison confounds at least four variables against the
+macOS figures: virtualised execution, one host CPU shared three ways, a
+completely different machine, and a workload the macOS side never ran. Nothing
+here indicates a Linux-specific defect, and the structural evidence points the
+other way — the 20-cycle soak is bit-identical across the two platforms, and
+guest blocks per frame match, so the emulation is demonstrably doing the same
+work per frame on both.
+
+Recorded so the impression does not later get cited as a measurement. **What a
+real answer would need:** one instance per host, the same scene on both
+platforms, bare metal on each, and `THEOC_FPS`'s structural columns — guest
+blocks/frame and blocks/s — rather than the frame rate, for the reason the
+province differential already gives above.
 
 ## Packaging a Linux bundle
 
@@ -333,17 +363,31 @@ Two consequences worth knowing:
 
 ## Sequencing
 
-1. **Linux first.** It is mostly subtraction, it forces the platform seam into
-   existence against the easier target, and because it is the guest's *native*
-   ABI any residual translation bug surfaces immediately instead of hiding behind
-   a second translation.
-2. **Then Windows**, with the seam already proven by two implementations.
+1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces
+   the platform seam into existence against the easier target, and because it is
+   the guest's *native* ABI any residual translation bug surfaces immediately
+   instead of hiding behind a second translation.
+2. **Then Windows**, ~~with the seam already proven by two implementations~~ —
+   but see below: step 1 did not in fact produce a seam.
 
-**Introduce `port/src/platform/` rather than sprinkling `#ifdef`s.** The
-macOS-isms are concentrated — sockets, sleep, clock, filesystem, one shell-out —
-so a thin interface with three implementations keeps `traps.cpp` readable.
-Scattering conditionals through a 4000-line file is how this stops being
-maintainable.
+**Step 1's second reason did not hold, and Windows should not assume otherwise.**
+Linux was expected to force `port/src/platform/` into existence; it needed *two
+`#if` guards* and nothing more, because the socket layer turned out to be
+portable by construction. So Windows arrives with **no seam already proven** —
+it has to build the first one, against the harder target, which is the opposite
+of the leverage this ordering was meant to buy. The ordering was still right for
+its other two reasons (the native-ABI oracle, and subtraction being cheap), and
+Linux is the reference implementation that makes any Windows divergence
+diagnosable. But the estimate for Windows should not be discounted on the
+strength of a seam that does not exist.
+
+**Introduce `port/src/platform/` rather than sprinkling `#ifdef`s** — at Winsock,
+which is where it finally earns its keep. The macOS-isms are concentrated —
+sockets, sleep, clock, filesystem, one shell-out — so a thin interface with three
+implementations keeps `traps.cpp` readable. Scattering conditionals through a
+4000-line file is how this stops being maintainable. Two sites did not earn an
+interface, which is why Linux correctly did not build one; Windows touches every
+item on that list.
 
 Also waiting, already known: **teardown**. `CloseSubsystems` is deliberately
 skipped because process exit on macOS reclaims everything it would release, and a
