@@ -151,6 +151,40 @@ network. On a project whose whole debugging history is wall-clock bugs
 masquerading as performance bugs, that produces plausible wrong numbers. Use VNC
 into a VM if you need to watch it, and keep judgement calls on real hardware.
 
+## First Linux build — 2026-08-03
+
+It builds and runs, and the prediction above held almost exactly: **two
+compile errors, both BSD-isms, nothing else.**
+
+- `sockaddr_in::sin_len` — a BSD-only leading length byte.
+- `SO_NOSIGPIPE` — per-socket SIGPIPE suppression; Linux uses `MSG_NOSIGNAL`
+  per send. Skipped there, because libmvos `main()`'s first act is
+  `signal(SIGPIPE, SIG_IGN)` and the host honours it.
+
+Both are now narrow `#if` guards behind `THEOC_HAVE_SIN_LEN` /
+`THEOC_HAVE_SO_NOSIGPIPE` in `traps.cpp` — deliberately *not* a `platform/`
+layer, because two sites do not earn an interface. That calculus changes at
+Winsock.
+
+Everything else compiled unchanged, and the boot is indistinguishable from
+macOS: 79 COPY relocs, 34,994 relocs, **0 zero GOT/PLT slots**, 10/10 libmvos
+and 215/215 game constructors clean, **0 faults, 0 aborts, 0 unimplemented
+traps**. The menu renders correctly — verified from a BMP dump, headless, with
+`SDL_VIDEODRIVER=dummy` and no X server anywhere:
+
+```
+[fps] 42.6 fps | guest 0.2M blk/s | heartbeat 25/s mixer 10/s
+      sleep 0ms/s in 0 usleep | audio q=0.11s underrun=0/s | heap 2.6MB live
+```
+
+`sleep 0ms/s in 0 usleep` at the menu is expected — like `RealmGameLoop`, the
+menu has no frame limiter of its own, so the 60fps ceiling is what bounds it.
+
+**Not yet exercised on Linux:** anything past the menu (the province limiter and
+the re-entrant sleep it drives), sockets and multiplayer — which is where the
+remaining translation asymmetries live and where the interesting failures should
+be — save/load, and interactive input.
+
 ## Sequencing
 
 1. **Linux first.** It is mostly subtraction, it forces the platform seam into

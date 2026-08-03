@@ -645,6 +645,21 @@ std::string TrapLayer::resolve_path(const std::string& guest) const {
     return data_root_ + "/" + guest;
 }
 
+// ---- host platform differences, isolated -------------------------------------
+// Exactly two things in this file are BSD-specific, and both are in the socket
+// path below. Kept as narrow conditionals rather than a platform/ abstraction:
+// two sites do not earn an interface. That calculus changes at Winsock — see
+// docs/porting/other-os-ports.md.
+//
+// Note the direction of travel. The *guest* is a Linux binary, so on a Linux
+// host most of this file's translation work is the identity function and the
+// job is to remove it, not to add more. These two are the exceptions: things
+// the BSD host needed that Linux simply does not have.
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(BSD)
+#  define THEOC_HAVE_SIN_LEN      1  // sockaddr_in carries a leading length byte
+#  define THEOC_HAVE_SO_NOSIGPIPE 1  // per-socket SIGPIPE suppression
+#endif
+
 // ---- guest(Linux/i386) <-> host(BSD/macOS) socket translation ----------------
 // The guest is a 1999 Linux i386 binary and we are on BSD. Three things differ in
 // ways that fail silently rather than loudly, so each is translated explicitly:
@@ -711,7 +726,9 @@ bool guest_to_host_sin(Machine& m, uint32_t gaddr, uint32_t glen, sockaddr_in& o
         return false;
     }
     std::memset(&out, 0, sizeof out);
+#ifdef THEOC_HAVE_SIN_LEN
     out.sin_len = sizeof(sockaddr_in);   // the byte the guest does not know about
+#endif                                   // (Linux has no such field — see above)
     out.sin_family = AF_INET;
     out.sin_port = port;
     out.sin_addr.s_addr = ip;
@@ -1379,7 +1396,14 @@ void TrapLayer::register_builtins() {
         // send(); BSD sets it once on the fd. Belt and braces with the global
         // SIGPIPE ignore in the `signal` handler — this one also covers the case
         // where guest code never asked.
+        //
+        // On Linux only that global ignore is left, and it is enough in practice:
+        // libmvos `main()`'s very first act is signal(SIGPIPE, SIG_IGN), which we
+        // honour on the host. If a future path ever writes to a socket before the
+        // guest has asked, the fix is MSG_NOSIGNAL on the send, not this option.
+#ifdef THEOC_HAVE_SO_NOSIGPIPE
         ::setsockopt(hfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
+#endif
         int gfd = adopt_host_fd(hfd);
         std::fprintf(stderr, "  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
         return (uint32_t)gfd;
