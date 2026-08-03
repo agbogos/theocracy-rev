@@ -11,52 +11,64 @@ controlled activity saturating, and the last broken shortcuts turned out to be
 the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
-**One item left.** It is the biggest, and it needs game-logic surgery.
-**Stage 1 landed 2026-08-03 and needs a run to confirm** — see the note under
-item 1.
+**One item left**, and it is new: the cursor does not visually run at 30Hz.
+The decoupling item that stood here for a year closed as won't-do on 2026-08-03.
 
-1. **Decouple sim from render (frame-tied engine)** — the engine steps
-   physics/animation once per rendered frame, and `cProvince::Do`
-   (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
-   (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
-   default) for correct sim speed. **12fps is choppy, and that is the whole of
-   the complaint** — the fix is to render at ~30fps but step the sim only every
-   ~2.5 frames, so it is smooth *and* correct-speed. Needs patching the
-   frame-tied stepping in `theocracy.real` (game-logic surgery) — the "gradually
-   rewrite the game natively" territory. See `docs/porting/frame-timing.md`.
-
-   *Amended 2026-08-03:* this used to also claim the ~2–8Hz SIGALRM heartbeat at
-   12fps as a cost, implying timed logic ran slow. It does not. The heartbeat
-   only drives the cursor click animation and cursor refresh, and the simulation
-   clocks itself from elapsed wall-clock with its own bounded catch-up. A higher
-   heartbeat is a nice side effect of this item, not a reason for it.
-
-   **Stage 1 — done 2026-08-03, awaiting a run.** The turbo that the global
-   `THEOC_FRAME_MS=83` clamp was holding back was **our defect, not the game's**:
-   our `usleep` truncated the guest's own 83ms frame-limiter sleep at the first
-   due tick, so `cProvince_Do` returned early and re-ran ~2.5× too often. `usleep`
-   now honours the full duration and delivers heartbeats *during* it, by splicing
-   `_TimerFunction` with its return address pointing back at the usleep trap —
-   no guest patch. The clamp is off by default (`THEOC_FRAME_MS=0`).
-   Consequences: province self-limits to its designed 12fps through its own code,
-   and **the realm screen is no longer capped at 12fps** — checked step by step,
-   nothing in `RealmGameLoop` is frame-tied. Mechanism and the frame-aliasing
-   caveat: `docs/porting/frame-timing.md`, "Bug 2, revisited".
-
-   **Confirmed on a run.** Province `12.4 fps | heartbeat 30/s | sleep 605ms/s in
-   43 usleep | underrun=0/s` — 43 usleep calls for 12 frames is each 83ms sleep
-   being split into ~3.5 tick-delivering slices, which is the splice working.
-   Realm reported `0 usleep`: `RealmGameLoop` has **no frame limiter at all**, so
-   uncapped it free-ran to ~100fps. `THEOC_FRAME_MS` therefore survives as a
-   **60fps ceiling** (default 16ms) rather than a 12fps pacer — it never fires in
-   province. `83` restores the old clamp; `THEOC_LEGACY_SLEEP=1` reverts the
-   sleep handling.
-
-   **Stage 2 is the item proper** — province at ~30fps render / 12Hz sim needs
-   the animation/simulation seam inside `cProvince_Do` (`0x81da420`, and its
-   ~11.7 KB caller `FUN_08180230`), which is the game-logic surgery above.
+1. **Cursor is not visually 30Hz** *(opened 2026-08-03, cause not yet
+   confirmed)*. The heartbeat measures a solid `30/s`, and
+   `cIntuition::TimerProc` does run `MouseRefresh` + `cSprite::Refresh` at that
+   rate — but the cursor does not *look* 30Hz in province. Leading hypothesis,
+   untested: `cSprite::Refresh` repaints the cursor into the guest LFB, and the
+   host only copies that LFB to SDL at **present** — 12/s in province. So 30 of
+   the repaints happen and only 12 reach the screen. On the original, the sprite
+   was painted straight onto the visible buffer, so a refresh between frames was
+   seen immediately. If that holds, the fix is host-side (push the LFB, or just
+   the cursor rect, when the heartbeat refreshes it) and needs no game patch.
+   This matters more than it sounds: the separate 30Hz cursor timer is how the
+   original made a 12fps game feel responsive, so losing it costs exactly what
+   the engine's designers spent a whole timer to buy.
 
 ## Done
+
+- **Decouple sim from render — Stage 1 shipped, Stage 2 closed as won't-do
+  (2026-08-03).** The last of the modernisation items, and the biggest.
+
+  **Stage 1 shipped and is kept.** The province "turbo" that the global
+  `THEOC_FRAME_MS=83` clamp had been holding back was **our defect, not the
+  game's**: `usleep` truncated the guest's own 83ms frame-limiter sleep at the
+  first due tick, so `cProvince_Do` returned early and re-ran ~2.5× too often,
+  and the present clamp was a second limiter restraining the first one we had
+  disabled. `usleep` now honours the full duration and delivers heartbeats
+  *during* it, by splicing `_TimerFunction` with its return address pointing back
+  at the usleep trap — no guest patch. Measured: province `12.4 fps | heartbeat
+  30/s | 605ms/s sleep in 43 usleep` — 43 calls for 12 frames is each sleep split
+  into ~3.5 tick-delivering slices. The run also disproved an assumption:
+  `RealmGameLoop` calls `usleep` **zero** times, having no limiter at all, so
+  uncapped it free-ran to ~100fps; `THEOC_FRAME_MS` survives re-purposed as a
+  60fps *ceiling* (16ms) that never fires in province.
+
+  **Stage 2 — province at 30fps render / 12Hz sim — is a won't-do.** Four
+  approaches, all closed on evidence; full argument in
+  [docs/porting/frame-timing.md](docs/porting/frame-timing.md), "Why province
+  stays at 12fps". In short: `cMan::Do` (24.6 KB) contains **no reference to
+  `SetBySys__8cDayTime` at all**, so province movement is fixed-increment with no
+  delta to scale; skipping the sim body would animate terrain at 30Hz while units
+  froze, which reads worse than honest 12fps; render-time interpolation means
+  building a renderer feature the engine has no concept of; and scaling
+  `selap.txt` founders not on ambiguity — the file is internally consistent, with
+  real-seconds, game-calendar and frame-counted values each owned by a different
+  subsystem — but on **scale and representation**: hundreds of interdependent
+  balance levers, held as integers, where `Nature5_HealFrame=6 × 0.4 = 2.4` is
+  not expressible and the engine has no fractional accumulator to consume it.
+
+  **The decisive argument is the engine's own design.** The cursor was given a
+  *separate* 30Hz timer precisely because the engine supports nothing but 12Hz.
+  The original developers hit this same wall and solved it the only way
+  available — move the one thing that must feel responsive onto its own clock,
+  leave everything else at the designed rate. 12fps province is the intended sim
+  rate and frame rate, not an accident we inherited. What remains available is
+  the limiter constant itself, which moves sim rate and frame rate together
+  because that is all the engine allows.
 
 - **Real threads / signal delivery — closed as won't-do (2026-08-03).** Another
   inherited premise, and this one was a leftover from the superseded *pure-HLE

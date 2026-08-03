@@ -235,11 +235,75 @@ sleep handling entirely.
 > asset loading where the emulator is genuinely compute-bound and rarely yields.
 > Pre-existing and already documented; it recovers to 0 underruns immediately.
 
-12fps in province is choppy but authentic. Getting smooth-**and**-correct still
-means decoupling the sim step from the render frame inside `cProvince_Do`
-(render ~30fps, step the sim at 12Hz) — real game-logic surgery, still tracked
-in `../../task_fifo.md`. What changed is that the guest's own pacing is now
-visible and faithful, which is the precondition for attempting it.
+12fps in province is choppy but authentic. Making it smooth-**and**-correct was
+the remaining half of the task. It is now a **won't-do** — see below.
+
+## Why province stays at 12fps — decoupling closed as won't-do (2026-08-03)
+
+The plan was: render province at ~30fps, step the simulation at 12Hz. Four
+approaches, all closed on evidence rather than on effort estimates.
+
+**1. Run the sim at 30Hz with scaled per-tick deltas — impossible.** There are no
+deltas. `cMan::Do` (`0x80a0c60`, **24.6 KB**) is the per-unit update, reached
+from `cProvince_Do` via 11× `cManList::Do` (`0x8147c40`), and **not one xref to
+`SetBySys__8cDayTime` falls inside its range** — nor inside `cManList::Do`.
+Province movement and animation never read wall-clock; they advance by
+fixed increments per call. (Contrast `SimulationUpdate`/`SimulationStep`, which
+call it three times each — the *realm* sim is time-based. Province is not.)
+
+**2. Skip the sim body on some frames — worse than doing nothing.** Cheap to
+build: `cProvince_Do` already has a `LAB_081daefb` path that jumps past the AI
+block to the phase counters, and the two animation phase counters
+(`DAT_084c76e4` cycling 0–5, `DAT_084c76e6` toggling) are written *only* in
+`cProvince_Do` and read *only* by `FUN_08099c00`. So terrain phases would
+animate at 30Hz — while units froze between sim steps. Smooth background with
+12Hz units teleporting across it reads worse than honest 12fps.
+
+**3. Interpolate at render time — out of scope by an order of magnitude.**
+Snapshot every unit's position per step and lerp during paint, i.e. build an
+interpolating renderer into an engine with no concept of one, from outside,
+against 24.6 KB of unit state we do not understand.
+
+**4. Scale the balance data instead of the code — the real reason it dies.**
+Run at 30fps and multiply every rate-like quantity by 0.4 so things move at the
+correct real-world speed in smaller steps. `selap.txt` is internally consistent
+about units once you know the game — three time bases, three subsystems:
+
+| Base | Examples | Owner |
+|---|---|---|
+| Real seconds | `INFO_SCROLL_PIXEL_PER_SEC=15` | the scrolling event-narration widget, separately clocked |
+| Game calendar | `SCN_3T01_STRIKEDELAY_DAY=175`, `SCN_5T01_TIMEOUT_YEAR=10` | realm-screen world events |
+| **Frames** | `Moon3_WoundFrame=10`, `Nature5_HealFrame=6` | **province — the targets** |
+
+The remaining bare integers (`ARROW_SPEED=140`, `Moon1_ConcTime=10`,
+`TRIBE0_CAST_TIME=900`, `PRIEST_GUARD_DELAY=24`, `Soul1_EndTime=23`) are almost
+certainly frame counts too. So the blocker is **not** ambiguity. It is scale and
+representation:
+
+- **Scale.** These are hundreds of interdependent *balance* levers — spell
+  durations, cast times, projectile speeds, guard delays, damage-over-time and
+  healing periods. Multiplying them is not a mechanical edit, it is a rebalance,
+  and verifying it means playing the game.
+- **Representation.** The values are integers. `Nature5_HealFrame=6 × 0.4 = 2.4`
+  does not exist in this format, and neither does a fractional accumulator in the
+  engine to consume it. Every such value would have to be rounded — reintroducing
+  exactly the drift the exercise was meant to remove — or the engine taught
+  fractions, which is the "rewrite the game natively" project.
+
+**The engine says so itself.** The decisive argument is not any of the above but
+a design fact: the cursor was given its **own 30Hz timer** (`setitimer` → the
+single `cVTimer`, i.e. `cIntuition::TimerProc`; see "What the heartbeat actually
+drives") *because the engine supports nothing but 12Hz*. The original developers
+hit this exact wall and solved it the only way available — they moved the one
+thing that had to feel responsive onto a separate clock, and left everything else
+at the designed rate. Province at 12fps is not a limitation we inherited by
+accident; it is the engine's intended sim rate and frame rate, and the separate
+cursor timer is the evidence.
+
+**What remains available** is the frame limiter constant itself
+(`Set__8cDayTimell(&target, 0, 0x14585)` in `cProvince_Do`). Patching it changes
+sim rate and frame rate together, which is what the engine's design allows and
+all it allows.
 
 ---
 
