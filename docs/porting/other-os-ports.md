@@ -298,6 +298,39 @@ Two instrument findings fell out:
 **Not yet exercised on Linux:** anything past the menu (the province limiter and
 the re-entrant sleep it drives), multiplayer beyond the server's accept path, save/load, interactive input, and a full two-client netgame (the server side is now proven, the client side is not).
 
+## Packaging a Linux bundle
+
+`tools/package-linux.sh [amd64|arm64]` builds and packages in one step, entirely
+in a container so `ldd` sees the *target* architecture. Output is
+`dist/theoc-linux-<arch>/` — a launcher, `bin/theoc`, `lib/`, and a README.
+Verified self-contained by running it in a bare `debian:bookworm-slim` with no
+development packages installed: 0 loader errors, 215/215 constructors, video up.
+
+**What is bundled, and the mistake that decided it.** The first attempt used a
+hand-written denylist that kept X11, GL, ALSA and PulseAudio on the host, on the
+theory that these are system-integration libraries SDL `dlopen`s. The bundle
+would not start at all: Debian's SDL2 has `libasound.so.2` as a hard
+`DT_NEEDED`. **Guessing which dependencies are dlopen-ed does not work — the
+loader is the oracle.**
+
+The graph turns out to contain no `libGL`/`libEGL` at all, because SDL2 really
+does load GL at runtime. So the one group that would be genuinely dangerous to
+ship is absent by construction, and **the host GPU stack is always used no matter
+what we bundle**. That leaves only client libraries speaking stable protocols to
+host daemons, so the denylist shrank to just glibc and libstdc++/libgcc — the
+same trade-off the Steam runtime makes. `THEOC_SYSTEM_LIBS=1` ignores the bundle
+if it ever bites on an unusual driver stack.
+
+Two consequences worth knowing:
+
+- **~190 MB**, almost all of it ffmpeg's codec dependencies (x264, x265, vpx,
+  theora, srt, zmq…). The port only ever decodes MPEG-1 cutscenes, so a
+  minimally-configured ffmpeg would cut this dramatically — worth doing if the
+  bundle is ever distributed rather than just tested.
+- **glibc ≥ 2.36 and libstdc++ from GCC 12** on the target, inherited from the
+  bookworm base. For an older target, build the image `FROM` an older base
+  rather than bundling around it.
+
 ## Sequencing
 
 1. **Linux first.** It is mostly subtraction, it forces the platform seam into

@@ -37,3 +37,6 @@ __pycache__/
 *.log
 # tools/plot_health.py output — regenerate it from the log
 *-health.svg
+
+# Packaged bundles — rebuild with tools/package-linux.sh
+/dist/

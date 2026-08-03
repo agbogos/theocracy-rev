@@ -1,0 +1,3 @@
+/src/port/build-linux-amd64/CMakeFiles/theoc.dir
+/src/port/build-linux-amd64/CMakeFiles/edit_cache.dir
+/src/port/build-linux-amd64/CMakeFiles/rebuild_cache.dir
