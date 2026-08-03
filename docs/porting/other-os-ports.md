@@ -235,9 +235,63 @@ Two things to do with it, both mattering more than the headline number:
   and that gap has to be known before any later in-VM measurement can be
   trusted — the same reason this doc refuses X11 forwarding for timing work.
 
-**Status: written and cross-compiles clean; not yet run.** No numbers exist yet,
-and nothing above should be read as predicting them. It ships inside the Windows
-bundle so it can be run on the target *before* `theoc.exe` is.
+It ships inside the Windows bundle so it can be run on the target *before*
+`theoc.exe` is.
+
+### The probe's answer — measured 2026-08-03, in a VM
+
+Run in the Windows VM (12 logical CPUs, QPC at 10 MHz). **The risk is real, and
+it has a clean fix.**
+
+| requested | `Sleep()` | `Sleep()`+`timeBeginPeriod(1)` | waitable timer (HIGH_RESOLUTION) |
+|---|---|---|---|
+| 0.100 ms | **15.944** | 2.000 | **0.634** |
+| 0.500 ms | **15.957** | 2.000 | **0.634** |
+| 1.000 ms | **15.928** | 2.000 | 1.670 |
+| 16.667 ms | 31.056 | 17.998 | 17.013 |
+| 83.333 ms | 94.114 | 84.745 | 83.990 |
+
+(medians, ms). Sustained 30 Hz heartbeat, median lateness against an absolute
+schedule: `Sleep()` **9.04 ms**, `+timeBeginPeriod` 1.59 ms, waitable timer
+**0.655 ms**. Province frame, sliced as `traps.cpp` slices it: **94.0 ms**,
+84.9 ms, **84.0 ms** against an 83.3 ms target.
+
+Four things fall out, and the third was not predicted:
+
+1. **The 15.6 ms floor is exactly as feared.** A naive port would run the
+   province frame ~13% slow, with the heartbeat 9 ms late every tick — and
+   because the frame limiter is elapsed-based, that is a *game-speed* error, not
+   just jitter.
+2. **`CreateWaitableTimerEx(HIGH_RESOLUTION)` solves it.** 0.634 ms for a
+   0.1 ms request, and an 84.0 ms province frame — 0.8% off target, which is
+   better than `timeBeginPeriod` manages and close enough that nothing downstream
+   would notice. This is the "contained change, not a redesign" branch the probe
+   was written to distinguish.
+3. **`timeBeginPeriod(1)` on top of the waitable timer buys nothing** (0.647 vs
+   0.655 ms — noise). So the port needs the timer alone, and does not need to
+   raise the system-wide timer resolution at all. That is worth having: raising
+   it is a global side effect with a power cost, and this says to skip it.
+4. **`NtQueryTimerResolution` reported the current resolution as 1.0 ms while
+   `Sleep()` still took 15.9 ms.** Not a contradiction — since Windows 10 2004,
+   `timeBeginPeriod` affects only the *calling process*, so the global figure
+   says nothing about what this process gets. **A reading of
+   `NtQueryTimerResolution` is not evidence about your own sleeps**, which is
+   exactly the kind of plausible-but-wrong instrument this project keeps meeting.
+
+> **Caveat, and it is not a small one: this was measured in a VM.** VM timer
+> delivery is mediated by the hypervisor, so these numbers describe *this VM on
+> this host*, not Windows. The qualitative result is safe — the ordering of the
+> four methods, and the fact that the high-resolution timer tracks sub-millisecond
+> requests where `Sleep()` cannot, are not the sort of thing virtualisation
+> inverts. The absolute figures should not be quoted as "Windows does X". A
+> bare-metal run is still wanted, and there is no bare-metal Windows available to
+> this project.
+
+**Not yet done: the port does not use any of this.** `traps.cpp` still calls
+`::usleep`, which on mingw is the ~15.6 ms path — i.e. today's `theoc.exe` is
+the naive column. The fix is a Windows `sleep_us()` built on
+`CreateWaitableTimerEx`, which is the first thing `port/src/platform/` should
+hold.
 
 ## The Windows build — 2026-08-03
 
@@ -318,21 +372,67 @@ falls out instead of needing a judgement call. `libwinpthread-1.dll` **is**
 bundled — it comes from the toolchain, not from Windows — while libgcc and
 libstdc++ are statically linked and so never appear.
 
-### What is not known
+### First run on Windows: the single-instance lock, and a latent bug on every platform
 
-**Nothing has executed.** Not the boot, not a single trap, not one frame. The
-things most likely to be wrong, in order:
+The first execution got **further than expected and then looped forever**. The
+boot is line-for-line identical to macOS — 79 COPY relocs, 34,994 relocs, 0 zero
+GOT/PLT slots, 10/10 libmvos and 215/215 game constructors clean, all nine
+subsystem flags set, plugins loaded, audio open, `cIntuition` constructed — and
+then, inside `Start`:
 
-1. **Timing** — the untouched risk 1. Run `win-timing-probe.exe` first.
+```
+  [net] socket(type=1) -> guest fd 4
+  [net] bind(:5043) faked OK — single-instance lock
+  [abort] ignored (bring-up; THEOC_LOUD_ABORT=1 to trap)
+  ... the whole of Init runs again, forever
+You can run only one Theocracy in the same time!
+```
+
+**Root cause: `listen()` on an unbound socket.** The single-instance lock fake
+returned success from `bind` *without binding anything*
+([guest-libmvos.md](guest-libmvos.md), "The single-instance lock stays faked").
+That worked on macOS and Linux **by accident**: POSIX `listen()` auto-binds an
+unbound socket to an ephemeral port, so the game's next call succeeded anyway.
+Verified rather than assumed — a five-line probe on macOS returns `listen() == 0`
+and `getsockname` then reports a kernel-chosen port. Winsock has no such
+behaviour: `listen()` on an unbound socket fails with `WSAEINVAL`, the game reads
+that as "the port is taken", and `Fatal`s.
+
+The fix binds the socket to an **ephemeral loopback port** instead of returning
+early. The purpose of the fake was only ever to avoid *holding* `:5043` so a
+second instance can boot for multiplayer testing — not to leave an unbound
+socket behind. All three platforms now take the same path.
+
+**This is a latent bug in the macOS and Linux ports, not a Windows-ism.** They
+depended on an implicit `bind` nobody had decided to depend on, and it went
+unnoticed for as long as every host happened to provide it. That is the same
+shape as the `st_blksize` and `d_type` assumptions this port has hit before, and
+the reason a third platform is worth having at all.
+
+**Second finding: an ignored `abort` can spin forever.** The handler's own
+comment already warned that ignoring `abort` risks "a silent OpenSubsystems
+restart" — and that is precisely what happened, 16 times over, until the run was
+killed. Ignoring `abort` returns into guest code that has already concluded it
+cannot continue, so everything after is undefined. The ignore is now **bounded**
+(`THEOC_ABORT_CAP`, default 32): past the cap the host stops and prints the
+diagnosis, instead of leaving someone to infer it from a repeating log. A healthy
+run aborts zero times.
+
+### What is still not known
+
+The boot now gets past the lock, but **that has not been re-run**, and nothing
+past `Start` has ever executed on Windows. Remaining risks, in order:
+
+1. **Timing** — measured (above), fix identified, **not implemented**. Today's
+   `theoc.exe` still calls mingw's `::usleep` and is the naive ~15.6 ms column.
 2. **Path handling.** `resolve_path` builds `/`-separated paths and the guest
    supplies Unix ones. Windows APIs accept `/`, but nothing here has tested a
-   drive-letter root, and `guest[0] == '/'` as the "absolute path" test is
-   simply not how Windows spells that.
+   drive-letter root, and `guest[0] == '/'` as the "is absolute" test is simply
+   not how Windows spells that.
 3. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
    `std::system`. Compiles; will do nothing useful. Off by default.
 4. **`CloseSubsystems` is still skipped** — and Windows is the platform
-   [host-architecture.md](host-architecture.md) names as the revisit trigger for
-   that decision.
+   [host-architecture.md](host-architecture.md) names as the revisit trigger.
 
 ## Which binary does the Windows port run?
 

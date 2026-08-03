@@ -1260,6 +1260,32 @@ void TrapLayer::register_builtins() {
     t["abort"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         static const bool loud = std::getenv("THEOC_LOUD_ABORT") != nullptr;
         if (!loud) {
+            // An ignored abort returns into guest code that has already decided
+            // it cannot continue, so control flow past this point is undefined —
+            // and the comment above names what that looks like in practice: a
+            // silent OpenSubsystems restart. On Windows it did exactly that and
+            // spun forever, writing the same 13 lines until the user killed it.
+            //
+            // So the ignore is now *bounded*. A healthy run aborts zero times;
+            // the cap is set far above any legitimate count and far below
+            // infinity, and tripping it prints the diagnosis rather than making
+            // someone infer it from a repeating log.
+            static int ignored = 0;
+            const int cap = []{
+                const char* e = std::getenv("THEOC_ABORT_CAP");
+                int v = e ? std::atoi(e) : 32;
+                return v > 0 ? v : 32;
+            }();
+            if (++ignored > cap) {
+                std::fprintf(stderr,
+                    "\n  [abort] %d ignored aborts — the guest is looping on a Fatal it\n"
+                    "          cannot get past, and continuing would only repeat it.\n"
+                    "          Re-run with THEOC_LOUD_ABORT=1 for the guest backtrace\n"
+                    "          that says which Fatal (THEOC_ABORT_CAP raises this cap).\n",
+                    ignored - 1);
+                m.request_stop();
+                return 0;
+            }
             if (rl_allow("abort-ignored", 5, std::chrono::seconds(60)))
                 std::fprintf(stderr,
                              "  [abort] ignored (bring-up; THEOC_LOUD_ABORT=1 to trap)\n");
@@ -1527,6 +1553,32 @@ void TrapLayer::register_builtins() {
         uint16_t port = ntohs(sa.sin_port);
         static const bool real_lock = std::getenv("THEOC_REAL_LOCK") != nullptr;
         if (port == 5043 && !real_lock) {
+            // Bind for real, to an ephemeral loopback port. The purpose of the
+            // fake is only to avoid *holding* :5043 — so a second instance can
+            // boot, which is what multiplayer testing on one machine needs — not
+            // to leave the socket unbound.
+            //
+            // Returning 0 without binding worked on macOS and Linux **by
+            // accident**: POSIX listen() auto-binds an unbound socket to an
+            // ephemeral port (verified: listen() returns 0 and getsockname then
+            // reports a kernel-chosen port), so the game's next call succeeded
+            // regardless. Winsock has no such behaviour — listen() on an unbound
+            // socket fails with WSAEINVAL, the lock check reads that as "port
+            // taken", and the game Fatals with "You can run only one Theocracy in
+            // the same time!". Binding here makes all three platforms take the
+            // same path instead of two of them relying on an implicit bind.
+            if (hfd >= 0) {
+                sockaddr_in eph{};
+#ifdef THEOC_HAVE_SIN_LEN
+                eph.sin_len = sizeof eph;
+#endif
+                eph.sin_family = AF_INET;
+                eph.sin_port   = 0;                          // kernel picks
+                eph.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                if (::bind(hfd, (sockaddr*)&eph, sizeof eph) < 0)
+                    std::fprintf(stderr, "  [net] bind(:5043) stand-in bind failed "
+                                "(harmless unless listen() follows)\n");
+            }
             std::fprintf(stderr, "  [net] bind(:5043) faked OK — single-instance lock "
                         "(THEOC_REAL_LOCK=1 to honour it)\n");
             return 0;

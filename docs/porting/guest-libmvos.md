@@ -758,6 +758,16 @@ Real bind, real `EADDRINUSE`, and the guest correctly interprets the failure —
 which exercises the errno translation all the way into guest code. With the
 default exemption, two clients both boot to Realm Shell, 0 faults, 0 unimplemented.
 
+> **Corrected 2026-08-03: the fake now binds.** As written above, the exemption
+> returned success from `bind` *without binding anything*, and that was only safe
+> because POSIX `listen()` auto-binds an unbound socket to an ephemeral port —
+> an implicit behaviour nobody had decided to rely on. Winsock does not do it:
+> `listen()` fails with `WSAEINVAL`, and the first Windows run Fatal'd with
+> "You can run only one Theocracy in the same time!" and then looped on the
+> ignored `abort`. The exemption now binds to an **ephemeral loopback port**,
+> which holds nothing and leaves a socket every platform can `listen()` on. See
+> [other-os-ports.md](other-os-ports.md).
+
 Single-player is unaffected: the lock path is the only socket use on that route.
 
 ### Follow-up: errno translation is not a socket-call concern
