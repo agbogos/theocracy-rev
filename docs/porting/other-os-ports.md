@@ -259,6 +259,42 @@ translation: `bind` goes through `guest_to_host_sin` (the `sin_len` skip) and
 `accept` writes the peer back through `host_to_guest_sin`. Sockets on Linux are
 sound.
 
+### The 20-cycle soak, both platforms — bit-identical
+
+`THEOC_SOAK=20 THEOC_SOAK_PLAY=20` drives 20 full load/unload cycles (menu →
+Prophecy → OK → province → map → exit → confirm → menu), ~9 min, headless.
+
+**All 20 cycles are identical between macOS and Linux** — live heap *and*
+frontier, to two decimals:
+
+```
+cycle  1 | heap 11.65 MB live / 28.74 MB frontier | esp 0x6ffff3e4 | stubs 144 B | fds 2
+cycle 20 | heap 12.01 MB live / 29.74 MB frontier | esp 0x6ffff3e4 | stubs 144 B | fds 2
+```
+
+`0 faults, 0 aborts, 0 [slow] stalls` on both. Guest ESP is the same constant
+across all 20 cycles on both hosts, so the green-thread mixer does not drift on
+Linux either; the stub page stays flat at 144 B.
+
+Two things follow, and the second is the one that mattered:
+
+- **The guest heap is deterministic and host-independent.** Same allocation
+  sequence, same totals, different kernel. That also sharpens
+  [open question #30](../open_questions.md): the +18 KB/cycle is the *guest*
+  allocating, not the port leaking.
+- **The 2026-08-03 sleep/present/cursor rewrite did not perturb allocation at
+  all** — these numbers reproduce the 2026-07-25 baseline exactly. That closes
+  the "those changes have never been soaked" gap, on both platforms at once.
+
+Two instrument findings fell out:
+
+- **`fds` reads 2, not 1.** The 2026-07-25 note recorded 1; both hosts now say 2
+  and stay flat, so the old figure is stale rather than the port having leaked a
+  descriptor.
+- **`rss` reads 0.0 MB inside the container.** The host-RSS probe does not work
+  there, so host memory has to be watched from outside. On macOS it went
+  156.7 → 155.8 MB over the run — *down*, and non-monotonic as documented.
+
 **Not yet exercised on Linux:** anything past the menu (the province limiter and
 the re-entrant sleep it drives), multiplayer beyond the server's accept path, save/load, interactive input, and a full two-client netgame (the server side is now proven, the client side is not).
 

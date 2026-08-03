@@ -101,6 +101,13 @@ understand in order to run it.*
     Answering it needs an allocation-site histogram, which is the tool to build
     if it ever matters.
 
+    **Reproduced exactly on 2026-08-03, on both platforms**, after the sleep/
+    present rewrite: macOS and Linux agree on all 20 cycles to two decimals,
+    live *and* frontier (11.65 → 12.01 MB live, 28.74 → 29.74 MB frontier).
+    So the growth is deterministic and host-independent — whatever it is, it
+    is the guest allocating, not the port leaking. See
+    [porting/other-os-ports.md](porting/other-os-ports.md).
+
 ## Minor / deferred
 
 18. Map loader `FUN_081c7a00` → actual file read (deferred).
