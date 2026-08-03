@@ -180,6 +180,50 @@ traps**. The menu renders correctly — verified from a BMP dump, headless, with
 `sleep 0ms/s in 0 usleep` at the menu is expected — like `RealmGameLoop`, the
 menu has no frame limiter of its own, so the 60fps ceiling is what bounds it.
 
+### Province, driven headlessly — the first cross-platform differential
+
+`THEOC_AUTO_PROVINCE=1` self-drives menu → Prophecy → OK into province, so the
+frame limiter, the re-entrant sleep and `cProvince_Do` can all be exercised with
+no display. Run on both platforms under `SDL_VIDEODRIVER=dummy`:
+
+| | Linux (container, Unicorn 2.0) | macOS (native, Unicorn 2.1) |
+|---|---|---|
+| province fps | 9.3–9.9 | 10.2–10.5 |
+| guest blocks/frame | 0.15M | 0.14–0.15M |
+| guest blocks/s | 1.4–1.5M | 1.5M |
+| heartbeat | 29–31/s | 30–31/s |
+| `usleep` calls/s | 39–43 | 41–44 |
+| guest heap live | 28.6 MB | 28.6 MB |
+| audio underrun/s | 396–1502 | 0 |
+| `THEOC_START_SEC` | **never fires** | fires |
+| unimplemented traps | — | **0** |
+
+**The port behaves identically where it matters.** Guest blocks per frame, blocks
+per second and live heap all match, so the emulation is doing the same work;
+`heartbeat ~30/s` with ~4 `usleep` calls per frame means the re-entrant sleep and
+its tick-delivering splice work on Linux exactly as designed. Province renders
+correctly (verified from a BMP dump).
+
+Two differences, one of them real:
+
+- **`THEOC_START_SEC` does not fire on Linux.** It is Unicorn's own
+  `uc_emu_start` timeout (`Machine::call`). macOS logs `Start (host Start
+  timeout — still in game)` and exits 0; Linux ran 3+ minutes past it. Debian
+  ships **Unicorn 2.0** where Homebrew has **2.1**, which is the leading
+  suspicion but is not proven. This is a *harness* knob, not game behaviour —
+  work around it with `timeout -s KILL N` in the container.
+- **Audio underruns, 400–1500/s against 0.** Both runs used SDL's dummy audio
+  driver, which paces its callback differently per platform, so this is most
+  likely an artifact of headless audio rather than a mixer defect. Worth
+  re-checking against a real audio device before treating it as a bug.
+
+> **Do not read the absolute fps as a port measurement.** These runs are
+> unattended, on a fresh campaign start, and produce ~0.15M guest blocks/frame
+> against the ~0.41M an interactive session shows — a different scene, and a
+> different (possibly CPU-constrained) execution environment. What is comparable
+> here is **Linux against macOS within the same conditions**, and the structural
+> columns, not the frame rate.
+
 **Not yet exercised on Linux:** anything past the menu (the province limiter and
 the re-entrant sleep it drives), sockets and multiplayer — which is where the
 remaining translation asymmetries live and where the interesting failures should
