@@ -358,7 +358,6 @@ report as an 83ms `[slow]` section and bury the real ones.
 - [guest-libmvos.md](guest-libmvos.md) — per-gate writeups (G13 loud abort, G14/G15
   heap, G16 watchdog and cutscene skip, G17 render probe, G18 fullscreen, G19
   sockets, G20 server) that these instruments were built during.
-- `task_fifo.md`, "Notes" — the running list these tables consolidate.
 - `data/commit-log.md` (generate with `tools/dump_commit_log.py`) — the commit
   for each instrument states the problem that
   forced it into existence.

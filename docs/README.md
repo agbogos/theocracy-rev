@@ -11,8 +11,7 @@ about these binaries should outlive the port.
 Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl /
 sockets / SMPEG). Single-player is playable end to end. The earlier *pure-HLE
 native-replace* plan is **superseded** — it hit an unbounded GUI-reimplementation
-wall; kept as historical record and as a source of RE'd layouts. Live worklist:
-`../task_fifo.md`.
+wall; kept as historical record and as a source of RE'd layouts.
 
 ## Why this boundary works
 
@@ -39,7 +38,6 @@ All RE-confirmed, and the reason the project is tractable at all:
 | `port/` | the emulator host (C++17 + Unicorn 2 + SDL2 + libav) — see [porting/host-architecture.md](porting/host-architecture.md) |
 | `tools/` | reusable scripts: demangler, extractor, crypto, API inventory, Ghidra scripts, [`elfq.py`](../tools/elfq.py) — query either binary straight from the ELF (xrefs, PLT map, relocation-aware vtables) without Ghidra — and [`plot_health.py`](../tools/plot_health.py), which charts a `THEOC_LONGRUN` session log |
 | `include/mvos_api.hpp` | generated signature reference (each method annotated with its file address) |
-| `task_fifo.md` | the live worklist — top item is next |
 
 Build and run:
 
@@ -69,6 +67,15 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 - [porting/frame-timing.md](porting/frame-timing.md) — **★ crucial finding.** Province view was not slow, its clock was stalled: a present-coupled heartbeat, a frame-tied simulation, and an fps-coupled audio mixer. The general lesson — under this emulator, wall-clock bugs masquerade as performance bugs — and how to tell them apart in one line. Also **what the 30Hz heartbeat actually drives** (the cursor, not the simulation — a correction that closed the "real threads / signal delivery" item as a non-issue).
 - [porting/heap-growth-trials.md](porting/heap-growth-trials.md) — **the leak hunt, by elimination — closed 2026-08-02.** Why a fifth mixed-activity long session would answer nothing, the one-activity-per-run protocol built on `Alt+M` markers, and five trials in which **every activity saturates**: idling, the window mode, the realm↔province sawtooth (~8 KB/cycle) and finally nine battles with save reloads (a plateau at ~43.6 MB, converging to 30 KB per reload). Nothing measured threatens the 128 MB arena; the +7–11 MB/h of the two long sessions was never reproduced, and the three readings that remain consistent with the evidence are stated rather than chosen between. Reference costs for reading any future log, and the nine instrument defects the trials exposed — five of which produced plausible wrong numbers rather than obvious failures.
 - [porting/upscale-filtering.md](porting/upscale-filtering.md) — **done 2026-08-02.** Why there is no true AA to be had here (no geometry, no higher-res art) and why the complaint is really "no CRT". Sharp-bilinear shipped — guest → 3× intermediate nearest → screen linear, which keeps edges crisp without the mush plain linear gives, fits fractionally (recovering the ~5% the integer floor cost) and makes scanlines free (`THEOC_SCANLINES`). Includes the two options deliberately rejected, and how a render change was geometry-tested with no display.
+
+## The port — what's next
+
+The worklist (`task_fifo.md`) was **retired on 2026-08-03** when its last item
+closed. There is no worklist file; these two are the directions, and
+[open_questions.md](open_questions.md) is what is still unknown.
+
+- [porting/native-rewrite.md](porting/native-rewrite.md) — **the long game.** Replace the emulated engine with native C++ one function at a time, game playable at every step, until Unicorn has nothing left to run. Why this is not the superseded pure-HLE plan (we now have a running system to check each piece against), the seam that already exists (`blit.cpp`'s five native LFB16 overrides), what makes a good candidate, and the hard parts — shared guest memory, the GUI toolkit, and knowing when to stop.
+- [porting/other-os-ports.md](porting/other-os-ports.md) — Windows and Linux hosts. Not started; a placeholder with the two things already known to be waiting.
 
 ## Reference & method
 
@@ -142,7 +149,7 @@ accurate and still cited; the *approach* is not current.
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp` |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted |
 | **macOS port — guest-libmvos (current)** | **PLAYABLE, single-player and multiplayer** — dual-image emulator; single-player runs end to end (menu → realm → units, war, save/load) with cutscenes and audio, 0 unimplemented traps. Multiplayer verified end-to-end 2026-07-26: the shipped dedicated server runs under the same emulator, so both ends stay original code and the wire protocol never had to be reversed |
-| **macOS port — next** | **Playability is closed.** The heap-leak hunt ended 2026-08-02 with every controlled activity saturating and nothing threatening the 128 MB arena ([porting/heap-growth-trials.md](porting/heap-growth-trials.md)), and the last broken keyboard shortcuts turned out to be the macOS dead-key composer rather than the game ([subsystems/dev-console.md](subsystems/dev-console.md)). Upscale filtering ([porting/upscale-filtering.md](porting/upscale-filtering.md)) and the save-file index overflow ([subsystems/save-format.md](subsystems/save-format.md)) both landed 2026-08-02. **The modernisation list is closed as of 2026-08-03**, the last three items in one day. The "abandoned" guest present path turned out to be load-bearing (what was genuinely vestigial in `HLE_SwapBuffers` was measured dead and deleted); real threads / signal delivery closed as won't-do; and sim/render decoupling shipped its useful half — `usleep` now honours the guest's full sleep and delivers heartbeats during it, so the game paces itself and the realm screen is no longer capped — while **province at 30fps is a won't-do**: the engine is fixed-increment frame-tied all the way down, and the separate 30Hz cursor timer is the original developers' own evidence that 12Hz is all it supports ([porting/frame-timing.md](porting/frame-timing.md)). Two more landed the same day: the 30Hz between-frame cursor now reaches the screen (`cGD_LFB16::Refresh` was an inherited no-op — correct for a real linear framebuffer, wrong for our staging buffer), and `THEOC_PROVINCE_MS` exposes the one province pacing control the engine admits. **Nothing is outstanding.** Full list: `../task_fifo.md` |
+| **macOS port — next** | **Nothing outstanding.** Playability closed 2026-08-02; the modernisation list closed 2026-08-03, the last three items in one day — two of them as *won't-do* once their premises were checked. Province stays at its designed 12fps and [porting/frame-timing.md](porting/frame-timing.md) says why with evidence; `THEOC_PROVINCE_MS` is the one pacing control the engine admits. The worklist file is retired. Next directions: [porting/native-rewrite.md](porting/native-rewrite.md) and [porting/other-os-ports.md](porting/other-os-ports.md); still-unknown: [open_questions.md](open_questions.md) |
 | RE findings audit | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Method distilled into [reference/re-methodology.md](reference/re-methodology.md) |
 | Everything else | mapped only (see [overview.md](overview.md)) |
 

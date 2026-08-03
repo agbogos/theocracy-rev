@@ -4,7 +4,7 @@ The ledger of what we still **don't** know. Consolidated from the per-subsystem
 docs, roughly ordered by centrality.
 
 **IDs are stable and never reused.** They are cited from outside this file
-(commit messages, `task_fifo.md`), so a resolved item is retired
+(commit messages, and the retired `task_fifo.md`), so a resolved item is retired
 to the [Closed](#closed) table rather than deleted, and a new item takes the
 next free number rather than filling a gap. Numbers are therefore not in
 reading order — that is deliberate.

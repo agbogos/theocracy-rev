@@ -534,8 +534,8 @@ Alt+C closes, and the command sets respond on realm and province.
 
 The cheat/console surface below is **incomplete by choice**, not by oversight.
 The console itself works on both screens and the useful cheats are identified;
-the remainder is tangential to the port, so it is **not tracked in
-`../../task_fifo.md`** and nobody should expect it to be picked up in order.
+the remainder is tangential to the port, so it is **not tracked anywhere as
+work** and nobody should expect it to be picked up in order.
 Recorded here so the next person knows where the edge is rather than
 rediscovering it.
 

@@ -325,6 +325,38 @@ Read and write guest memory only through `m.read/write/r32/w32/cstr`. Return gue
   wrong as a general test, since it would also label a host region "game" —
   except that host regions all sit at or above `0x50000000` and are filtered
   earlier.
+### Accepted behaviours and won't-fixes
+
+Deliberate non-bugs. Recorded so they are not rediscovered as defects and
+"fixed" at cost. (Migrated here 2026-08-03 when `task_fifo.md` was retired;
+these were the only decisions in it that had no other home.)
+
+- **A cutscene is bracketed by ~1.35 s of decode.** `SMPEG_new` decodes the whole
+  movie up front (~0.9 s for the intro) and `SMPEG_delete` frees it (~0.4 s).
+  Lazy or threaded decode is not worth it: this happens once per cutscene, on a
+  screen a keypress already skips.
+- **`[` and `]` are not mapped.** Keyboard coverage is letters, digits, arrows,
+  modifiers, F-keys, enter, space and backspace. `[` and `]` are absent from the
+  **original** libmvos eKey table, and nothing in the game depends on them — so
+  there is nothing to map them *to*.
+- **Eight Alt+letter combinations do nothing** — C, E, G, K, O, R, X, Z fall to
+  the default case of the game's own dispatcher and return. Not our bug; see
+  [../subsystems/dev-console.md](../subsystems/dev-console.md).
+- **Audio can blip during the ~1 s province-load spike.** The emulator is
+  genuinely compute-bound there and rarely yields. Steady state is clean (0
+  underruns/s); see [frame-timing.md](frame-timing.md).
+- **Guest heap grows ~18 KB per load/unload cycle** — measured very linearly over
+  a 20-cycle soak, i.e. ~7000 cycles to exhaust the 128 MB arena. Left unchased;
+  attributing it needs an allocation-site histogram, which is open question #30.
+
+**One harness lesson worth keeping**, from `THEOC_LONGRUN` silently capping every
+session at ten minutes: it armed the watchdog but left `THEOC_START_SEC` at its
+600 s default, so multi-hour sessions ended early *and* ended with a line that
+read like a fault. **A harness that configures only some of the knobs its own
+purpose depends on is worse than one that configures none**, because the one it
+missed presents as a result. It now defaults `THEOC_START_SEC=0` the same way it
+defaults the watchdog.
+
 ### Why teardown skips `CloseSubsystems`
 
 libmvos's `main` ends by calling `CloseSubsystems` (file `0x950e0`), which shuts

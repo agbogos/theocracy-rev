@@ -7,10 +7,16 @@ port is one goal; the reverse-engineering write-up in `docs/` is the other.
 
 ## Orientation, in order
 
-1. `task_fifo.md` — the live worklist. Top item is next.
-2. `docs/README.md` — the index. Every doc is one line there, grouped by state.
-3. `docs/porting/host-architecture.md` before touching `port/src`;
+1. `docs/README.md` — the index. Every doc is one line there, grouped by state,
+   and its status table says where the project actually stands.
+2. `docs/porting/host-architecture.md` before touching `port/src`;
    `docs/porting/diagnostics.md` before debugging anything.
+
+There is **no worklist file**. `task_fifo.md` was retired on 2026-08-03 when the
+last item closed; its history is in git and everything it knew was moved into
+`docs/`. What is next is `docs/porting/native-rewrite.md` (retire Unicorn
+gradually) and `docs/porting/other-os-ports.md`. What is still *unknown* is
+`docs/open_questions.md` — stable IDs, cited from outside, never renumbered.
 
 Findings live in `docs/`, not in commit messages. If a finding has no doc that
 owns it, that means a doc is missing.
