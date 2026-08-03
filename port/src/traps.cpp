@@ -2866,6 +2866,62 @@ bool TrapLayer::redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t rema
 // .rel.rodata and the raw words read as zeros (re-methodology §10).
 static constexpr uint32_t OFF_GD_LFB16_Refresh = 0x6bae0;
 
+// THEOC_PROVINCE_MS — retune the province frame limiter.
+//
+// cProvince_Do builds its target period with
+//     Set__8cDayTimell(&target, 0, 0x14585)      // 83,333 µs == 12fps
+// and then sleeps the remainder of it. The literal is one `push imm32`:
+//
+//   0x81da529:  68 85 45 01 00   push 0x14585    <- the 4 bytes we rewrite
+//   0x81da52e:  31 db            xor  ebx,ebx
+//   0x81da530:  6a 00            push 0          ; high dword of the long long
+//   0x81da532:  56               push esi        ; &target
+//   0x81da533:  e8 2c 56 e7 ff   call Set__8cDayTimell@plt
+//
+// `68 85 45 01 00` occurs exactly **once** in the whole 24 MB image, so the site
+// is unambiguous — but we verify the operand before writing anyway, because a
+// silent mismatch here would retune something else entirely.
+//
+// This is a *game speed* control, not a smoothness control: province steps its
+// simulation once per frame, with no wall-clock input anywhere in cMan::Do, so
+// halving the period doubles the frame rate **and** doubles the game speed. That
+// coupling is the engine's, not ours (frame-timing.md, "Why province stays at
+// 12fps"). Unset leaves the shipped 12fps alone.
+void TrapLayer::install_province_rate(Machine& m) {
+    const char* e = std::getenv("THEOC_PROVINCE_MS");
+    if (!e || !*e) return;
+
+    constexpr uint32_t kSite     = 0x81da52a;  // the imm32, i.e. the push + 1
+    constexpr uint32_t kStock    = 0x14585;    // 83,333 µs
+    constexpr int      kMinMs    = 10;         // 100fps — past this it is silly
+    constexpr int      kMaxMs    = 1000;       // 1fps
+
+    int ms = std::atoi(e);
+    if (ms < kMinMs || ms > kMaxMs) {
+        std::fprintf(stderr, "  [province] THEOC_PROVINCE_MS=%s out of range "
+                             "(%d-%d ms); ignored\n", e, kMinMs, kMaxMs);
+        return;
+    }
+    uint32_t found = 0;
+    try { found = m.r32(kSite); } catch (...) {
+        std::fprintf(stderr, "  [province] THEOC_PROVINCE_MS: cannot read %#x; ignored\n", kSite);
+        return;
+    }
+    if (found != kStock) {
+        std::fprintf(stderr, "  [province] THEOC_PROVINCE_MS: operand at %#x is %#x, "
+                             "expected %#x — refusing to patch\n", kSite, found, kStock);
+        return;
+    }
+    uint32_t us = (uint32_t)ms * 1000;
+    try { m.w32(kSite, us); } catch (...) {
+        std::fprintf(stderr, "  [province] THEOC_PROVINCE_MS: write to %#x failed\n", kSite);
+        return;
+    }
+    std::fprintf(stderr, "  [province] frame limiter %u -> %u us (%d ms, ~%.1f fps). "
+                         "Sim speed scales with it: %.2fx normal.\n",
+                 kStock, us, ms, 1000.0 / ms, (double)kStock / us);
+}
+
 void TrapLayer::install_gd_refresh(Machine& m, uint32_t mvos_base) {
     if (std::getenv("THEOC_LEGACY_CURSOR")) {
         std::fprintf(stderr, "  [cursor] async refresh DISABLED "

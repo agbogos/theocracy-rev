@@ -370,6 +370,10 @@ int main(int argc, char** argv) {
         // back to the emulated libmvos originals for A/B comparison.
         if (!headless) install_native_blit(m, guestlink::MVOS_BASE);
 
+        // THEOC_PROVINCE_MS — retune cProvince_Do's 12fps frame limiter. A game
+        // patch, and a game-*speed* one: province steps its sim once per frame.
+        L.traps->install_province_rate(m);
+
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";
         m.write(argv_str, kArg0, sizeof kArg0);

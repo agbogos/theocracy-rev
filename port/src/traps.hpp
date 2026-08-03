@@ -51,6 +51,14 @@ public:
     // mvos_base is guestlink::MVOS_BASE. Maps plugin trap window + guest FB.
     void install_plugins_and_video(Machine& m, uint32_t mvos_base);
 
+    // THEOC_PROVINCE_MS — retune the province frame limiter (a *game* patch, so
+    // it is separate from the libmvos patches above). cProvince_Do targets
+    // 0x14585 µs == 83.3ms == 12fps. Because one cProvince_Do call is one sim
+    // step *and* one frame, this moves render rate and simulation speed together
+    // — that is what the engine's design allows and all it allows. See
+    // docs/porting/frame-timing.md, "Why province stays at 12fps".
+    void install_province_rate(Machine& m);
+
     // Game-space singleton pointers, resolved BY NAME in main.cpp. These are
     // R_386_COPY globals, so the executable's dynamic symbol table names them
     // and `guestlink::abs_sym` can find them in whatever image was booted —

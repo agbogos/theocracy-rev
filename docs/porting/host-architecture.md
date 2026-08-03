@@ -125,6 +125,12 @@ This is a **different mechanism** from trapping an import: the host overwrites i
 | `0x8df10` | `PushMouseInput__Fv` | single `0xC3` (`ret`) — SDL already feeds the Intuition ring, and leaving this live double-fed it |
 | `0x92b3c` + `0x92b8e` | `Main__16cSoundCard_Linux` | `EB 02` to enter the loop body once, and `90 90` over the backward branch — turns `while (running)` into `do { } while (0)` so a green-thread slice mixes exactly one fragment. Applied by `patch_sound_main_oneshot` on the first `pthread_create`. |
 
+One patch targets the **game** rather than libmvos, and so is given as an absolute address and installed separately (`install_province_rate`, from `main.cpp`):
+
+| Address | Target | Patch |
+|---|---|---|
+| `0x81da52a` | `cProvince_Do`'s frame-limiter operand | rewrite the `imm32` of `push 0x14585` (83,333 µs = 12fps) — `THEOC_PROVINCE_MS`, off unless set. The operand is read back and verified before writing. Because province steps its sim once per frame, this scales **game speed** with frame rate; see [frame-timing.md](frame-timing.md). |
+
 The synthetic plugin exports themselves live in a second trap window at `PLUGIN_TRAP_BASE` (`0x76000000`), registered by `install_plugins_and_video` and dispatched by `dispatch_plugin`. `dlopen` on any `libmvos_*`/`vvc` path returns a synthetic handle; `dlsym` maps an export name to `PLUGIN_TRAP_BASE + slot`. The current export list is `QueryDevice`, `CreateVideoDevice`, `CreateKeyboardDevice`, `CreateMouseDevice`, `CreatePointerDevice`, `Plugin_NoopOK`, `Plugin_Return0`, `Plugin_KeyMatrix`, `Plugin_SetVideoMode`, `HLE_OpenDisplay`, `HLE_SwapBuffers`.
 
 ### The present chain

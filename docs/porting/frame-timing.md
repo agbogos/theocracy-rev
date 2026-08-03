@@ -303,7 +303,21 @@ cursor timer is the evidence.
 **What remains available** is the frame limiter constant itself
 (`Set__8cDayTimell(&target, 0, 0x14585)` in `cProvince_Do`). Patching it changes
 sim rate and frame rate together, which is what the engine's design allows and
-all it allows.
+all it allows. That is shipped as **`THEOC_PROVINCE_MS`**:
+
+```
+0x81da529:  68 85 45 01 00   push 0x14585   <- the 4 bytes at 0x81da52a
+0x81da52e:  31 db            xor  ebx,ebx
+0x81da530:  6a 00            push 0         ; high dword of the long long
+0x81da532:  56               push esi       ; &target
+0x81da533:  e8 2c 56 e7 ff   call Set__8cDayTimell@plt
+```
+
+The byte string `68 85 45 01 00` occurs **exactly once** in the whole 24 MB
+image, so the site is unambiguous — the installer still reads the operand back
+and refuses to write unless it is the expected `0x14585`, because a silent
+mismatch would retune something else entirely. `33` → ~30fps at ~2.5× speed,
+`166` → ~6fps at ~0.5×. Unset leaves the shipped 12fps alone.
 
 ---
 
