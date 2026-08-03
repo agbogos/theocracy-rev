@@ -96,15 +96,27 @@ different codebase: `guestlink.cpp` would need a PE/COFF sibling, and none of th
 year's findings — the save-format fix, the frame limiter at `0x81da52a`, the GD
 vtable slots — would carry.
 
-**And it is protected.** `tex.pck` holds `Setup.exe` and `theocracy-*.exe/.icd`,
-and the CD root carries `secdrv.sys`, `clokspl.exe`, `clcd16.dll`, `clcd32.dll`
-and `drvmgt.dll` — the **SafeDisc** support set. The `.icd` is the encrypted real
-executable; the `.exe` is a loader that needs the `secdrv.sys` kernel driver,
-which **Microsoft disabled on Windows 10 and later** (MS15-097). So the shipped
-Windows build does not run on a modern Windows to begin with, and targeting it
-means defeating SafeDisc *first* and *then* starting the reverse-engineering
-over. *(Inferred from the file names and the support-file set; `tex.pck` has not
-actually been extracted and inspected — do that before relying on it.)*
+**The Windows build also would not run as shipped.** `tex.pck` holds `Setup.exe`
+and `theocracy-*.exe/.icd`, and the CD root carries `secdrv.sys`, `clokspl.exe`,
+`clcd16.dll`, `clcd32.dll` and `drvmgt.dll` — a disc-based copy-protection
+support set whose kernel driver **Microsoft disabled on Windows 10 and later**
+(MS15-097). Whatever else it is, it is not a usable starting point on a modern
+machine. *(Inferred from file names and the support-file set; `tex.pck` has not
+been extracted or inspected.)*
+
+Note the asymmetry that made this project possible at all: **the Linux binaries
+ship unprotected.** That is why `theocracy.real` and `libmvos.so` could be read,
+linked and run directly, and it is a large part of why the macOS port exists.
+
+**And obtaining a usable Windows executable would not rescue the option**, which
+is the part worth recording, because it is the argument someone will otherwise
+re-run. The output would still be a *different compilation of a different
+codebase*: none of this repo's addresses apply to it, so the reverse-engineering
+starts from zero. And every improvement worth shipping — the save-corruption fix,
+the 30 Hz cursor, sharp-bilinear presentation, `THEOC_PROVINCE_MS` — exists only
+as work against the Linux binaries. A native Windows build would be the original
+game with its original defects, including the one that ends a campaign at 51
+saves.
 
 **So: run the Linux binary on Windows.** One guest ABI across all three hosts,
 one set of RE, one set of fixes. The Windows work stays what the section above
