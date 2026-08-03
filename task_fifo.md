@@ -12,6 +12,8 @@ the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
 **One item left.** It is the biggest, and it needs game-logic surgery.
+**Stage 1 landed 2026-08-03 and needs a run to confirm** — see the note under
+item 1.
 
 1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
@@ -28,6 +30,31 @@ modernisation, and none of it blocks playing the game.
    only drives the cursor click animation and cursor refresh, and the simulation
    clocks itself from elapsed wall-clock with its own bounded catch-up. A higher
    heartbeat is a nice side effect of this item, not a reason for it.
+
+   **Stage 1 — done 2026-08-03, awaiting a run.** The turbo that the global
+   `THEOC_FRAME_MS=83` clamp was holding back was **our defect, not the game's**:
+   our `usleep` truncated the guest's own 83ms frame-limiter sleep at the first
+   due tick, so `cProvince_Do` returned early and re-ran ~2.5× too often. `usleep`
+   now honours the full duration and delivers heartbeats *during* it, by splicing
+   `_TimerFunction` with its return address pointing back at the usleep trap —
+   no guest patch. The clamp is off by default (`THEOC_FRAME_MS=0`).
+   Consequences: province self-limits to its designed 12fps through its own code,
+   and **the realm screen is no longer capped at 12fps** — checked step by step,
+   nothing in `RealmGameLoop` is frame-tied. Mechanism and the frame-aliasing
+   caveat: `docs/porting/frame-timing.md`, "Bug 2, revisited".
+
+   **Confirmed on a run.** Province `12.4 fps | heartbeat 30/s | sleep 605ms/s in
+   43 usleep | underrun=0/s` — 43 usleep calls for 12 frames is each 83ms sleep
+   being split into ~3.5 tick-delivering slices, which is the splice working.
+   Realm reported `0 usleep`: `RealmGameLoop` has **no frame limiter at all**, so
+   uncapped it free-ran to ~100fps. `THEOC_FRAME_MS` therefore survives as a
+   **60fps ceiling** (default 16ms) rather than a 12fps pacer — it never fires in
+   province. `83` restores the old clamp; `THEOC_LEGACY_SLEEP=1` reverts the
+   sleep handling.
+
+   **Stage 2 is the item proper** — province at ~30fps render / 12Hz sim needs
+   the animation/simulation seam inside `cProvince_Do` (`0x81da420`, and its
+   ~11.7 KB caller `FUN_08180230`), which is the game-logic surgery above.
 
 ## Done
 

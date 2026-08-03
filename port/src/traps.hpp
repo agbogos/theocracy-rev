@@ -376,6 +376,26 @@ private:
     // If due, redirect trap return → _TimerFunction (no nested uc_emu_start).
     // Returns true if redirect_guest was used.
     bool maybe_redirect_timer(Machine& m, uint32_t esp);
+    // Collapse the tick schedule up to now; returns intervals skipped.
+    int  advance_timer_schedule();
+
+    // --- Re-entrant usleep ---------------------------------------------------
+    // A real kernel delivers SIGALRM *during* a long sleep without shortening
+    // it. We used to truncate instead — return from usleep at the first due
+    // tick — which cut the game's own 83ms frame limiter to ~33ms and made the
+    // province sim run ~2.5x fast (frame-timing.md, Bug 2). Now the usleep
+    // handler splices _TimerFunction with its return address pointing back at
+    // the usleep trap and keeps the unslept remainder here, so the sleep
+    // resumes after the tick and the guest sees its full duration.
+    uint32_t sleep_remaining_us_ = 0;  // unslept remainder, 0 = not mid-sleep
+    uint32_t sleep_resume_ret_   = 0;  // original caller's return address
+    bool     sleep_resuming_     = false;
+    // True when the SIGALRM handler is the stock _TimerFunction, which ignores
+    // its signo argument. The re-entry frame necessarily aliases signo onto the
+    // return address (see redirect_timer_reentrant), so a custom handler that
+    // reads signo must take the old truncating path instead.
+    bool timer_handler_ignores_signo() const;
+    bool redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t remaining);
 
     // --- THEOC_FPS frame instrument (throughput-vs-timing diagnostic) ---------
     // Reports per second: FPS (presents), guest-work/frame (blocks), guest

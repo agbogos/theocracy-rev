@@ -154,10 +154,92 @@ if (frame_ms > 0 && elapsed_since_last_present < frame_ms) usleep(remainder);
 ```
 
 Result: province **12fps with correct sim speed** — faithful to the original.
-12fps is choppy by modern standards but authentic; the proper way to get
-smooth-**and**-correct is to decouple the sim step from the render frame (render at
-30fps, step the sim at 12Hz), which means patching the frame-tied stepping in
-`theocracy.real` — tracked as a future task in `../../task_fifo.md`.
+
+> **Superseded 2026-08-03 — the clamp was treating our own symptom.** It worked,
+> but the turbo was never the game's doing: see "Bug 2, revisited" below. The
+> default is now `THEOC_FRAME_MS=0` and the guest paces itself.
+
+### Bug 2, revisited — the turbo was ours, and the clamp was compensation
+
+The frame limiter in `cProvince_Do` is `Sleep(83333µs − elapsed)`. It was never
+broken. **Our `usleep` handler was truncating it.** Bug 1's fix had taught
+`usleep` to deliver a due heartbeat by returning immediately (EINTR semantics),
+and otherwise to sleep no further than the next tick deadline — so a requested
+83 ms sleep returned after at most ~33 ms. `cSyncSystem::Sleep` does not loop,
+so `cProvince_Do` returned early and re-ran, ~2.5× too often. That is the whole
+of the turbo. The global present clamp was a second limiter bolted on to hold
+back the first one we had disabled.
+
+Two costs followed from that, and neither was obvious while the clamp was in
+place. It applied to **every screen**, including the realm loop, which has
+nothing frame-tied in it at all — `SimulationUpdate` self-clocks,
+`UpdateProvincePaletteEffects` is pure wall-clock, and step 9 is an idempotent
+CD-state setter (see
+[game-loop-and-simulation.md](../subsystems/game-loop-and-simulation.md)). And
+it made province's frame rate a *host* parameter, so no measurement of the
+guest's own pacing meant anything.
+
+**Fix — honour the full sleep, and deliver ticks during it.** A real kernel
+fires SIGALRM ~3 times inside an 83 ms `usleep` without shortening it. We could
+not: a spliced tick has to *return through the trap*, so delivering one meant
+abandoning the sleep. The way out is to make it return to the **usleep trap**
+instead of to usleep's caller, and keep the remainder in host state:
+
+```
+usleep(83333) → sleep 33ms → tick due → splice _TimerFunction ─┐
+                                                                │ returns to
+              ← ─────────── usleep trap re-entered ─────────────┘ the trap
+              → sleep 33ms → tick due → splice ──→ re-entered
+              → sleep 17ms → remaining == 0 → return to the real caller
+```
+
+Full duration *and* a 30 Hz heartbeat, with **no guest patch**. The frame is
+tight: `_TimerFunction` returns through `esp-4`, so its `signo` argument lands
+on the same dword the re-entered trap reads as its return address — a `ret` pops
+4 and a cdecl arg sits at `+4`, so the two slots cannot be separated without a
+trampoline. That is safe only because the stock `_TimerFunction` never reads its
+parameter (verified in the disassembly), so `timer_handler_ignores_signo()`
+gates it and anything else falls back to the old truncating delivery.
+
+Sound is deliberately **not** serviced mid-sleep: its entry argument (the
+`cThread*`) occupies that same aliased slot and cannot survive the re-entry. It
+is serviced once on entry instead, which its ~120 ms buffer absorbs.
+
+**Measured, first run (2026-08-03).** Province:
+
+```
+[fps] 12.4 fps | heartbeat 30/s mixer 10/s | sleep 605ms/s in 43 usleep | underrun=0/s
+```
+
+The load-bearing number is **43 `usleep` calls for 12 frames**. The game issues
+one `usleep` per frame; each is being split into ~3.5 slices by tick delivery,
+and every re-entry counts as a fresh call — 12 × 3.5 ≈ 43. That is the splice
+working, and `heartbeat 30/s` alongside `sleep 605ms/s` is the thing the old
+design could not do: full-duration sleeps *and* a 30 Hz tick.
+
+**And it exposed a wrong assumption.** Realm reported `sleep 0ms/s in 0 usleep`
+— `RealmGameLoop` **never calls the frame limiter at all**. It has no pacing of
+its own, so "let realm run at its natural rate" was meaningless: uncapped it
+free-ran to **~100fps** at 0.01–0.04M blocks/frame, and would climb further on
+faster hardware. Realm was never *paced* at 12fps by anything but our clamp.
+
+So the clamp stays, re-purposed: **`THEOC_FRAME_MS` now defaults to 16ms
+(~60fps) as a ceiling rather than 83ms as a pacer.** It never fires in province,
+which self-limits to 83ms through its own code, so it bounds the unlimited
+screen without touching the limited one. `THEOC_FRAME_MS=83` restores the old
+global clamp, `0` is genuinely uncapped, and `THEOC_LEGACY_SLEEP=1` reverts the
+sleep handling entirely.
+
+> **Known, unchanged:** entering province still spikes — one sample at
+> `underrun=15015/s`, `heap +6.04MB/s`, `heartbeat 10/s` — during the ~1s of
+> asset loading where the emulator is genuinely compute-bound and rarely yields.
+> Pre-existing and already documented; it recovers to 0 underruns immediately.
+
+12fps in province is choppy but authentic. Getting smooth-**and**-correct still
+means decoupling the sim step from the render frame inside `cProvince_Do`
+(render ~30fps, step the sim at 12Hz) — real game-logic surgery, still tracked
+in `../../task_fifo.md`. What changed is that the guest's own pacing is now
+visible and faithful, which is the precondition for attempting it.
 
 ---
 

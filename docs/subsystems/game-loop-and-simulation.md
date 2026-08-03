@@ -39,9 +39,16 @@ Then, each frame while running:
 6. **Drain the input event pipe** (`g_RealmScreen+0x70..0x7c` ring buffer): dispatch events, `delete` type `-1`.
 7. `UpdateProvincePaletteEffects(...)` — animate province colors.
 8. `cScreen::EndRefresh(g_RealmScreen)` — **flip the double buffer**.
-9. `FUN_081a3a70(DAT_084c9764, 1)` — advance animations / frame sync.
+9. `FUN_081a3a70(DAT_084c9764, 1)` — **a CD/music state setter, not animation.**
+   Its whole body is `if (state@+0x18 != arg) { Lock(+0x84); state = arg; if
+   (+0x90) arg == 4 ? VCD->vt[0x1c]() : FUN_081a3b80(this); Unlock(); }` — so
+   after the first frame sets the state to 1 it is a no-op every frame
+   thereafter. *Corrected 2026-08-03; it previously read "advance animations /
+   frame sync", which made the realm loop look frame-tied when it is not.*
 
 So: **render every frame; simulate on a fixed timestep gated by pause.** Rendering and simulation are decoupled.
+
+**Nothing in this loop is frame-tied** — checked step by step 2026-08-03, because the port was capping the realm screen to 12fps on the assumption that it was. `SimulationUpdate` self-clocks from `elapsed/tickDuration`; `UpdateProvincePaletteEffects` derives its pulsing colours from `SetBySys__8cDayTime`, i.e. pure wall-clock; step 9 is the idempotent CD-state setter above; the rest is render, input and focus. Rendering the realm screen faster is therefore both safe and correct — it is what the original would have done on a faster machine. The frame-tied engine the port worries about is **province** (`cProvince_Do`), not this loop.
 
 ## `SimulationUpdate(g_World)` (`0x81f97e0`) — fixed-timestep, lockstep-ready
 The important one.

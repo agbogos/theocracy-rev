@@ -1250,30 +1250,68 @@ void TrapLayer::register_builtins() {
         // tick right here, exactly as EINTR-from-SIGALRM would (THEOC_LEGACY_SLEEP
         // reverts to the old blind sleep for A/B).
         static const bool legacy = std::getenv("THEOC_LEGACY_SLEEP") != nullptr;
-        // Deliver a due heartbeat (EINTR-from-SIGALRM semantics) or a due sound
-        // slice right here. Both are otherwise only serviced at present, so at low
-        // fps the mixer starves and audio stutters; usleep fires ~once per frame
-        // too, doubling the real-time service points and decoupling both from fps.
-        if (!legacy) {
-            if (maybe_redirect_timer(m, esp)) return 0;
-            if (maybe_redirect_sound(m, esp)) return 0;
+        if (legacy) {  // pre-2026-08-03 blind sleep, for A/B
+            uint32_t us = req > 100000 ? 100000 : req;
+            fps_usleep_us_ += us;
+            if (us) ::usleep(us);
+            return 0;
         }
-        // Never sleep past the next tick deadline, so the clock keeps 30Hz cadence
-        // and the loop re-evaluates promptly rather than blocking a whole frame.
-        uint32_t cap = 100000;
-        if (!legacy && timer_armed_) {
+
+        // Are we resuming a sleep we interrupted to deliver a tick? Then the
+        // remainder is ours, not the guest's argument — which on re-entry is
+        // still the *original* request and would restart the sleep from the top.
+        // Guarded on the return address too, in case a spliced handler ever
+        // calls usleep itself.
+        uint32_t remaining = req;
+        bool resumed = false;
+        if (sleep_resuming_) {
+            sleep_resuming_ = false;
+            if (m.r32(esp) == sleep_resume_ret_) { remaining = sleep_remaining_us_; resumed = true; }
+            sleep_remaining_us_ = 0;
+        }
+        if (remaining > 1000000) remaining = 1000000;  // sanity clamp
+
+        // Sound is buffer-driven with a ~120ms cushion, and its entry argument
+        // (the cThread*) can't survive the re-entry frame, so it is serviced on
+        // a *fresh* entry only. Doing it on a resume would splice back to the
+        // original caller and silently drop the rest of the sleep — which the
+        // game's elapsed-based limiter would absorb, but only by running an
+        // extra full cProvince_Do body. A slice that comes due mid-sleep waits
+        // for the next yield instead; the cushion absorbs it (measured 0
+        // underruns/s in steady state, province and realm alike).
+        if (!resumed && maybe_redirect_sound(m, esp)) return 0;
+
+        // Sleep the FULL requested duration, delivering heartbeats *during* it
+        // the way the kernel does — rather than returning at the first due tick.
+        // Truncating is what cut the game's own 83ms province limiter to ~33ms
+        // and made the sim run ~2.5x fast (frame-timing.md, Bug 2).
+        for (;;) {
+            if (!remaining) return 0;
             auto now = std::chrono::steady_clock::now();
-            if (timer_next_ <= now) cap = 0;
-            else {
+            if (timer_armed_ && timer_next_ <= now) {
+                if (timer_handler_ignores_signo() &&
+                    redirect_timer_reentrant(m, esp, remaining))
+                    return 0;                          // resumes on re-entry
+                // Custom signo-reading handler: fall back to the old truncating
+                // delivery rather than build a frame it would misread.
+                if (maybe_redirect_timer(m, esp)) return 0;
+                // Neither path fired (no mvos base, no usleep trap, timer
+                // disarmed mid-flight). Push the schedule past now anyway, or
+                // the zero-length slice below would spin forever.
+                if (timer_armed_) advance_timer_schedule();
+            }
+            uint32_t slice = remaining;
+            if (timer_armed_) {
                 auto until = std::chrono::duration_cast<std::chrono::microseconds>(
                                  timer_next_ - now).count();
-                if (until >= 0 && (uint64_t)until < cap) cap = (uint32_t)until;
+                if (until < 0) until = 0;
+                if ((uint64_t)until < slice) slice = (uint32_t)until;
             }
+            if (!slice) continue;   // tick is due; next pass delivers it
+            ::usleep(slice);
+            fps_usleep_us_ += slice;
+            remaining -= slice;
         }
-        uint32_t us = req > cap ? cap : req;
-        fps_usleep_us_ += us;
-        if (us) ::usleep(us);
-        return 0;
     };
     t["ioctl"] = [](Machine& m, uint32_t esp) -> uint32_t {
         // /dev/dsp probes etc. — succeed with zeros.
@@ -2483,14 +2521,35 @@ void TrapLayer::register_builtins() {
         t[nm] = [](Machine&, uint32_t) -> uint32_t { return 0; };
 }
 
-// The present-to-present cap, in ms (THEOC_FRAME_MS; 83 = the engine's own
-// 12fps limiter, 0 = uncapped). Read once. Shared by the frame limiter and the
-// [health] line, which reports it because the engine is frame-tied: growth
-// rates are only comparable between runs at the same cap.
+// The present-to-present cap, in ms (THEOC_FRAME_MS; 0 = uncapped, the default
+// since 2026-08-03). Read once. Also reported on the [health] line, because
+// growth rates are only comparable between runs at the same cap.
+//
+// This used to default to 83 (the province limiter's own period) and applied to
+// *every* screen. It was compensation for our own defect: the usleep handler
+// truncated the guest's frame-limiter sleep at the first due tick, so
+// cProvince::Do returned early and the sim ran ~2.5x fast, and a global present
+// clamp was what held it back. The usleep handler now honours the full
+// requested duration (see t["usleep"]), so the guest limits itself:
+//   - province self-limits to its designed 12fps via its own Sleep(0x14585-el);
+//   - the realm screen, which has nothing frame-tied in its loop at all
+//     (SimulationUpdate self-clocks, UpdateProvincePaletteEffects is pure
+//     wall-clock, and the step-9 call is an idempotent CD-state setter), is no
+//     longer held to 12fps for a frame-tiedness it does not have.
+// Set THEOC_FRAME_MS=83 to restore the old global clamp for A/B.
+//
+// The default is now **16ms (~60fps) as a ceiling**, not a pacing clamp. The
+// first uncapped run showed why: RealmGameLoop calls usleep *zero* times — it
+// has no frame limiter of its own at all — so with nothing capping it, realm
+// free-ran to ~100fps at 0.01-0.04M guest blocks/frame. Correct, but it is
+// burning host CPU to present frames nothing asked for, and it would only climb
+// on faster hardware. 16ms never fires in province (which self-limits to 83ms
+// through its own code), so it caps the unlimited screen without touching the
+// limited one. 0 = genuinely uncapped.
 int TrapLayer::frame_cap_ms() {
     static const int ms = []{
         const char* e = std::getenv("THEOC_FRAME_MS");
-        return e ? std::atoi(e) : 83;
+        return e ? std::atoi(e) : 16;
     }();
     return ms;
 }
@@ -2722,6 +2781,69 @@ void TrapLayer::fps_tick(Machine& m) {
     fps_select_calls_ = 0;
 }
 
+// Collapse the tick schedule up to now so a slow frame doesn't storm. Returns
+// the number of intervals skipped, or -1 if the timer disarmed itself.
+int TrapLayer::advance_timer_schedule() {
+    if (timer_interval_.count() <= 0) {
+        timer_armed_ = false;
+        return -1;
+    }
+    auto now = std::chrono::steady_clock::now();
+    int skipped = 0;
+    while (timer_next_ <= now && skipped < 16) {
+        timer_next_ += timer_interval_;
+        skipped++;
+    }
+    if (timer_next_ < now)
+        timer_next_ = now + timer_interval_;
+    return skipped;
+}
+
+// The stock handler is _TimerFunction (mvos+0x922e0), which takes an int and
+// never reads it — verified in the disassembly: it loads TimerSystem and tail-
+// calls cTimerSystem_Linux::Proc without touching [ebp+8]. That is what makes
+// the re-entrant frame in redirect_timer_reentrant safe, so anything else must
+// take the old truncating path.
+bool TrapLayer::timer_handler_ignores_signo() const {
+    if (!mvos_base_) return false;
+    return sigalrm_handler_ == 0 || sigalrm_handler_ == mvos_base_ + 0x922e0;
+}
+
+// Splice the tick so that when it returns, control lands back in the *usleep
+// trap* rather than in usleep's caller — the host keeps the unslept remainder
+// and finishes the sleep on re-entry. This is what lets a long guest sleep
+// behave like a real one: full duration, with ticks delivered during it.
+//
+// Frame layout, and why signo aliases the return address:
+//
+//   esp   → [ret_original][orig_arg]      the trap's own frame, left intact
+//   esp-4 → [usleep_trap]                 _TimerFunction returns through this
+//
+// _TimerFunction runs with ESP = esp-4, so it reads signo at [esp] — the same
+// dword the re-entered trap will read as its return address. A `ret` pops 4 and
+// a cdecl arg sits at +4, so those two slots are necessarily the same one and
+// cannot be separated without a trampoline. Harmless here only because the
+// stock handler ignores signo; the caller checks that first.
+//
+// After its `ret`: EIP = usleep_trap, ESP = esp — exactly the frame the trap
+// was entered with, so the eventual normal return pops ret_original as usual.
+bool TrapLayer::redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t remaining) {
+    uint32_t usleep_trap = trap_addr("usleep");
+    if (!usleep_trap) return false;
+    if (advance_timer_schedule() < 0) return false;
+
+    uint32_t fn = sigalrm_handler_;
+    if (!fn) fn = mvos_base_ + 0x922e0;  // _TimerFunction__Fi
+    sleep_remaining_us_ = remaining;
+    sleep_resume_ret_   = m.r32(esp);
+    sleep_resuming_     = true;
+    uint32_t sp = esp - 4;
+    m.w32(sp, usleep_trap);
+    m.redirect_guest(fn, sp);
+    fps_timer_fires_++;
+    return true;
+}
+
 bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     // Host-side SIGALRM without nested uc_emu_start (that crashes Unicorn).
     // Same pattern as sound: rewrite trap return into _TimerFunction(signo);
@@ -2730,18 +2852,8 @@ bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     auto now = std::chrono::steady_clock::now();
     if (now < timer_next_) return false;
 
-    // Advance schedule; collapse backlog so a slow frame doesn't storm.
-    int skipped = 0;
-    if (timer_interval_.count() <= 0) {
-        timer_armed_ = false;
-        return false;
-    }
-    while (timer_next_ <= now && skipped < 16) {
-        timer_next_ += timer_interval_;
-        skipped++;
-    }
-    if (timer_next_ < now)
-        timer_next_ = now + timer_interval_;
+    int skipped = advance_timer_schedule();
+    if (skipped < 0) return false;
 
     uint32_t fn = sigalrm_handler_;
     if (!fn) fn = mvos_base_ + 0x922e0;  // _TimerFunction__Fi
