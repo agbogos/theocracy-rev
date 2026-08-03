@@ -319,6 +319,14 @@ and refuses to write unless it is the expected `0x14585`, because a silent
 mismatch would retune something else entirely. `33` → ~30fps at ~2.5× speed,
 `166` → ~6fps at ~0.5×. Unset leaves the shipped 12fps alone.
 
+**Tested by hand at 30, 42 and 50 ms (2026-08-03); all report and behave
+correctly, at the expected speeds.** The judgement that came out of it:
+**`THEOC_PROVINCE_MS=50` — 20fps at 1.67× — is where it stops reading as a
+2000-era game without yet reading as fast-forward.** That is a subjective call
+and is recorded as one, but it is the only figure here anybody actually played
+to, and it is worth knowing that the sweet spot is *not* 30fps: the speed-up you
+have to accept to get there is what spoils it, not the frame rate.
+
 ---
 
 ## Bug 3 — audio mixer coupled to frame rate (stutter)
