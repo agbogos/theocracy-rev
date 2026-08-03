@@ -130,7 +130,7 @@ private:
     // Socket plumbing: sockets share the fd table with files (the guest tells us
     // which is which by calling send/recv vs read/write).
     int host_fd_of(int gfd);
-    int adopt_host_fd(int hfd);
+    int adopt_host_fd(int hfd, bool is_socket = false);
 
     // name -> game-space address of the copy-reloc'd singleton pointer.
     std::unordered_map<std::string, uint32_t> game_globals_;
@@ -244,6 +244,17 @@ private:
         bool  eof = false;
         std::string host_path;  // resolved path, for post-close normalisation
         bool  wrote = false;    // opened for writing (see collapse_save_file)
+        // Is host_fd a socket rather than a file descriptor? On POSIX this is
+        // merely informative — one namespace, and read/write/close work on both.
+        // On Windows it is *required*: Winsock SOCKETs are a separate namespace
+        // from CRT fds, so ::read/::write/::close on one are silently wrong and
+        // must become recv/send/closesocket. libmvos makes this unavoidable —
+        // cIPCO_TCPIP::Read/Write poll the socket through plain read/write.
+        bool  sock = false;
+        // Remembered O_NONBLOCK state. Windows' ioctlsocket(FIONBIO) is
+        // write-only — there is no F_GETFL — so fcntl(F_GETFL) is answered from
+        // here. Exact, because the fcntl handler is its only writer.
+        bool  nonblock = false;
     };
     std::unordered_map<uint32_t, HostFile> files_;   // guest FILE*
     std::unordered_map<int, HostFile> fds_;          // guest fd → host
@@ -251,7 +262,12 @@ private:
     uint32_t hostent_buf_ = 0;   // reusable guest `struct hostent` (see gethostbyname)
     // opendir/readdir: guest DIR* handle -> host DIR* plus a reusable guest
     // `struct dirent` (readdir returns a pointer to static storage, per contract).
-    struct HostDir { void* d = nullptr; uint32_t ent = 0; };
+    // `path` is the resolved host directory. Only Windows needs it — mingw's
+    // struct dirent has no d_type, so readdir has to stat each entry to fill the
+    // byte cDirent reads — but it is stored unconditionally rather than behind an
+    // #ifdef, because a field that exists on one platform only is how struct
+    // layouts quietly diverge.
+    struct HostDir { void* d = nullptr; uint32_t ent = 0; std::string path; };
     std::unordered_map<uint32_t, HostDir> dirs_;
     uint32_t next_dir_ = 0x44495200;   // 'DIR\0' — distinctive in a fault dump
     std::string data_root_;

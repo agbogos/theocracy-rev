@@ -1,5 +1,6 @@
 #include "video.hpp"
-#include <cstdio>
+#include <cmath>     // std::floor — pulled in transitively by libc++/libstdc++
+#include <cstdio>    // on macOS and Linux, but not by mingw's headers
 #include <cstdlib>
 #include <cstring>
 #include <SDL2/SDL.h>

@@ -9,12 +9,21 @@
 #include <cerrno>
 #include <csignal>
 #include <dirent.h>
-#include <arpa/inet.h>
 #include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/select.h>
-#include <sys/socket.h>
+// Sockets. Every POSIX header mingw-w64 lacks is a socket header — the rest of
+// this file's POSIX surface (dirent, fcntl, sys/stat, sys/time, unistd) is
+// present and links. winsock2.h MUST precede windows.h, which is why it is here
+// and not beside the other Windows includes.
+#if defined(_WIN32)
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+#else
+#  include <arpa/inet.h>
+#  include <netdb.h>
+#  include <netinet/in.h>
+#  include <sys/select.h>
+#  include <sys/socket.h>
+#endif
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -660,6 +669,52 @@ std::string TrapLayer::resolve_path(const std::string& guest) const {
 #  define THEOC_HAVE_SO_NOSIGPIPE 1  // per-socket SIGPIPE suppression
 #endif
 
+// ---- Winsock2 compatibility --------------------------------------------------
+// This is where the platform seam finally earned its keep. Linux needed two #if
+// guards; Windows needs a whole vocabulary, because Winsock is not a POSIX
+// socket API wearing a different hat:
+//
+//  * sockets are not file descriptors. They live in a separate namespace from
+//    CRT fds, so ::close/::read/::write on a SOCKET are wrong — see the `sock`
+//    flag on HostFile and the dispatch in close/read/write. This is the one that
+//    would have compiled cleanly and failed at runtime.
+//  * errors come from WSAGetLastError(), not errno, and use their own 100xx
+//    numbering that shares nothing with Linux's.
+//  * non-blocking is ioctlsocket(FIONBIO), and there is no F_GETFL to read it
+//    back, so the flag has to be remembered host-side.
+//  * send/recv take char* rather than void*.
+//  * there is no SIGPIPE at all, so both the BSD and Linux mitigations are moot.
+#if defined(_WIN32)
+// Winsock's socket handle is UINT_PTR. Every handle Windows actually hands out
+// fits in 32 bits and the whole fd table here is int-keyed, so narrow at the
+// boundary rather than churn the table — but do it in one named place.
+typedef int socklen_t_compat;
+#  define THEOC_CLOSESOCKET(fd) ::closesocket((SOCKET)(fd))
+#  define THEOC_SOCK_CAST(p)    ((char*)(p))
+static inline int theoc_mkdir(const char* p) { return ::mkdir(p); }
+#else
+typedef socklen_t socklen_t_compat;
+#  define THEOC_CLOSESOCKET(fd) ::close(fd)
+#  define THEOC_SOCK_CAST(p)    (p)
+static inline int theoc_mkdir(const char* p) { return ::mkdir(p, 0755); }
+#endif
+
+// ---- O_BINARY: the quiet data-corruption hazard ------------------------------
+// Windows opens files in *text* mode by default, which translates \n <-> \r\n on
+// the way through and stops reading at a 0x1a byte. Every file this port touches
+// on the guest's behalf is binary: the .tsg saves, the PHLS .pck archives, the
+// MPEG cutscenes, the XOR-obfuscated config. Without O_BINARY they would be
+// silently mangled — a bug that compiles cleanly, runs, and only shows up as a
+// corrupt save days later.
+//
+// O_BINARY simply does not exist on POSIX (where there is no such translation to
+// suppress), so it is defined to 0 there and every guest-facing open ORs it in
+// unconditionally. Same for the "b" in fopen mode strings, which is already
+// ignored on POSIX but load-bearing here.
+#if !defined(O_BINARY)
+#  define O_BINARY 0
+#endif
+
 // ---- guest(Linux/i386) <-> host(BSD/macOS) socket translation ----------------
 // The guest is a 1999 Linux i386 binary and we are on BSD. Three things differ in
 // ways that fail silently rather than loudly, so each is translated explicitly:
@@ -693,6 +748,51 @@ int to_linux_errno(int e) {
         case ENETUNREACH:  return 101;
         default:           return e;
     }
+}
+
+// The socket-error accessor. On POSIX the socket calls set errno like anything
+// else; Winsock keeps its own error slot and its own numbering, which shares
+// *nothing* with Linux's — WSAEWOULDBLOCK is 10035 where the guest expects 11.
+//
+// Why this matters more than it looks: libmvos's cIPCO_TCPIP switches on errno
+// 4..22 and maps anything outside that window to its generic "unknown error"
+// (5). A non-blocking read with no data pending is the common case on every
+// netgame frame, so leaking 10035 instead of 11 would turn "no data yet" into a
+// hard error on every poll — the exact bug the BSD EAGAIN=35 mistake caused,
+// with a number three orders of magnitude further out of range.
+int last_socket_errno() {
+#if defined(_WIN32)
+    switch (WSAGetLastError()) {
+        case WSAEWOULDBLOCK:   return 11;    // EAGAIN
+        case WSAEINPROGRESS:   return 115;
+        case WSAEALREADY:      return 114;
+        case WSAEADDRINUSE:    return 98;
+        case WSAEADDRNOTAVAIL: return 99;
+        case WSAECONNREFUSED:  return 111;
+        case WSAECONNRESET:    return 104;
+        case WSAECONNABORTED:  return 103;
+        case WSAEISCONN:       return 106;
+        case WSAENOTCONN:      return 107;
+        case WSAETIMEDOUT:     return 110;
+        case WSAEHOSTUNREACH:  return 113;
+        case WSAENETUNREACH:   return 101;
+        case WSAENETDOWN:      return 100;
+        case WSAENOTSOCK:      return 88;
+        case WSAEINTR:         return 4;
+        case WSAEBADF:         return 9;
+        case WSAEINVAL:        return 22;
+        case WSAEMFILE:        return 24;
+        case WSAEACCES:        return 13;
+        case WSAEFAULT:        return 14;
+        case WSAEMSGSIZE:      return 90;
+        case WSAEAFNOSUPPORT:  return 97;
+        case WSAEPROTONOSUPPORT: return 93;
+        case WSAESHUTDOWN:     return 108;
+        default:               return 5;     // EIO — libmvos's own "unknown"
+    }
+#else
+    return to_linux_errno(errno);
+#endif
 }
 
 constexpr uint32_t kGuestAfInet = 2;   // AF_INET agrees, but check it explicitly
@@ -762,9 +862,12 @@ int TrapLayer::host_fd_of(int gfd) {
     return it->second.host_fd;
 }
 
-int TrapLayer::adopt_host_fd(int hfd) {
+int TrapLayer::adopt_host_fd(int hfd, bool is_socket) {
     int gfd = next_fd_++;
-    fds_[gfd] = HostFile{nullptr, hfd, false, false, false};
+    HostFile hf{};
+    hf.host_fd = hfd;
+    hf.sock    = is_socket;
+    fds_[gfd]  = hf;
     return gfd;
 }
 
@@ -1385,12 +1488,18 @@ void TrapLayer::register_builtins() {
             return (uint32_t)-1;
         }
         // SOCK_STREAM=1 / SOCK_DGRAM=2 agree between Linux and BSD.
-        int hfd = ::socket(AF_INET, type, proto);
-        if (hfd < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        int hfd = (int)::socket(AF_INET, type, proto);
+        if (hfd < 0) { set_errno(m, last_socket_errno()); return (uint32_t)-1; }
         // Address reuse by default: the game rebinds its listen port across
         // sessions, and BSD's TIME_WAIT would otherwise refuse for ~a minute.
+        //
+        // Windows note: SO_REUSEADDR there is *not* the POSIX option — it permits
+        // another process to hijack a live bound port, where POSIX only relaxes
+        // TIME_WAIT. It is kept anyway because it reproduces the rebind behaviour
+        // the game depends on; SO_EXCLUSIVEADDRUSE would be the hardening move if
+        // this ever faced a hostile network, which a LAN game from 2000 does not.
         int on = 1;
-        ::setsockopt(hfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+        ::setsockopt(hfd, SOL_SOCKET, SO_REUSEADDR, THEOC_SOCK_CAST(&on), sizeof on);
         // SO_NOSIGPIPE: writing to a socket whose peer has gone must return EPIPE,
         // not raise SIGPIPE and kill the host. Linux code says MSG_NOSIGNAL per
         // send(); BSD sets it once on the fd. Belt and braces with the global
@@ -1404,7 +1513,7 @@ void TrapLayer::register_builtins() {
 #ifdef THEOC_HAVE_SO_NOSIGPIPE
         ::setsockopt(hfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
 #endif
-        int gfd = adopt_host_fd(hfd);
+        int gfd = adopt_host_fd(hfd, /*is_socket=*/true);
         std::fprintf(stderr, "  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
         return (uint32_t)gfd;
     };
@@ -1448,11 +1557,11 @@ void TrapLayer::register_builtins() {
         uint32_t gaddr = arg(m, esp, 1), glen_ptr = arg(m, esp, 2);
         if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
         sockaddr_in peer{};
-        socklen_t plen = sizeof peer;
+        socklen_t_compat plen = sizeof peer;
         int c = ::accept(hfd, (sockaddr*)&peer, &plen);
         if (c < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         host_to_guest_sin(m, gaddr, glen_ptr, peer);
-        int gfd = adopt_host_fd(c);
+        int gfd = adopt_host_fd(c, /*is_socket=*/true);
         std::fprintf(stderr, "  [net] accept -> guest fd %d from %s:%u\n", gfd,
                     inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
         return (uint32_t)gfd;
@@ -1486,7 +1595,7 @@ void TrapLayer::register_builtins() {
         if (n) m.read(buf, tmp.data(), n);
         // MSG_NOSIGNAL does not exist on BSD; SO_NOSIGPIPE is set on the fd
         // instead (below) so a dead peer returns EPIPE rather than killing us.
-        ssize_t s = ::send(hfd, tmp.data(), n, 0);
+        ssize_t s = ::send(hfd, THEOC_SOCK_CAST(tmp.data()), n, 0);
         if (s < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         return (uint32_t)s;
     };
@@ -1496,7 +1605,7 @@ void TrapLayer::register_builtins() {
         uint32_t buf = arg(m, esp, 1), n = arg(m, esp, 2);
         if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
         std::vector<uint8_t> tmp(n);
-        ssize_t got = ::recv(hfd, tmp.data(), n, 0);
+        ssize_t got = ::recv(hfd, THEOC_SOCK_CAST(tmp.data()), n, 0);
         if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         if (got > 0) m.write(buf, tmp.data(), (uint32_t)got);
         return (uint32_t)got;
@@ -1511,7 +1620,7 @@ void TrapLayer::register_builtins() {
         if (n) m.read(buf, tmp.data(), n);
         sockaddr_in sa{};
         bool have = guest_to_host_sin(m, gaddr, glen, sa);
-        ssize_t s = ::sendto(hfd, tmp.data(), n, 0,
+        ssize_t s = ::sendto(hfd, THEOC_SOCK_CAST(tmp.data()), n, 0,
                              have ? (sockaddr*)&sa : nullptr, have ? sizeof sa : 0);
         if (s < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         return (uint32_t)s;
@@ -1524,8 +1633,8 @@ void TrapLayer::register_builtins() {
         if (hfd < 0) { set_errno(m, 9); return (uint32_t)-1; }
         std::vector<uint8_t> tmp(n);
         sockaddr_in peer{};
-        socklen_t plen = sizeof peer;
-        ssize_t got = ::recvfrom(hfd, tmp.data(), n, 0, (sockaddr*)&peer, &plen);
+        socklen_t_compat plen = sizeof peer;
+        ssize_t got = ::recvfrom(hfd, THEOC_SOCK_CAST(tmp.data()), n, 0, (sockaddr*)&peer, &plen);
         if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         if (got > 0) m.write(buf, tmp.data(), (uint32_t)got);
         host_to_guest_sin(m, gaddr, glen_ptr, peer);
@@ -1544,7 +1653,7 @@ void TrapLayer::register_builtins() {
             int v = 1;
             if (val && len >= 4) v = (int)m.r32(val);
             ::setsockopt(hfd, SOL_SOCKET, opt == 2 ? SO_REUSEADDR : SO_KEEPALIVE,
-                         &v, sizeof v);
+                         THEOC_SOCK_CAST(&v), sizeof v);
         }
         return 0;
     };
@@ -1557,7 +1666,7 @@ void TrapLayer::register_builtins() {
         int hfd = host_fd_of((int)arg(m, esp, 0));
         if (hfd < 0) return (uint32_t)-1;
         sockaddr_in sa{};
-        socklen_t l = sizeof sa;
+        socklen_t_compat l = sizeof sa;
         if (::getsockname(hfd, (sockaddr*)&sa, &l) < 0) return (uint32_t)-1;
         host_to_guest_sin(m, arg(m, esp, 1), arg(m, esp, 2), sa);
         return 0;
@@ -1611,7 +1720,7 @@ void TrapLayer::register_builtins() {
         }
         uint32_t h = next_dir_++;
         uint32_t ent = guest_alloc(0x120);          // dirent incl. 256-byte name
-        dirs_[h] = HostDir{(void*)d, ent};
+        dirs_[h] = HostDir{(void*)d, ent, hp};
         std::fprintf(stderr, "  [dir] opendir('%s') -> handle %#x\n", gp.c_str(), h);
         return h;
     };
@@ -1627,7 +1736,20 @@ void TrapLayer::register_builtins() {
         m.w32(p + 0x00, (uint32_t)e->d_ino);
         m.w32(p + 0x04, 0);
         uint16_t reclen = (uint16_t)(0x0b + name.size() + 1);
+#if defined(_WIN32)
+        // mingw's struct dirent carries no d_type. cDirent reads this byte, so
+        // derive it rather than leave it 0 (DT_UNKNOWN), which would make every
+        // entry look like a non-directory.
+        uint8_t dtype = 0;   // DT_UNKNOWN
+        {
+            struct stat dst{};
+            std::string full = it->second.path + "/" + name;
+            if (::stat(full.c_str(), &dst) == 0)
+                dtype = S_ISDIR(dst.st_mode) ? 4 /*DT_DIR*/ : 8 /*DT_REG*/;
+        }
+#else
         uint8_t  dtype  = (uint8_t)e->d_type;
+#endif
         m.write(p + 0x08, &reclen, 2);
         m.write(p + 0x0a, &dtype, 1);
         m.write(p + 0x0b, name.c_str(), (uint32_t)name.size() + 1);
@@ -1655,25 +1777,49 @@ void TrapLayer::register_builtins() {
         return 0;
     };
 
+    // cIPCO_TCPIP does fcntl(fd, F_SETFL, 0x800) — Linux O_NONBLOCK — to make its
+    // polling socket non-blocking, so this is the switch that decides whether the
+    // netgame polls or hangs.
+    //
+    // Windows has no fcntl at all. The equivalent is ioctlsocket(FIONBIO), which
+    // is *write-only*: there is no way to read the current blocking state back.
+    // So the flag is remembered host-side in HostFile::nonblock and F_GETFL is
+    // answered from that, which is exact here because this handler is the only
+    // thing that ever changes it.
     t["fcntl"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         int gfd = (int)arg(m, esp, 0), cmd = (int)arg(m, esp, 1);
         uint32_t a = arg(m, esp, 2);
-        int hfd = host_fd_of(gfd);
-        if (hfd < 0) return 0;                 // faked fds: pretend success
+        auto it = fds_.find(gfd);
+        if (it == fds_.end() || it->second.host_fd < 0) return 0;  // faked fd: succeed
+        int hfd = it->second.host_fd;
         if (cmd == 4 /*F_SETFL*/) {
+            bool want_nb = (a & 0x800u) != 0;
+#if defined(_WIN32)
+            u_long nb = want_nb ? 1 : 0;
+            if (::ioctlsocket((SOCKET)hfd, FIONBIO, &nb) != 0) {
+                set_errno(m, last_socket_errno());
+                return (uint32_t)-1;
+            }
+#else
             int fl = ::fcntl(hfd, F_GETFL, 0);
             if (fl < 0) fl = 0;
-            if (a & 0x800u) fl |= O_NONBLOCK; else fl &= ~O_NONBLOCK;
+            if (want_nb) fl |= O_NONBLOCK; else fl &= ~O_NONBLOCK;
             if (::fcntl(hfd, F_SETFL, fl) < 0) {
                 set_errno(m, to_linux_errno(errno));
                 return (uint32_t)-1;
             }
+#endif
+            it->second.nonblock = want_nb;
             return 0;
         }
         if (cmd == 3 /*F_GETFL*/) {
+#if defined(_WIN32)
+            return it->second.nonblock ? 0x800u : 0u;
+#else
             int fl = ::fcntl(hfd, F_GETFL, 0);
             if (fl < 0) return (uint32_t)-1;
             return (fl & O_NONBLOCK) ? 0x800u : 0u;   // report in Linux terms
+#endif
         }
         return 0;
     };
@@ -1750,7 +1896,7 @@ void TrapLayer::register_builtins() {
     // One reusable block, matching the real function's static-storage contract.
     t["gethostbyname"] = [this](Machine& m, uint32_t esp) -> uint32_t {
         std::string host = m.cstr(arg(m, esp, 0));
-        in_addr_t ip = INADDR_NONE;
+        uint32_t ip = INADDR_NONE;   // in_addr_t is POSIX-only; the value is a u32
         if (host == "localhost" || host.empty()) {
             ip = htonl(INADDR_LOOPBACK);
         } else {
@@ -1806,8 +1952,15 @@ void TrapLayer::register_builtins() {
         int sig = (int)arg(m, esp, 0);
         uint32_t h = arg(m, esp, 1);       // 0 = SIG_DFL, 1 = SIG_IGN, else handler
         if (sig == 13 /*SIGPIPE on both Linux and BSD*/ && h == 1) {
+#if defined(SIGPIPE)
             ::signal(SIGPIPE, SIG_IGN);
             std::fprintf(stderr, "  [net] SIGPIPE ignored (guest requested)\n");
+#else
+            // Windows has no SIGPIPE: a send to a dead peer returns
+            // WSAECONNRESET/WSAESHUTDOWN rather than raising anything, so the
+            // request is already satisfied by the platform.
+            std::fprintf(stderr, "  [net] SIGPIPE ignore requested; no-op on this host\n");
+#endif
         }
         // Other signals stay stubbed: the guest's SIGALRM timer is delivered by
         // our own scheduler, not by real host signals.
@@ -2269,12 +2422,17 @@ void TrapLayer::register_builtins() {
                 for (size_t i = 0; i < dir.size(); ++i) {
                     cur.push_back(dir[i]);
                     if (dir[i] == '/' && cur.size() > 1)
-                        ::mkdir(cur.c_str(), 0755);
+                        theoc_mkdir(cur.c_str());
                 }
                 if (!dir.empty() && dir.back() != '/')
-                    ::mkdir(dir.c_str(), 0755);
+                    theoc_mkdir(dir.c_str());
             }
         }
+        // Force binary mode. The guest is a Linux binary, so its mode strings
+        // never carry 'b' — on Windows that would mean text translation on the
+        // saves, the .pck archives and the cutscenes. On POSIX 'b' is ignored,
+        // so this is unconditional rather than another #ifdef.
+        if (mode.find('b') == std::string::npos) mode.push_back('b');
         FILE* fp = std::fopen(host.c_str(), mode.c_str());
         if (!fp) {
             // Fallback: try path as-is relative to cwd.
@@ -2407,6 +2565,7 @@ void TrapLayer::register_builtins() {
         if (flags & 1) hflags = O_WRONLY;       // O_WRONLY=1 on Linux i386
         if (flags & 2) hflags = O_RDWR;         // O_RDWR=2
         // O_CREAT etc. ignored for bring-up unless needed.
+        hflags |= O_BINARY;   // no-op on POSIX; prevents CRLF mangling on Windows
         int hfd = ::open(host.c_str(), hflags);
         if (hfd < 0) hfd = ::open(path.c_str(), hflags);
         if (hfd < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
@@ -2419,7 +2578,10 @@ void TrapLayer::register_builtins() {
         int gfd = (int)arg(m, esp, 0);
         auto it = fds_.find(gfd);
         if (it == fds_.end()) return (uint32_t)-1;
-        if (it->second.host_fd >= 0) ::close(it->second.host_fd);
+        if (it->second.host_fd >= 0) {
+            if (it->second.sock) THEOC_CLOSESOCKET(it->second.host_fd);
+            else                 ::close(it->second.host_fd);
+        }
         fds_.erase(it);
         return 0;
     };
@@ -2442,8 +2604,16 @@ void TrapLayer::register_builtins() {
         }
         if (it->second.host_fd < 0) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         std::vector<uint8_t> b(n);
-        ssize_t got = ::read(it->second.host_fd, b.data(), n);
-        if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        // A socket cannot be ::read on Windows (separate handle namespace), and
+        // its error does not land in errno either — dispatch on the kind.
+        ssize_t got;
+        if (it->second.sock) {
+            got = ::recv(it->second.host_fd, THEOC_SOCK_CAST(b.data()), n, 0);
+            if (got < 0) { set_errno(m, last_socket_errno()); return (uint32_t)-1; }
+        } else {
+            got = ::read(it->second.host_fd, b.data(), n);
+            if (got < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        }
         if (got) m.write(buf, b.data(), (uint32_t)got);
         return (uint32_t)got;
     };
@@ -2473,8 +2643,14 @@ void TrapLayer::register_builtins() {
         if (it->second.host_fd < 0) { set_errno(m, 9 /*EBADF*/); return (uint32_t)-1; }
         std::vector<uint8_t> b(n);
         if (n) m.read(buf, b.data(), n);
-        ssize_t w = ::write(it->second.host_fd, b.data(), n);
-        if (w < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        ssize_t w;
+        if (it->second.sock) {
+            w = ::send(it->second.host_fd, THEOC_SOCK_CAST(b.data()), n, 0);
+            if (w < 0) { set_errno(m, last_socket_errno()); return (uint32_t)-1; }
+        } else {
+            w = ::write(it->second.host_fd, b.data(), n);
+            if (w < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
+        }
         return (uint32_t)w;
     };
 
@@ -2538,8 +2714,17 @@ void TrapLayer::register_builtins() {
         put32(0x1c, (uint32_t)st.st_gid);
         put64(0x20, (uint64_t)st.st_rdev);
         put32(0x2c, (uint32_t)st.st_size);
+#if defined(_WIN32)
+        // mingw's struct stat has neither field. The Linux/i386 layout the guest
+        // expects still has the slots, so fill them consistently with st_size
+        // rather than leaving zeros: a 0 block size has tripped buffered-IO code
+        // before, and nothing here needs them to be the truth.
+        put32(0x30, 512u);
+        put32(0x34, (uint32_t)((st.st_size + 511) / 512));
+#else
         put32(0x30, (uint32_t)st.st_blksize);
         put32(0x34, (uint32_t)st.st_blocks);
+#endif
         put32(0x38, (uint32_t)st.st_atime);
         put32(0x40, (uint32_t)st.st_mtime);
         put32(0x48, (uint32_t)st.st_ctime);
@@ -2727,7 +2912,13 @@ void TrapLayer::longrun_tick(Machine& m) {
     // be lined up against the samples. Uptime alone cannot do that.
     char clock[16] = "--:--:--";
     { std::time_t t = std::time(nullptr); std::tm tmv{};
-      if (localtime_r(&t, &tmv)) std::strftime(clock, sizeof clock, "%H:%M:%S", &tmv); }
+#if defined(_WIN32)
+      // Note the reversed argument order vs localtime_r, and 0 means success.
+      if (::localtime_s(&tmv, &t) == 0)
+#else
+      if (localtime_r(&t, &tmv))
+#endif
+          std::strftime(clock, sizeof clock, "%H:%M:%S", &tmv); }
 
     char headroom[32];
     if (settled && headroom_h > 0.0)

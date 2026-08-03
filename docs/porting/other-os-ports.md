@@ -1,17 +1,18 @@
 # Other-OS ports — Windows and Linux
 
-**Status: Linux done, Windows scaffolded.** Linux was brought up on 2026-08-03
-and confirmed by play the same day — see [Confirmed by play](#confirmed-by-play)
-at the end of the Linux material.
+**Status: Linux done and played. Windows builds but has never run.** Both were
+brought up on 2026-08-03. Linux is confirmed by play — see
+[Confirmed by play](#confirmed-by-play).
 
-Windows started the same day and has no host machine in the loop yet: a
-mingw-w64 cross toolchain (`port/cmake/toolchain-mingw-w64.cmake`), a survey of
-what already cross-compiles, and a standalone timing probe
-(`tools/win_timing_probe.cpp`) for the one risk that cannot be settled by
-reading a header. The audit-written risk list below now has measurements against
-it, and they moved three of its five items — see
-[What the cross compiler says](#what-the-cross-compiler-says). No `theoc.exe`
-exists and nothing has run on Windows.
+Windows now **compiles, links and packages** to
+`dist/theoc-windows-x64/` via `tools/package-windows.sh`, cross-built from macOS
+with mingw-w64 and no Windows machine in the loop. That is the whole claim: **not
+one instruction has executed on Windows**, so nothing here says the game works.
+The audited risk list below has measurements against it now — they moved three
+of its five items — and the one risk that survived, sub-millisecond sleep, is
+still unmeasured because measuring it needs a Windows host. See
+[What the cross compiler says](#what-the-cross-compiler-says) and
+[The Windows build](#the-windows-build--2026-08-03).
 
 ## The reusable core is bigger than it looks
 
@@ -235,7 +236,103 @@ Two things to do with it, both mattering more than the headline number:
   trusted — the same reason this doc refuses X11 forwarding for timing work.
 
 **Status: written and cross-compiles clean; not yet run.** No numbers exist yet,
-and nothing above should be read as predicting them.
+and nothing above should be read as predicting them. It ships inside the Windows
+bundle so it can be run on the target *before* `theoc.exe` is.
+
+## The Windows build — 2026-08-03
+
+**`theoc.exe` builds, links and packages.** Nothing has run on Windows, so this
+section is about what the compiler and linker settled, not about the game
+working. Produced entirely by cross-compiling from macOS:
+
+```sh
+tools/package-windows.sh          # -> dist/theoc-windows-x64/
+```
+
+### Staging the dependencies took longer than the port
+
+SDL2 and ffmpeg were download-and-untar as predicted. Unicorn had to be
+cross-built, and failed twice for reasons worth recording because neither is
+about Unicorn:
+
+- **`qemu/configure` runs under `execute_process` with no error checking**, so
+  its failure surfaced ~200 source files later as `config-target.h: No such file
+  or directory`. The actual cause was a **missing `pkg-config` binary** — the
+  same thing `port/CMakeLists.txt` already warns about for macOS, in its comment
+  explaining why the port itself does not use pkg-config.
+- `-DUNICORN_ARCH=x86 -DBUILD_SHARED_LIBS=OFF` is the useful configuration:
+  x86-only cuts the build substantially, and static means one less bundled DLL.
+
+### The port needed 11 fixes, and one of them was a real bug
+
+`traps.cpp` reached zero errors in eleven changes. Ten were mechanical; these
+are the ones that were not:
+
+| Fix | Why it is more than mechanical |
+|---|---|
+| **`HostFile::sock`** | Winsock SOCKETs are a **separate namespace from CRT fds**, so `::read`/`::write`/`::close` on one are silently wrong. libmvos forces the issue: `cIPCO_TCPIP::Read/Write` poll the socket through plain `read`/`write`. This would have compiled, linked, and failed at runtime. |
+| **`O_BINARY`** everywhere | Windows translates CRLF and stops at `0x1a` in text mode. The `.tsg` saves, the PHLS `.pck` archives and the MPEG cutscenes are all binary. A clean-compiling, silent data-corruption bug. `fopen` mode strings get a `'b'` forced on for the same reason — the guest is a Linux binary, so it never supplies one. |
+| **`last_socket_errno()`** | Winsock errors come from `WSAGetLastError()` with 100xx numbering. libmvos maps anything outside errno 4..22 to its generic "unknown error", and a non-blocking read with no data is the common case *every netgame frame* — so leaking `WSAEWOULDBLOCK` (10035) instead of 11 would be the BSD `EAGAIN=35` bug again, three orders of magnitude further out of range. |
+| **`fcntl` → `ioctlsocket(FIONBIO)`** | Windows has no `fcntl`, and `FIONBIO` is **write-only** — there is no way to read the blocking state back. `HostFile::nonblock` remembers it, which is exact only because this handler is its sole writer. |
+| **`std::floor` in `video.cpp`** | A genuine latent bug, not a Windows-ism: `<cmath>` was never included and libc++/libstdc++ happened to provide it transitively. **Cross-compiling found a real defect in the working macOS build.** |
+
+The rest were `char*` casts for Winsock, `socklen_t`→`int`, one-argument `mkdir`,
+`localtime_r`→`localtime_s` (reversed arguments), absent `st_blksize`/`st_blocks`,
+absent `dirent::d_type` (derived with `stat` instead), `in_addr_t`, and a
+`SIGPIPE` guard — Windows has no SIGPIPE, so the guest's request to ignore it is
+satisfied by the platform.
+
+Link needed `ws2_32` and `winmm`, plus **`SDL_MAIN_HANDLED`**: on Windows,
+including `SDL.h` `#define`s `main` to `SDL_main` and expects `SDL2main` to
+supply a `WinMain`. The host wants its own `main`.
+
+**The macOS build was rebuilt and is unaffected** — same warnings, exit 0. Every
+change is either behind `#if defined(_WIN32)` or a no-op on POSIX (`O_BINARY` is
+0, the `'b'` in an fopen mode is ignored, `HostFile::sock` is merely informative
+where one namespace covers both).
+
+### The bundle
+
+`dist/theoc-windows-x64/` — launcher, `bin/theoc.exe`, seven DLLs, the timing
+probe, README. The DLL list is **not hand-written**: it is the transitive import
+closure of `theoc.exe` walked with `objdump` and filtered against a denylist of
+DLLs that ship with Windows, because the Linux bundle already established that
+guessing does not work and the loader is the oracle.
+
+Two things measured rather than assumed:
+
+- **119 MB**, of which `avcodec-61.dll` alone is 89.6 MB. The closure is seven
+  DLLs against Linux's ~160-library graph, but that is **not** because it carries
+  less — this ffmpeg links its codec dependencies *into* the av\* DLLs. The Linux
+  note therefore still stands: the port only decodes MPEG-1 cutscenes, and a
+  minimally-configured ffmpeg would cut this dramatically. (The first draft of
+  the packaging script claimed "~50 MB" from reasoning rather than measurement,
+  and was wrong by 2.5x.)
+- **Stripping `theoc.exe` takes it from 14.1 MB to 2.4 MB**, and the symbols are
+  regenerable by rebuilding.
+
+There is no system-integration hazard to reason about, which on Linux was the
+hard part: the Windows equivalents of libX11/libGL (`d2d1`, `DWrite`, `USP10`,
+`ntdll`, `msvcrt`) are all system DLLs the denylist excludes anyway, so the rule
+falls out instead of needing a judgement call. `libwinpthread-1.dll` **is**
+bundled — it comes from the toolchain, not from Windows — while libgcc and
+libstdc++ are statically linked and so never appear.
+
+### What is not known
+
+**Nothing has executed.** Not the boot, not a single trap, not one frame. The
+things most likely to be wrong, in order:
+
+1. **Timing** — the untouched risk 1. Run `win-timing-probe.exe` first.
+2. **Path handling.** `resolve_path` builds `/`-separated paths and the guest
+   supplies Unix ones. Windows APIs accept `/`, but nothing here has tested a
+   drive-letter root, and `guest[0] == '/'` as the "absolute path" test is
+   simply not how Windows spells that.
+3. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
+   `std::system`. Compiles; will do nothing useful. Off by default.
+4. **`CloseSubsystems` is still skipped** — and Windows is the platform
+   [host-architecture.md](host-architecture.md) names as the revisit trigger for
+   that decision.
 
 ## Which binary does the Windows port run?
 

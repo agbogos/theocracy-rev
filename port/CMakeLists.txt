@@ -94,6 +94,23 @@ target_link_libraries(theoc PRIVATE
 
 target_compile_options(theoc PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
+# ---- Windows host ------------------------------------------------------------
+# Two things, both of which fail confusingly if missed:
+#
+#   ws2_32   Winsock2. Without it every socket symbol is an undefined
+#            __imp_* reference at link time.
+#   winmm    timeBeginPeriod/timeGetDevCaps — the scheduler-granularity controls
+#            the sleep model depends on (see tools/win_timing_probe.cpp).
+#
+# SDL_MAIN_HANDLED is the subtle one. On Windows, including SDL.h #defines main
+# to SDL_main and expects you to link SDL2main, which supplies a WinMain that
+# calls it. This host wants its own main() as the real entry point, so tell SDL
+# to keep its hands off rather than adding SDL2main and the mingw32 shim.
+if(WIN32)
+  target_link_libraries(theoc PRIVATE ws2_32 winmm)
+  target_compile_definitions(theoc PRIVATE SDL_MAIN_HANDLED)
+endif()
+
 # NOTE: the host runs entirely inside Unicorn's own guest address space, so it
 # does NOT need the low-4GB 1:1 mapping / shrunk __PAGEZERO. That macOS linker
 # flag (-Wl,-pagezero_size,0x1000) would only arrive with zero-copy guest
