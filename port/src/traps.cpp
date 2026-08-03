@@ -1271,6 +1271,22 @@ void TrapLayer::register_builtins() {
         }
         if (remaining > 1000000) remaining = 1000000;  // sanity clamp
 
+        // A tick we spliced has just run cIntuition::TimerProc, which repainted
+        // the pointer into the LFB and flushed it through cGD_LFB16::Refresh.
+        // This is the safe moment to show it: the frame limiter sleeps at the
+        // *top* of cProvince_Do, so the LFB currently holds the last completed
+        // frame, and TimerProc's erase/repaint pair has both finished. Skipped
+        // when the scene is already presenting faster than the 30Hz heartbeat
+        // (the realm screen), where an extra present would buy nothing.
+        if (resumed && gd_refresh_dirty_) {
+            auto since = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - last_present_).count();
+            if (last_present_.time_since_epoch().count() == 0 || since >= 25)
+                present_async_cursor(m);
+            else
+                gd_refresh_dirty_ = false;
+        }
+
         // Sound is buffer-driven with a ~120ms cushion, and its entry argument
         // (the cThread*) can't survive the re-entry frame, so it is serviced on
         // a *fresh* entry only. Doing it on a resume would splice back to the
@@ -2844,6 +2860,42 @@ bool TrapLayer::redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t rema
     return true;
 }
 
+// libmvos file offset of cGD_LFB16::Refresh(const cRectangle&). Confirmed as
+// vtable slot +0x14 of __vt_9cGD_LFB16 (0xa2820) with relocations applied —
+// `tools/elfq.py mvos vtable 0xa2820`, since libmvos keeps its vtable relocs in
+// .rel.rodata and the raw words read as zeros (re-methodology §10).
+static constexpr uint32_t OFF_GD_LFB16_Refresh = 0x6bae0;
+
+void TrapLayer::install_gd_refresh(Machine& m, uint32_t mvos_base) {
+    if (std::getenv("THEOC_LEGACY_CURSOR")) {
+        std::fprintf(stderr, "  [cursor] async refresh DISABLED "
+                             "(THEOC_LEGACY_CURSOR=1); pointer follows the frame rate\n");
+        return;
+    }
+    // Entry-point override, same seam as blit.cpp: the handler runs instead of
+    // the real body. Bypassing it costs nothing — the real cGD_LFB16::Refresh
+    // is literally `{ return; }`.
+    m.add_code_traps(mvos_base + OFF_GD_LFB16_Refresh, 1,
+                     [this](Machine& mm, uint32_t, uint32_t) -> uint32_t {
+                         (void)mm;
+                         gd_refresh_dirty_ = true;
+                         return 0;
+                     }, false);
+    std::fprintf(stderr, "  [cursor] cGD_LFB16::Refresh implemented "
+                         "(async pointer updates; THEOC_LEGACY_CURSOR=1 reverts)\n");
+}
+
+void TrapLayer::present_async_cursor(Machine& m) {
+    gd_refresh_dirty_ = false;
+    if (!video_.is_open() || !gd_) return;
+    uint32_t nbytes = video_.fb_bytes();
+    if (nbytes > GUEST_FB_SIZE) nbytes = GUEST_FB_SIZE;
+    try { m.read(GUEST_FB_BASE, video_.fb(), nbytes); } catch (...) { return; }
+    video_.present();
+    present_seq_.fetch_add(1, std::memory_order_relaxed);
+    last_present_ = std::chrono::steady_clock::now();
+}
+
 bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     // Host-side SIGALRM without nested uc_emu_start (that crashes Unicorn).
     // Same pattern as sound: rewrite trap return into _TimerFunction(signo);
@@ -3974,8 +4026,14 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                         ::usleep((useconds_t)(target - elapsed));
                     }
                 }
-                last_present_ = std::chrono::steady_clock::now();
             }
+            // Tracked unconditionally, not just when the cap is armed: the
+            // async-cursor path uses it to tell a slow scene (worth an extra
+            // present) from one already outrunning the 30Hz heartbeat.
+            last_present_ = std::chrono::steady_clock::now();
+            // A full frame just went out, so any pending cursor rect is on
+            // screen already.
+            gd_refresh_dirty_ = false;
 
             // One guest redirect per present (no nested uc_emu_start). Prefer
             // sound when its ~90ms slice is due so the 33ms timer cannot starve
@@ -4088,6 +4146,9 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
         m.write(at, &ret, 1);
         std::fprintf(stderr, "  [HLE] nop'd PushMouseInput @%#x (SDL owns Intuition pipe)\n", at);
     }
+    // Implement cGD_LFB16::Refresh so the engine's 30Hz between-frame pointer
+    // repaints actually reach the screen. See install_gd_refresh().
+    install_gd_refresh(m, mvos_base);
 }
 
 // THEOC_CONSOLE=1 — open the in-game developer console on demand (Alt+V).

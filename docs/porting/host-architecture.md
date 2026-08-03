@@ -205,6 +205,53 @@ nothing a two-minute one did not.
 > artifact in [re-methodology](../reference/re-methodology.md) — resolved, as it
 > says to, by reading the instruction stream.
 
+### Asynchronous cursor refresh: implementing `cGD_LFB16::Refresh`
+
+The engine repaints the pointer **between frames**, and that is how a 12fps game
+felt responsive in 2000. `cIntuition::TimerProc` runs on the 30Hz `setitimer`
+heartbeat and, gated on `GD->IsAsyncRefreshCapable()`, calls `MouseRefresh` +
+`cSprite::Refresh`. `cSprite::Refresh` erases the old pointer (`RestoreBg`),
+paints the new one, and flushes each touched rectangle through the GD's vtable
+slot `+0x14` — `cGD_LFB16::Refresh(const cRectangle&)`.
+
+Both halves of that contract are trivially satisfied on the original, and both
+are traps for us:
+
+| | Original | Us |
+|---|---|---|
+| `IsAsyncRefreshCapable()` | returns **1** — an LFB *is* the display | still returns 1, but now it is a lie |
+| `Refresh(rect)` | `{ return; }` — writing the LFB already displayed it | `{ return; }` — the pixels sit in a staging buffer |
+
+`cGD_LFB16` is the **linear framebuffer** GD: on real hardware, writing to it is
+writing to the screen, so an empty flush is correct. (The X backend substitutes
+`cGD_X`, whose `Refresh` pushes the rect over MIT-SHM — same contract, different
+implementation.) Our LFB is neither: it is a staging buffer copied to SDL only at
+present. So we inherited an empty `Refresh` that silently discarded every
+between-frame pointer update, pinning the cursor to the scene's frame rate —
+**12fps in province**, which is exactly the responsiveness the separate 30Hz
+timer existed to buy.
+
+The fix implements the method rather than patching anything: an entry-point
+override (`install_gd_refresh`, the same seam `blit.cpp` uses) marks the frame
+dirty, and `present_async_cursor` does the LFB→SDL copy at the next safe point.
+Three things make it correct:
+
+- **It does not present from inside the override.** `cSprite::Refresh` calls
+  `Refresh` *twice* — once after the erase, once after the repaint — so
+  presenting on the first would show the erased pointer as its own frame.
+- **The present happens on the `usleep` resume path**, right after the spliced
+  tick returns. The frame limiter sleeps at the *top* of `cProvince_Do`, so the
+  LFB holds the **last completed frame** at that moment: no half-drawn scene, and
+  `TimerProc`'s erase/repaint pair has finished.
+- **It is skipped when the scene already outruns the heartbeat** (>25 ms since
+  the last present). The realm screen presents faster than 30Hz on its own, where
+  an extra present would buy nothing.
+
+`THEOC_LEGACY_CURSOR=1` reverts to the inherited no-op. Note the side effect on
+instruments: province now presents ~30×/s while its simulation still steps 12×/s,
+so **`THEOC_FPS`'s fps figure is no longer a proxy for sim rate** — see
+[diagnostics.md](diagnostics.md).
+
 ### x87 float returns: `return_double`
 
 The trap contract is "handler returns a `uint32_t`, `code_hook` puts it in EAX". A function returning `double` on i386 System V returns it in `st0`, and a native handler cannot push onto the guest's x87 stack by writing a register — the FPU stack top is architectural state that only an x87 instruction maintains correctly. `Machine::return_double(v)` solves it by making the guest do the push:

@@ -397,6 +397,32 @@ private:
     bool timer_handler_ignores_signo() const;
     bool redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t remaining);
 
+    // --- Asynchronous cursor refresh (cGD_LFB16::Refresh) --------------------
+    // The engine repaints the pointer *between* frames: cIntuition::TimerProc
+    // runs at 30Hz and, when the GD reports IsAsyncRefreshCapable(), calls
+    // MouseRefresh + cSprite::Refresh — which flushes the touched rectangle via
+    // the GD vtable slot +0x14, cGD_LFB16::Refresh(const cRectangle&).
+    //
+    // On the original that flush is genuinely free: cGD_LFB16 is the *linear
+    // framebuffer* GD, so writing to it is writing to the display, and both
+    // IsAsyncRefreshCapable() = 1 and Refresh() = {} are correct. Our LFB is not
+    // a display — it is a staging buffer copied to SDL only at present — so we
+    // inherited a no-op that silently dropped every between-frame cursor update,
+    // pinning the pointer to the scene's frame rate (12fps in province).
+    //
+    // We implement the method instead of patching anything: an entry-point
+    // override marks the region dirty, and the present happens at the next safe
+    // point. It is deliberately NOT presented from inside the override, because
+    // cSprite::Refresh calls Refresh twice — once after RestoreBg erases the old
+    // pointer, once after painting the new one — and presenting on the first
+    // would show the erased state as its own frame.
+    bool gd_refresh_dirty_ = false;
+    void install_gd_refresh(Machine& m, uint32_t mvos_base);
+    // Copy the guest LFB to SDL and present. Just the pixels — none of the
+    // per-frame bookkeeping HLE_SwapBuffers does (fps/soak/auto-keys/edit mode),
+    // because this is an out-of-band cursor update, not a frame.
+    void present_async_cursor(Machine& m);
+
     // --- THEOC_FPS frame instrument (throughput-vs-timing diagnostic) ---------
     // Reports per second: FPS (presents), guest-work/frame (blocks), guest
     // blocks/sec (throughput ceiling → saturation check), and heartbeat/mixer

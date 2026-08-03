@@ -14,19 +14,33 @@ modernisation, and none of it blocks playing the game.
 **One item left**, and it is new: the cursor does not visually run at 30Hz.
 The decoupling item that stood here for a year closed as won't-do on 2026-08-03.
 
-1. **Cursor is not visually 30Hz** *(opened 2026-08-03, cause not yet
-   confirmed)*. The heartbeat measures a solid `30/s`, and
-   `cIntuition::TimerProc` does run `MouseRefresh` + `cSprite::Refresh` at that
-   rate — but the cursor does not *look* 30Hz in province. Leading hypothesis,
-   untested: `cSprite::Refresh` repaints the cursor into the guest LFB, and the
-   host only copies that LFB to SDL at **present** — 12/s in province. So 30 of
-   the repaints happen and only 12 reach the screen. On the original, the sprite
-   was painted straight onto the visible buffer, so a refresh between frames was
-   seen immediately. If that holds, the fix is host-side (push the LFB, or just
-   the cursor rect, when the heartbeat refreshes it) and needs no game patch.
-   This matters more than it sounds: the separate 30Hz cursor timer is how the
-   original made a 12fps game feel responsive, so losing it costs exactly what
-   the engine's designers spent a whole timer to buy.
+1. **Cursor is not visually 30Hz** — *cause found, fix built 2026-08-03, needs a
+   run to confirm.* Diagnosed, not guessed: `cGD_LFB16::IsAsyncRefreshCapable()`
+   returns **1**, so `cIntuition::TimerProc` really does run `MouseRefresh` +
+   `cSprite::Refresh` at 30Hz — the work happens. What is empty is
+   `cGD_LFB16::Refresh(const cRectangle&)`, the GD "flush this rect to the
+   display" call at vtable slot `+0x14`, whose body is literally `{ return; }`.
+
+   That is **correct on the original**: `cGD_LFB16` is the linear-framebuffer GD,
+   where writing to the LFB *is* writing to the display, so an empty flush is
+   right (the X backend swaps in `cGD_X`, which pushes the rect over MIT-SHM).
+   Our LFB is a staging buffer copied to SDL only at present, so we inherited a
+   no-op that discarded every between-frame pointer update — pinning the cursor
+   to the scene's frame rate, exactly as observed.
+
+   Fixed by **implementing the method**, not patching: an entry-point override
+   marks the frame dirty and the present happens on the `usleep` resume path,
+   where the LFB holds a complete frame and `cSprite::Refresh`'s erase/repaint
+   pair has finished. Not presented from inside the override, because `Refresh`
+   is called twice per cursor move and the first call is mid-erase. Skipped when
+   the scene already presents faster than 30Hz (realm). `THEOC_LEGACY_CURSOR=1`
+   reverts. Write-up: `docs/porting/host-architecture.md`, "Asynchronous cursor
+   refresh".
+
+   **To confirm:** province cursor should now feel 30Hz over a 12Hz scene.
+   Expect `THEOC_FPS` to report province at ~30 presents/s — that is the
+   out-of-band cursor presents, *not* a faster simulation; the sim is still 12Hz
+   and the `usleep` call count is the figure that shows it.
 
 ## Done
 
