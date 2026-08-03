@@ -11,26 +11,56 @@ controlled activity saturating, and the last broken shortcuts turned out to be
 the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
-Item 1 is by far the biggest and needs game-logic surgery; 2 is small.
+**One item left.** It is the biggest, and it needs game-logic surgery.
 
 1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
    (`theocracy.real:0x081da59b`) caps province to its designed **12fps**
    (`0x14585` µs frame limiter). We currently match that (`THEOC_FRAME_MS=83`
-   default) for correct sim speed, but 12fps is choppy and — because our
-   single-threaded emulator can't run an async heartbeat — the SIGALRM heartbeat
-   drops to ~2–8Hz at 12fps (input still fine; it goes through the Intuition pipe
-   directly). The proper fix: render at ~30fps but step the sim only every ~2.5
-   frames, so it's smooth **and** correct-speed **and** the heartbeat stays 30Hz.
-   Needs patching the frame-tied stepping in `theocracy.real` (game-logic
-   surgery) — the "gradually rewrite the game natively" territory. See
-   `docs/porting/frame-timing.md`.
+   default) for correct sim speed. **12fps is choppy, and that is the whole of
+   the complaint** — the fix is to render at ~30fps but step the sim only every
+   ~2.5 frames, so it is smooth *and* correct-speed. Needs patching the
+   frame-tied stepping in `theocracy.real` (game-logic surgery) — the "gradually
+   rewrite the game natively" territory. See `docs/porting/frame-timing.md`.
 
-2. **Real threads / signal delivery** — sound mixer runs as a green-thread slice
-   off `present`, not a host thread; no real signal delivery / multi-tick
-   catch-up when frames stall. Fine today; revisit if timing gets tight.
+   *Amended 2026-08-03:* this used to also claim the ~2–8Hz SIGALRM heartbeat at
+   12fps as a cost, implying timed logic ran slow. It does not. The heartbeat
+   only drives the cursor click animation and cursor refresh, and the simulation
+   clocks itself from elapsed wall-clock with its own bounded catch-up. A higher
+   heartbeat is a nice side effect of this item, not a reason for it.
 
 ## Done
+
+- **Real threads / signal delivery — closed as won't-do (2026-08-03).** Another
+  inherited premise, and this one was a leftover from the superseded *pure-HLE
+  native-replace* plan: had the host reimplemented libmvos in C++, real threads
+  and real signal delivery would have been genuine obligations. Under
+  guest-libmvos the guest owns its own pacing, and the obligation moved with it.
+  Both halves dissolve, for different reasons — full chain and reasoning in
+  [docs/porting/frame-timing.md](docs/porting/frame-timing.md), "What the
+  heartbeat actually drives".
+
+  - **Multi-tick catch-up — nothing to build, and the stated concern was a
+    misreading.** `frame-timing.md` called `_TimerFunction` "the game's master
+    tick (advances game timers, drives timed logic)". Wrong: it is a one-line
+    wrapper on `cTimerSystem_Linux::Proc`, which dispatches to the **single**
+    `cVTimer` in an exclusive one-slot registration — `cIntuition::TimerProc`
+    (cursor click animation + cursor refresh), or `cFLCAnimPlayer` /
+    `cAnimSkeleton` during animation playback. **None reads a clock, none
+    touches the simulation.** `SimulationUpdate` self-clocks from
+    `elapsed/tickDuration` with catch-up clamped at 10 ticks/frame, per frame,
+    in the game. So collapsing SIGALRM backlog costs *cursor-animation frames*,
+    which are cosmetic, self-correcting, and already covered by the
+    `tick_pointer_click_anim` host fallback.
+  - **Real host threads — infeasible by construction, not just unnecessary.**
+    One `uc_engine`; nested `uc_emu_start` crashes Unicorn (the reason
+    `redirect_guest` exists); one engine driven from two host threads is not
+    safe; a second engine cannot share the guest address space. The mixer cannot
+    become a host thread without replacing the emulator — and does not need to,
+    at 0 underruns/s with a ~120 ms buffer even at 12fps.
+
+  **Reopen on evidence:** a cursor that visibly stalls or lags under load, or a
+  `cVTimer` other than those three in the `+0x1c` slot doing real work.
 
 - **Polish / the "abandoned present path" — closed (2026-08-03).** The item read
   "abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present used instead)",

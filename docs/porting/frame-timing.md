@@ -22,10 +22,21 @@ timer and a roughly fixed frame rate.
 `theocracy.real` + `libmvos.so` pace themselves with two independent clocks:
 
 - **The heartbeat.** `setitimer(ITIMER_REAL, 33ms)` arms a **30Hz** timer;
-  `SIGALRM` → `_TimerFunction` (`libmvos+0x922e0`) is the game's master tick
-  (advances game timers, drives timed logic). On real Linux the **kernel**
+  `SIGALRM` → `_TimerFunction` (`libmvos+0x922e0`). On real Linux the **kernel**
   delivers this signal 30×/s regardless of what the process is doing — even
   mid-`usleep` (delivery interrupts the sleep with `EINTR`).
+
+  > **Correction (2026-08-03).** This used to read "the game's master tick
+  > (advances game timers, drives timed logic)". That is **wrong**, and it made
+  > the heartbeat look far more load-bearing than it is. `_TimerFunction` is a
+  > one-line wrapper around `cTimerSystem_Linux::Proc`, which dispatches to the
+  > **single** `cVTimer` registered at `+0x1c` — `_ActivateTimer` is an
+  > exclusive one-slot registration, not a list. In game that timer is
+  > `cIntuition`, whose `TimerProc` advances the **cursor click animation** and
+  > refreshes the **cursor sprite**; during animation playback `cFLCAnimPlayer`
+  > or `cAnimSkeleton` takes the slot instead. Not one of them reads a clock,
+  > and none of them touch the simulation. See "What the heartbeat actually
+  > drives" below.
 
 - **The frame limiter.** The game's main loop renders a frame, then calls
   `cSyncSystem::Sleep(us)` (`libmvos+0x95b50`, a thin `usleep` wrapper) to pad out
@@ -180,6 +191,74 @@ holds the queue at ~0.16–0.21s with **0 underruns/s** even at the 12fps defaul
 frame rate). A brief blip remains during the **province-load spike** (~1s of heavy
 asset loading where the emulator is genuinely compute-busy and rarely yields) —
 transient, on screen entry, not the continuous stutter.
+
+## What the heartbeat actually drives — and why "real threads" was closed
+
+The three bugs above left a follow-up on the worklist for a year: *real threads /
+signal delivery — no multi-tick catch-up when frames stall*. Closed 2026-08-03
+**as a non-issue**, once the chain was actually read rather than assumed. It is
+worth recording why, because the premise was wrong in a way that made the port
+look fragile where it is not.
+
+**The SIGALRM chain, end to end:**
+
+```
+setitimer(ITIMER_REAL, 33ms) → SIGALRM
+  └─ _TimerFunction                    (0x922e0) — one line
+       └─ cTimerSystem_Linux::Proc     (0x925f0) — if (this+0x1c) vt+0xc
+            └─ the one registered cVTimer:
+                 cIntuition::TimerProc (0x8d640) — click anim + cursor Refresh
+                 cFLCAnimPlayer / cAnimSkeleton  — during animation playback
+```
+
+`cTimerSystem_Linux::_ActivateTimer` (`0x92590`) writes a **single** slot at
+`+0x1c` and succeeds only when no timer is already armed, so exactly one
+`cVTimer` owns SIGALRM at any moment. **None of the three handlers reads a
+clock.** The heartbeat is the *cursor and animation* tick. It is not, and never
+was, the simulation's clock.
+
+**The simulation clocks itself, and already has catch-up.**
+`SimulationUpdate` (`theocracy.real:0x81f97e0`, see
+[game-loop-and-simulation.md](../subsystems/game-loop-and-simulation.md)) runs
+from `RealmGameLoop` once per frame and computes its own work:
+
+```
+ticks = elapsed(world+0x1410) / tickDuration(world+0x1408)
+if (ticks > 10) ticks = 10          // anti "spiral of death" clamp
+while (ticks--) SimulationStep(g_World)
+```
+
+That is a fixed timestep with bounded multi-tick catch-up, **in the game, driven
+by elapsed wall-clock**. A stalled frame is absorbed there and nowhere else.
+
+**So the two halves of the old item dissolve differently:**
+
+- **Multi-tick catch-up — nothing to build.** `maybe_redirect_timer` collapses
+  backlog to one call, and what that costs is *cursor-animation frames*, not sim
+  ticks. Cosmetic, self-correcting (`MouseRefresh` re-reads the live pointer
+  position on the next tick), and already covered by a host fallback —
+  `tick_pointer_click_anim`, run every present for exactly this case. The thing
+  that genuinely needs catch-up has its own, and it is better than anything we
+  would have added.
+- **Real host threads — infeasible by construction, not merely unnecessary.**
+  There is one `uc_engine`; nested `uc_emu_start` crashes Unicorn (the entire
+  reason `redirect_guest` exists), and driving one engine from two host threads
+  is not safe either. A second engine cannot share the guest address space. The
+  mixer therefore cannot become a host thread without replacing the emulator —
+  and it does not need to: it is buffer-driven with a ~120 ms cushion and
+  measures **0 underruns/s** even at the 12 fps default.
+
+**Where the requirement came from.** It is a leftover from the superseded
+*pure-HLE native-replace* plan, where the host would have reimplemented libmvos
+in C++ and would then have owned real threads and real signal delivery as
+genuine obligations. Under guest-libmvos the guest owns its own pacing, and the
+obligation moved with it. That is the same pathology as the "abandoned guest
+SwapBuffers path" item — an inherited premise that no longer described the
+system, surviving because nobody re-read it.
+
+**Reopen on evidence:** a cursor that visibly stalls or lags its true position
+during heavy load, or a `cVTimer` other than the three above turning up in the
+`+0x1c` slot with real work in its `vt+0xc`.
 
 ## Why the native blit work still mattered
 
