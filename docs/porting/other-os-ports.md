@@ -48,10 +48,25 @@ host(BSD/macOS) socket translation"):
 - `O_NONBLOCK` `0x800`→`0x0004`, `SOL_SOCKET` `1`→`0xffff`, `SO_REUSEADDR` `2`→`4`
 - `to_linux_errno()` — EAGAIN 11/35, EINPROGRESS 115/36, EADDRINUSE 98/48
 
-**Left in place on Linux these are actively wrong**, not merely redundant:
-`to_linux_errno` would take an already-Linux errno and map it through a
-BSD→Linux table. The Linux work is finding and neutralising translations, not
-writing new ones.
+> **Correction (2026-08-03, measured).** This section originally claimed those
+> translations would be *actively wrong* on Linux — that `to_linux_errno` would
+> map an already-Linux errno through a BSD→Linux table. **That was wrong, and it
+> was an inference rather than a measurement.** The translations are written
+> *host macro → guest constant*: `case EAGAIN: return 11`. On Linux the host
+> macro **is** the guest constant, so every one of them is the identity;
+> on macOS every one translates. Verified by compiling the same probe on both:
+>
+> ```
+> Linux:  EAGAIN host=11  table=11   … 0 of 12 differ   O_NONBLOCK=0x800 SOL_SOCKET=1 SO_REUSEADDR=2
+> macOS:  EAGAIN host=35  table=11   … 12 of 12 differ  O_NONBLOCK=0x4   SOL_SOCKET=65535 SO_REUSEADDR=4
+> ```
+>
+> So there is **nothing to neutralise**: the socket layer was already portable by
+> construction, and the only things that actually broke were the two BSD-isms the
+> first build found. The general lesson is this project's own —
+> [re-methodology](../reference/re-methodology.md) — *when a claim is about
+> observable state, observe it.* A one-file probe settled in a minute what a
+> plausible-sounding argument got backwards.
 
 One must **stay**, and is easy to get wrong: `__xstat` writes an **88-byte
 Linux/i386** `struct stat`. A Linux *x86-64* host's own `stat` is a different
