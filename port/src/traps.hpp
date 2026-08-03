@@ -362,7 +362,6 @@ private:
     void push_intuition_event(uint32_t type, uint32_t payload);
     void push_intuition_move(int x, int y);
     void push_intuition_button_edges(uint8_t prev, uint8_t now);
-    void draw_software_cursor();  // fallback if no game pointer sprite
     // Fallback click anim if timer not armed; primary path is guest TimerProc.
     void tick_pointer_click_anim();
     uint32_t pointer_sprite() const;  // Intuition→screen→sprite, or 0

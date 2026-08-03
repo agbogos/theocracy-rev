@@ -120,12 +120,90 @@ This is a **different mechanism** from trapping an import: the host overwrites i
 | Offset | Target | Patch |
 |---|---|---|
 | `0x85ce0` | `OpenDisplay` | 7 bytes `mov eax, <PLUGIN_TRAP_BASE+slot>; jmp eax` → `HLE_OpenDisplay` |
-| `0x85e20` | `SwapBuffers__4cVVC` | same shape → `HLE_SwapBuffers` (present only; `SwapBuffers__Fv` is left intact so MouseRefresh / BeforeSwapBuffer / AfterSwapBuffer still run) |
+| `0x85e20` | `SwapBuffers__4cVVC` | same shape → `HLE_SwapBuffers` (present only; `SwapBuffers__Fv` is left intact — see [The present chain](#the-present-chain) for exactly what that buys) |
 | `0x8b69c` + `0x8b6ec` | `cSprite::AfterSwapBuffer` | 5-byte `JMP` to `0x8b6e7` skipping the two-slot background swap, plus 9 `NOP`s over the three stores that follow. Makes the single-buffer LFB correct (save → paint → present → restore the same rect). `THEOC_LEGACY_SPRITE=1` reverts. |
 | `0x8df10` | `PushMouseInput__Fv` | single `0xC3` (`ret`) — SDL already feeds the Intuition ring, and leaving this live double-fed it |
 | `0x92b3c` + `0x92b8e` | `Main__16cSoundCard_Linux` | `EB 02` to enter the loop body once, and `90 90` over the backward branch — turns `while (running)` into `do { } while (0)` so a green-thread slice mixes exactly one fragment. Applied by `patch_sound_main_oneshot` on the first `pthread_create`. |
 
 The synthetic plugin exports themselves live in a second trap window at `PLUGIN_TRAP_BASE` (`0x76000000`), registered by `install_plugins_and_video` and dispatched by `dispatch_plugin`. `dlopen` on any `libmvos_*`/`vvc` path returns a synthetic handle; `dlsym` maps an export name to `PLUGIN_TRAP_BASE + slot`. The current export list is `QueryDevice`, `CreateVideoDevice`, `CreateKeyboardDevice`, `CreateMouseDevice`, `CreatePointerDevice`, `Plugin_NoopOK`, `Plugin_Return0`, `Plugin_KeyMatrix`, `Plugin_SetVideoMode`, `HLE_OpenDisplay`, `HLE_SwapBuffers`.
+
+### The present chain
+
+We replace **one** function in the present path, and it is the innermost of
+three. Every link below has exactly one call site, so this is the whole of it
+(libmvos, read off the disassembly 2026-08-03):
+
+```
+cScreen::EndRefresh                       (0x9d2d0 — PaintTree, then:)
+  └─ SwapBuffers__Fv                      (0x8e820 file / 0x9e820 Ghidra)
+       ├─ rolling-demo record/compare     only if Intuition_Mode != 0 — never for us
+       ├─ Frame_Counter++
+       ├─ PushKeyInput                    (0x8e690 — the G16 spin site)
+       ├─ MouseRefresh                    (0x8e7c0)
+       │    ├─ PushMouseInput             we patch this to a bare `ret`
+       │    └─ cSprite::MoveTo            if Intuition_Mode == 0, i.e. always here
+       ├─ push a type-0x20 event into the Intuition+0x28 ring
+       ├─ VBlankInProgress = 1
+       ├─ cSprite::BeforeSwapBuffer       (0x8b650 — SaveBg + paint the pointer)
+       ├─ cVVC::SwapBuffers               (0x85e20) ← the only part we replace
+       ├─ cSprite::AfterSwapBuffer        (0x8b690 — patched single-buffer, G17)
+       └─ VBlankInProgress = 0
+```
+
+So cursor tracking, key input and the frame counter all stay **guest-side**, and
+the real `cSprite` is already composited onto the LFB before our handler runs.
+The two `cSprite::MoveTo` call sites are mutually exclusive on `Intuition_Mode`
+— the rolling-demo one reads `Intuition+0xa0`, `MouseRefresh`'s reads the live
+`Intuition+0x14/0x18` — which is why nopping `PushMouseInput` does **not** cost
+us pointer tracking.
+
+**This corrects a year-old task-list entry** that described the guest
+`SwapBuffers`/`BeforeSwapBuffer` path as "abandoned as fragile". The opposite is
+true: it is load-bearing, and G17's cursor-trail fix is a patch *inside* it. What
+is HLE'd is the VVC-level present alone, which is architecture, not debt.
+
+**The cVVC slot layout**, since `HLE_OpenDisplay` writes it and the old comment
+had it wrong:
+
+| Slot | Role |
+|---|---|
+| `+0x00` / `+0x04` | the two real buffers |
+| `+0x08` | **not a GD** — an optional memblock-backed overlay bitmap (`+0x0c` cMemBlock, `+0x14` refcount, `+0x20`/`+0x24` w/h). `cVVC::SwapBuffers` takes a wholly different path when it is non-null |
+| `+0x10` | the "current" GD — `cSprite::Refresh` reads it |
+| `+0x14` | the paint GD — `cScreen::EndRefresh` and `cSprite::BeforeSwapBuffer` read it |
+| `+0x18` / `+0x19` | buffer parity bytes, toggled at the end of `cVVC::SwapBuffers` |
+
+`cVVC::SetBuffers` (`0x85c90`) is what copies `+0x00`/`+0x04` into `+0x10`/`+0x14`
+according to `+0x18`. It has exactly two callers — `cVVC::OpenDisplay` and
+`cVVC::SwapBuffers` — and the host replaces **both**, so it never executes.
+Nothing in the guest can therefore move a GD slot under us. Two consequences:
+`HLE_OpenDisplay` is the **sole** writer of those slots, and our writing `gd`
+into `+0x08` is meaningless but harmless, since its only two readers are those
+same two replaced functions.
+
+**Two bring-up-era paths were deleted from `HLE_SwapBuffers` on that basis
+(2026-08-03)** — a per-frame re-stamp of the five GD slots, and the G5 magenta
+crosshair (`draw_software_cursor`) drawn whenever the active screen had no
+pointer sprite. Both were defensive code whose trigger had been designed out
+long before, and neither had ever been shown to fire.
+
+The static argument above is what identified them; it is not what closed them.
+Each was first turned into a **counter in the trap report**, because this port's
+standing lesson is that an instrument reading zero has to be shown capable of
+non-zero before the zero means anything. A session covering every transition
+that could plausibly produce a spriteless frame or a moved slot — movies,
+save/load, quit, new game — recorded **0 and 0 across 466 presents**, and they
+were removed. Coverage, not duration, is what made that run decisive: both paths
+live at screen transitions, so a long session of steady play would have proved
+nothing a two-minute one did not.
+
+> **Method note.** Both `cVVC::SwapBuffers` and `cVVC::OpenDisplay` have
+> **truncated reported bodies** in the Ghidra DB, so `get_xrefs_to` attributed
+> their tails to phantom `FUN_00095da0` / `FUN_00096040` and the `SetBuffers`
+> call sites appeared to be outside both. The decompiler follows the
+> fall-through and was right; the xref list was not. This is the split-function
+> artifact in [re-methodology](../reference/re-methodology.md) — resolved, as it
+> says to, by reading the instruction stream.
 
 ### x87 float returns: `return_double`
 

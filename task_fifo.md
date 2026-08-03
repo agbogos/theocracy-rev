@@ -11,7 +11,7 @@ controlled activity saturating, and the last broken shortcuts turned out to be
 the macOS dead-key composer rather than the game. Everything below is
 modernisation, and none of it blocks playing the game.
 
-Item 1 is by far the biggest and needs game-logic surgery; 2 and 3 are small.
+Item 1 is by far the biggest and needs game-logic surgery; 2 is small.
 
 1. **Decouple sim from render (frame-tied engine)** — the engine steps
    physics/animation once per rendered frame, and `cProvince::Do`
@@ -30,10 +30,46 @@ Item 1 is by far the biggest and needs game-logic surgery; 2 and 3 are small.
    off `present`, not a host thread; no real signal delivery / multi-tick
    catch-up when frames stall. Fine today; revisit if timing gets tight.
 
-3. **Polish** — abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present
-   used instead).
-
 ## Done
+
+- **Polish / the "abandoned present path" — closed (2026-08-03).** The item read
+  "abandoned guest SwapBuffers/BeforeSwapBuffer path (HLE present used instead)",
+  inherited unexamined from the pivot commit where it was "abandoned as fragile".
+  **The premise was wrong, and had been for a year.** We replace exactly one
+  function — `cVVC::SwapBuffers`, the innermost of three links, each with a
+  single call site (`cScreen::EndRefresh` → `SwapBuffers__Fv` → us). The guest
+  wrapper still owns `PushKeyInput`, `MouseRefresh` → `cSprite::MoveTo`, the
+  frame counter and the `Before`/`AfterSwapBuffer` pair. Far from abandoned, it
+  is load-bearing: **G17's cursor-trail fix is a patch inside it.** HLE-present-
+  only is architecture, not debt. Chain and cVVC slot layout:
+  [docs/porting/host-architecture.md](docs/porting/host-architecture.md), "The
+  present chain".
+
+  What was actually vestigial were two bring-up-era defensive paths in
+  `HLE_SwapBuffers`, now **deleted**: the per-frame re-stamp of the five VVC GD
+  slots, and the G5 magenta crosshair (`draw_software_cursor`) drawn when the
+  active screen had no pointer sprite. `cVVC::SetBuffers` is the only guest
+  writer of those slots and both its callers are functions we replace, so
+  `HLE_OpenDisplay` is now the sole writer.
+
+  **The static argument identified them; a measurement closed them.** Each was
+  first made a counter in the trap report — the standing lesson being that an
+  instrument reading zero has to be shown capable of non-zero first — and a
+  session covering every transition (movies, save/load, quit, new game) read
+  **0 and 0 over 466 presents**. *Coverage, not duration:* both paths live at
+  screen transitions, so a long session of steady play would have proved nothing
+  a two-minute one did not.
+
+  Two corrections fell out. `cVVC+0x08` is **not** a GD slot as the host comment
+  claimed — `cVVC::SwapBuffers` treats it as an optional memblock-backed overlay
+  bitmap; we write `gd` there, which is meaningless but harmless (its only two
+  readers are functions we replace), and it was left alone rather than "fixed"
+  blind. And both `cVVC::SwapBuffers` and `cVVC::OpenDisplay` have **truncated
+  reported bodies** in the Ghidra DB, so `get_xrefs_to` attributed their tails to
+  phantom `FUN_*` and the `SetBuffers` call sites appeared to be in neither
+  function; the decompiler followed the fall-through and was right, the xref list
+  was not. That is the split-function artifact in `docs/reference/re-methodology.md`,
+  caught because the two disagreed.
 
 - **Save-file corruption after ~50 saves — fixed (2026-08-02).** Every save
   appended a **byte-identical** copy of a small group to a list at the end of

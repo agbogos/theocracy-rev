@@ -3076,25 +3076,6 @@ void TrapLayer::mouse_event_buttons(uint32_t dev, uint8_t buttons) {
     m.w32(dev + 0x0c, wr);
 }
 
-void TrapLayer::draw_software_cursor() {
-    if (!video_.is_open()) return;
-    int W = video_.width(), H = video_.height();
-    int x = mouse_x_, y = mouse_y_;
-    if (x < 0 || y < 0 || x >= W || y >= H) return;
-    uint16_t* fb = video_.fb();
-    // Hot-pink crosshair so it's obvious against any palette.
-    auto plot = [&](int px, int py, uint16_t c) {
-        if (px >= 0 && py >= 0 && px < W && py < H) fb[py * W + px] = c;
-    };
-    const uint16_t col = 0xF81F;  // magenta RGB565
-    for (int d = -6; d <= 6; ++d) {
-        plot(x + d, y, col);
-        plot(x, y + d, col);
-    }
-    // Tip pixel white.
-    plot(x, y, 0xFFFF);
-}
-
 uint32_t TrapLayer::pointer_sprite() const {
     if (!machine_) return 0;
     Machine& m = *machine_;
@@ -3692,10 +3673,25 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             m.w32(self + 0x20, (uint32_t)w);
             m.w32(self + 0x24, (uint32_t)h);
             m.w32(self + 0x1c, (uint32_t)d);
-            // Single-buffer LFB: all GD slots point at the same cGD_LFB16.
-            //   +0x00/+0x04  front/back (PaintTree / various blits)
-            //   +0x08/+0x10  SwapBuffers__4cVVC / Refresh__7cSprite GD
-            //   +0x14        EndRefresh + BeforeSwapBuffer paint GD
+            // Single-buffer LFB: every GD slot points at the same cGD_LFB16.
+            // Slot roles re-read off the libmvos disassembly 2026-08-03:
+            //   +0x00/+0x04  the two real buffers. cVVC::SetBuffers copies one
+            //                of them into +0x10 and the other into +0x14,
+            //                chosen by the parity byte at +0x18.
+            //   +0x10        the "current" GD — cSprite::Refresh reads it.
+            //   +0x14        the paint GD — cScreen::EndRefresh and
+            //                cSprite::BeforeSwapBuffer read it.
+            //   +0x08        NOT a GD, despite what this comment used to say:
+            //                cVVC::SwapBuffers treats it as an optional
+            //                memblock-backed overlay bitmap (+0x0c cMemBlock,
+            //                +0x14 refcount, +0x20/+0x24 w/h) and takes a
+            //                completely different path when it is non-null.
+            //                Writing gd here is meaningless — but harmless,
+            //                because its only two readers are cVVC::SwapBuffers
+            //                and cVVC::SetBuffers and we replace both. Left as
+            //                it is rather than "fixed" blind: a guessed struct
+            //                layout is this port's dominant bug class, and
+            //                nothing observable depends on the value.
             m.w32(self + 0x00, gd);
             m.w32(self + 0x04, gd);
             m.w32(self + 0x08, gd);
@@ -3710,24 +3706,43 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
         return 1;
     }
     if (name == "HLE_SwapBuffers") {
-        // Present only — guest SwapBuffers__Fv still runs and calls:
-        //   MouseRefresh → MoveTo(sprite), BeforeSwapBuffer (paint pointer),
-        //   SwapBuffers__4cVVC (us), AfterSwapBuffer (restore under-cursor).
-        // So the real cSprite is already composited onto the LFB here.
+        // Present only. We replace cVVC::SwapBuffers, which is the *innermost*
+        // link of a three-function chain that is otherwise entirely guest code.
+        // Each link has exactly one call site (libmvos, checked 2026-08-03):
+        //
+        //   cScreen::EndRefresh
+        //     └─ SwapBuffers__Fv                    (mvos+0x8e820)
+        //          ├─ rolling-demo record/compare   (only if Intuition_Mode!=0;
+        //          │                                 never, for us)
+        //          ├─ Frame_Counter++
+        //          ├─ PushKeyInput                  (the G16 spin site)
+        //          ├─ MouseRefresh
+        //          │    ├─ PushMouseInput           (we nop this to a bare ret)
+        //          │    └─ cSprite::MoveTo          (if Intuition_Mode==0, i.e.
+        //          │                                 always here — this is what
+        //          │                                 tracks the pointer)
+        //          ├─ push a type-0x20 event into the Intuition+0x28 ring
+        //          ├─ VBlankInProgress = 1
+        //          ├─ cSprite::BeforeSwapBuffer     (SaveBg + paint pointer)
+        //          ├─ cVVC::SwapBuffers             ← us, present only
+        //          ├─ cSprite::AfterSwapBuffer      (restore under-cursor;
+        //          │                                 patched single-buffer, G17)
+        //          └─ VBlankInProgress = 0
+        //
+        // So the real cSprite is already composited onto the LFB by the time we
+        // are called, and the guest owns cursor tracking, key input and the
+        // frame counter. This is the opposite of the "abandoned guest
+        // SwapBuffers path" the task list claimed for a year — the guest path is
+        // load-bearing, and G17's fix is a patch *inside* it.
         if (video_.is_open()) {
             apply_edit_mode(m);   // THEOC_EDIT (no-op unless armed)
-            // Keep VVC GD slots alive (Refresh__7cSprite reads +0x10).
-            if (gd_ && mvos_base_) {
-                uint32_t vvc = m.r32(mvos_base_ + 0xaefcc);
-                if (!vvc && game_glob("VVC")) vvc = m.r32(game_glob("VVC"));
-                if (vvc) {
-                    m.w32(vvc + 0x00, gd_);
-                    m.w32(vvc + 0x04, gd_);
-                    m.w32(vvc + 0x08, gd_);
-                    m.w32(vvc + 0x10, gd_);
-                    m.w32(vvc + 0x14, gd_);
-                }
-            }
+            // (A per-frame re-stamp of the VVC GD slots used to sit here. It
+            // was bring-up-era defence: nothing in the guest can move those
+            // slots, because cVVC::SetBuffers is their only writer and both of
+            // its callers are functions we replace. Deleted 2026-08-03 after a
+            // session covering every transition — movies, save/load, quit, new
+            // game — measured zero drift over 466 presents. HLE_OpenDisplay is
+            // now the sole writer of the slots.)
             uint32_t nbytes = video_.fb_bytes();
             if (gd_) {
                 uint32_t gw = m.r32(gd_ + 0x00);
@@ -3745,13 +3760,12 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             if (nbytes > GUEST_FB_SIZE) nbytes = GUEST_FB_SIZE;
             if (nbytes > video_.fb_bytes()) nbytes = video_.fb_bytes();
             m.read(GUEST_FB_BASE, video_.fb(), nbytes);
-            // Fallback crosshair only when no screen pointer sprite is set.
-            uint32_t spr = pointer_sprite();
-            if (!spr) draw_software_cursor();
-            static int clog;
-            if (clog++ < 3)
-                std::fprintf(stderr, "  [cursor] present spr=%#x gd=%#x timer=%s\n",
-                            spr, gd_, timer_armed_ ? "on" : "off");
+            // (A fallback magenta crosshair used to be drawn here whenever the
+            // active screen had no pointer sprite — the G5 cursor, from before
+            // the guest cSprite was composited at all. Deleted 2026-08-03: it
+            // fired on 0 of 466 presents across every transition, and the guest
+            // null-checks the same pointer either side of us, so a frame
+            // without a sprite simply presents without a cursor.)
             { SlowSection s3(this, "present");
               video_.present(); }  // pumps SDL
             present_seq_.fetch_add(1, std::memory_order_relaxed);
