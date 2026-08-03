@@ -239,10 +239,28 @@ Two differences, one of them real:
 > here is **Linux against macOS within the same conditions**, and the structural
 > columns, not the frame rate.
 
+### Sockets, exercised headlessly
+
+`THEOC_SERVER=1` runs the shipped dedicated server, which is headless *by
+derivation* — it carries no `_12cApplication.Video` flag, so no display is ever
+brought up. That makes the whole socket layer testable in a container.
+
+Boot is **identical to macOS line for line**: same entry addresses, `10 ok / 0
+faulted` libmvos constructors, `Network 0 → 1`, `socket(type=1) -> guest fd 3`,
+`bind(:5042) ok`. Connecting a real TCP client from inside the container then
+gives:
+
+```
+[net] accept -> guest fd 4 from 127.0.0.1:52670
+```
+
+That single line validates both BSD-ism fixes and both directions of the address
+translation: `bind` goes through `guest_to_host_sin` (the `sin_len` skip) and
+`accept` writes the peer back through `host_to_guest_sin`. Sockets on Linux are
+sound.
+
 **Not yet exercised on Linux:** anything past the menu (the province limiter and
-the re-entrant sleep it drives), sockets and multiplayer — which is where the
-remaining translation asymmetries live and where the interesting failures should
-be — save/load, and interactive input.
+the re-entrant sleep it drives), multiplayer beyond the server's accept path, save/load, interactive input, and a full two-client netgame (the server side is now proven, the client side is not).
 
 ## Sequencing
 
