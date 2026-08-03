@@ -19,6 +19,11 @@
 # ── Build artifacts ───────────────────────────────────────────────────────
 /port/build/
 /port/build-linux/
+/port/build-win/
+# Staged third-party Windows dependencies (SDL2 / Unicorn / ffmpeg headers,
+# import libs and DLLs) for the mingw-w64 cross build. Third-party binaries:
+# same rule as data/cd/ — fetched out of band, never committed.
+/port/deps-win/
 build/
 *.o
 *.obj

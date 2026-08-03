@@ -1,10 +1,17 @@
 # Other-OS ports — Windows and Linux
 
-**Status: Linux done, Windows not started.** Linux was brought up on 2026-08-03
+**Status: Linux done, Windows scaffolded.** Linux was brought up on 2026-08-03
 and confirmed by play the same day — see [Confirmed by play](#confirmed-by-play)
-at the end of the Linux material. Windows is still structure only: that section
-was written 2026-08-03 from an audit of `port/src` rather than from general
-porting lore, and none of it has been compiled.
+at the end of the Linux material.
+
+Windows started the same day and has no host machine in the loop yet: a
+mingw-w64 cross toolchain (`port/cmake/toolchain-mingw-w64.cmake`), a survey of
+what already cross-compiles, and a standalone timing probe
+(`tools/win_timing_probe.cpp`) for the one risk that cannot be settled by
+reading a header. The audit-written risk list below now has measurements against
+it, and they moved three of its five items — see
+[What the cross compiler says](#what-the-cross-compiler-says). No `theoc.exe`
+exists and nothing has run on Windows.
 
 ## The reusable core is bigger than it looks
 
@@ -82,6 +89,13 @@ answer by reverse-engineering becomes a differential test.
 
 ## Windows is the real port
 
+> **Measured 2026-08-03, and it moves three of the five items below.** The list
+> that follows was written from an audit, before anything had been compiled. A
+> mingw-w64 cross toolchain and an afternoon then produced actual numbers; see
+> [What the cross compiler says](#what-the-cross-compiler-says) immediately
+> after it. Read both — the list is kept as written so the corrections have
+> something to correct, which is this repo's habit.
+
 Roughly in risk order:
 
 1. **Timing precision — the biggest technical risk.** The frame model now rests
@@ -99,6 +113,129 @@ Roughly in risk order:
    `std::system`. No equivalent; stub it or drop it.
 
 Audio needs nothing — `/dev/dsp` is already HLE'd onto SDL.
+
+## What the cross compiler says
+
+**Cross-compiling is the right tool for Windows, having been the wrong one for
+Linux.** The rejection above is about the *sysroot* — "the compiler is not the
+problem" — and Windows inverts that premise: SDL2 ships an official MinGW
+development tarball and ffmpeg has prebuilt Windows dev packages, so two of the
+three dependencies are download-and-untar and only Unicorn must be cross-built.
+Linux never developed that culture because distro packages made it unnecessary.
+Same argument, opposite conclusion, because the fact it rested on changed.
+
+So: `brew install mingw-w64`, `port/cmake/toolchain-mingw-w64.cmake`, and no
+Windows machine anywhere in the loop.
+
+### Four of seven units cross-compile unmodified — and it is a different four
+
+A `-fsyntax-only` pass with `x86_64-w64-mingw32-g++ -std=c++17`:
+
+| Unit | Result |
+|---|---|
+| `guestlink.cpp` | **clean** |
+| `machine.cpp` | **clean** |
+| `blit.cpp` | **clean** |
+| `main.cpp` | **clean** — *not* on the predicted list |
+| `video.cpp` / `mpeg.cpp` | untested — need Windows SDL2 / libav headers staged |
+| `traps.cpp` | the whole port, see below |
+
+The prediction was right in its count and wrong in its membership: `main.cpp`
+travels, and `video.cpp`/`mpeg.cpp` are unproven rather than proven. They are
+still the *likeliest* to travel — SDL2 and libav are genuinely cross-platform —
+but "likely" is what the audit already said, and staging the headers is what
+would turn it into a fact.
+
+> **What this pass does and does not prove.** `-fsyntax-only` parses and
+> type-checks; it does not codegen and does not link, so a unit can pass here and
+> still fail on a missing symbol. It also used the *macOS* Unicorn headers, which
+> is sound because `unicorn.h` is a portable C API but is not the same as
+> building against a staged Windows one. Treat this as a strong indication and a
+> work-list, not as a working build.
+
+### The entire POSIX gap in `traps.cpp` is sockets
+
+`traps.cpp` stops at its first missing header, so the useful question is which of
+its POSIX includes mingw-w64 lacks. Tested one header per compile:
+
+| Present in mingw-w64 | Missing |
+|---|---|
+| `csignal`, `dirent.h`, `fcntl.h`, `sys/stat.h`, `sys/time.h`, `unistd.h`, `pthread.h` | `sys/socket.h`, `netinet/in.h`, `arpa/inet.h`, `netdb.h`, `sys/select.h` |
+
+**Every missing header is a socket header.** And the present ones are not merely
+present — `gettimeofday`, `usleep`, `opendir`/`readdir`, `open` with `O_BINARY`,
+`fstat` and `close` all *link* in a static mingw build, which was checked
+separately because a header existing is not a symbol existing.
+
+That moves the risk list:
+
+- **Risk 3, filesystem — largely dissolves.** `open`/`stat`/`opendir`/`readdir`
+  are all there. What survives is *semantics*, and one specific hazard:
+  **`O_BINARY`**. Windows translates CRLF on handles opened without it, which
+  would silently corrupt the `.tsg` saves and the PHLS packs — a data-corruption
+  bug that compiles cleanly and only shows up in a file. Every guest-facing
+  `open` must carry it.
+- **Risk 4, clock — dissolves.** `gettimeofday` links; no
+  `QueryPerformanceCounter` translation needed for correctness.
+- **pthreads — never a risk.** mingw ships winpthreads, so the watchdog thread is
+  fine. (`fork`/`execlp` were already stubs.)
+- **Risk 2, sockets — confirmed, and now the only structural port work.** It is
+  also the point where `port/src/platform/` finally earns its keep, per
+  [Sequencing](#sequencing).
+
+### Risk 1 is untouched, and `usleep` linking makes it worse
+
+`usleep` is in the "present and links" column — and that is the trap, not the
+reprieve. It links; it says nothing about *granularity*. The port would build,
+run, and be quietly wrong: mingw's `usleep` is a wrapper over the same Windows
+sleep primitive whose default granularity is ~15.6 ms, and
+[the sleep model](#windows-is-the-real-port) needs sub-millisecond slices.
+
+Read the `usleep` handler in `traps.cpp` to see why sub-millisecond is not an
+edge case. It does **not** sleep the guest's 83 ms; it sleeps in slices bounded
+by the next 30 Hz heartbeat tick:
+
+```
+slice = min(remaining, time_until_next_tick);
+```
+
+so the requested duration is uniform over (0, 33.3 ms] and is **routinely
+sub-millisecond**, on every frame, as the tail slice before a tick comes due. A
+15.6 ms floor does not add jitter to those — it overshoots them by 15x–150x and
+sails past the deadline the slice existed to stop at.
+
+**So the one risk that cannot be dissolved by reading a header is the one that
+was ranked first, and it is now the only deep unknown in the Windows port.**
+
+`tools/win_timing_probe.cpp` measures it, standalone, before `traps.cpp` is
+touched — the errno-probe move from [Linux is a subtraction](#linux-is-a-subtraction-not-a-port),
+applied to the claim that is currently still an argument. It cross-compiles from
+macOS with no Windows involved:
+
+```sh
+x86_64-w64-mingw32-g++ -O2 -std=c++17 -static -Wall -Wextra \
+    -o win-timing-probe.exe tools/win_timing_probe.cpp -lwinmm
+```
+
+Three tests across four candidate implementations (`Sleep`, `Sleep` +
+`timeBeginPeriod(1)`, `CreateWaitableTimerEx(HIGH_RESOLUTION)`, and that timer
+plus `timeBeginPeriod`): a single-shot sweep weighted toward the sub-millisecond
+rows that decide it, a sustained 30 Hz heartbeat measured as lateness against an
+*absolute* schedule (which is how `timer_next_` advances, so overshoot
+accumulates rather than averaging out), and the province frame sliced exactly as
+the handler slices it, reported as ticks/frame against the ~3.5 the model needs.
+
+Two things to do with it, both mattering more than the headline number:
+
+- **Run it with `--busy N`.** The multiplayer session that prompted this ran
+  three game instances on one host; scheduler granularity under contention is
+  not the idle-box number.
+- **Run it on the VM *and* on bare metal.** VM timer behaviour is not the host's,
+  and that gap has to be known before any later in-VM measurement can be
+  trusted — the same reason this doc refuses X11 forwarding for timing work.
+
+**Status: written and cross-compiles clean; not yet run.** No numbers exist yet,
+and nothing above should be read as predicting them.
 
 ## Which binary does the Windows port run?
 
