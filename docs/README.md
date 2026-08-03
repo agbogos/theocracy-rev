@@ -47,6 +47,11 @@ cmake -S port -B port/build && cmake --build port/build
 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc   # defaults to data/cd/linux/*
 ```
 
+The build is platform-neutral — plain `find_path`/`find_library`, no hardcoded
+prefix (`-DTHEOC_PREFIX=…` overrides the search root). For Linux there is a
+container environment at [`Dockerfile`](../Dockerfile); see
+[porting/other-os-ports.md](porting/other-os-ports.md).
+
 Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 
 ## Start here

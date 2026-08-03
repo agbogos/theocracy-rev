@@ -123,6 +123,34 @@ one set of RE, one set of fixes. The Windows work stays what the section above
 describes — a host-side OS shim — which is the whole reason this architecture was
 chosen ([guest-libmvos.md](guest-libmvos.md)).
 
+## The development environment: containers, not a VM
+
+Initial Linux work needs **no VM, no target machine and no SSH**. A
+`linux/arm64` container builds at native speed on Apple Silicon and can run the
+headless verification too, because the port's diagnostics are text
+(`THEOC_FPS`, the trap report, `THEOC_WATCHDOG`) and its pixel checks are BMP
+dumps (`SDL_VIDEODRIVER=dummy` + `THEOC_SHOT_EVERY`/`THEOC_SHOT_DIR`) — the same
+technique that verified sharp-bilinear on macOS with no display
+([upscale-filtering.md](upscale-filtering.md)).
+
+`Dockerfile` at the repo root is that environment. It bind-mounts the repo
+rather than copying it, and builds into `port/build-linux` so the two platforms
+do not fight over `CMakeCache.txt`.
+
+Bring up a real Linux machine when — and only when — you need what the container
+cannot give: interactive play, or the x86-64 oracle.
+
+**Cross-compiling from macOS is the wrong tool here.** The compiler is not the
+problem; the *sysroot* is — you would have to assemble Linux headers and shared
+objects for SDL2, Unicorn and libav plus their transitive dependencies by hand.
+A container is native compilation with the reproducibility you actually wanted.
+
+**Do not forward X11 for timing work.** Under `ssh -X` the *client* renders, so
+every present round-trips and the frame rate you measure is a property of the
+network. On a project whose whole debugging history is wall-clock bugs
+masquerading as performance bugs, that produces plausible wrong numbers. Use VNC
+into a VM if you need to watch it, and keep judgement calls on real hardware.
+
 ## Sequencing
 
 1. **Linux first.** It is mostly subtraction, it forces the platform seam into
