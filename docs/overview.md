@@ -1,12 +1,15 @@
 # libmvos.so — Technical Report
 
-Reverse-engineering notes for the Theocracy (1999) game engine shared library.
-Running document — kept concise; append findings as we go.
+Reverse-engineering notes for the Theocracy (Philos Laboratories, 2000) game
+engine shared library. Running document — kept concise; append findings as we go.
+
+(Elsewhere these docs call the binaries "1999" — that is their build vintage, not
+the game's release year. Both are used deliberately.)
 
 ## Binary facts
 
 - **Type:** ELF 32-bit shared object (x86), load base `0x00010000` in Ghidra (**file addresses = Ghidra − 0x10000**; `objdump` shows file addresses).
-- **Toolchain:** GCC 2.x (g++ 2.95-era, GNU v2 mangling, sjlj exceptions). `.symtab` is stripped but — being a shared object — the **`.dynsym` carries all 1,843 exported C++ symbols** with full signatures encoded in the mangling (huge win). The game binary imports 232 of them.
+- **Toolchain:** GCC 2.x (g++ 2.95-era, GNU v2 mangling, sjlj exceptions). `.symtab` is stripped but — being a shared object — the **`.dynsym` carries all 2400 exported C++ symbols** with full signatures encoded in the mangling (huge win). The game binary imports 232 of them.
 - **Code:** `.text` `0x52980`–`0xa8c95` (~353 KB).
 - **Functions:** 4120 total — **2199 named** (from symbols), **1921 unnamed** (`FUN_`, mostly thunks/statics/exception glue).
 - **Role:** shared engine. The game's main executable links against it and calls in via PLT (engine classes appear there as `EXTERNAL` imports). See sibling analysis of the game binary.

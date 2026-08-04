@@ -16,7 +16,7 @@ The chosen porting strategy for modern macOS (Apple Silicon). Decision: **no OS-
 Why this boundary works (all confirmed by RE — see the contract inventory below):
 
 - The game links **only `libmvos.so` and libc** — every OS dependency (X11, OSS, pthreads, fork, sockets, CD, dlopen) sits *behind* the libmvos API.
-- The game imports just **232 symbols**; libmvos exports 1,843 with full GNU-v2-mangled signatures (types recoverable mechanically).
+- The game imports just **232 symbols**; libmvos exports 2400 with full GNU-v2-mangled signatures (types recoverable mechanically).
 - **libmvos owns `main()`** (game imports it; libmvos file addr `0x951e0`, Ghidra `0xa51e0`). So *our native runtime is `main()`* — we control the entire boot sequence. It was later decompiled in full; the 10-step boot is in [../subsystems/application-bootstrap.md](../subsystems/application-bootstrap.md).
 
 ## Architecture
