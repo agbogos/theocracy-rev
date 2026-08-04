@@ -316,6 +316,45 @@ to want a home there and, like the Winsock work, it is one narrow `#if` block
 next to the other one. Three would be an argument; two is a directory holding
 two functions.
 
+#### Measured on Windows — the fix lands, with a residual
+
+A 6-minute instrumented run (`THEOC_FPS=1 THEOC_WATCHDOG=1 THEOC_LONGRUN=60`),
+three minutes parked on realm and three on province. **No `[timing]` line**, so
+the high-resolution timer was acquired and this is the intended path rather than
+the fallback.
+
+| | naive `Sleep` (probed) | shipped timer (measured in-game) | target |
+|---|---|---|---|
+| province frame | 94.0 ms | **87.0 ms** (11.5 fps) | 83.3 ms |
+| error | +13% | **+4.4%** | — |
+| realm | — | **60.0–60.4 fps** | 16 ms cap |
+
+**Realm is the cleanest proof, and it is an accident of the frame cap.** That
+cap is a `theoc_sleep_us()` call for a 16 ms interval; under `Sleep()`'s 15.6 ms
+granularity a 16 ms request quantises to ~31 ms and the screen would sit at
+~32 fps. Hitting 60 is only reachable with sub-millisecond resolution. It is not
+the display, either: the renderer is created without `SDL_RENDERER_PRESENTVSYNC`
+and samples land *above* 60 (60.3, 60.4), which a vsync clamp cannot produce.
+
+**The residual 3.7 ms is the timer's own floor, not a defect**, and the log
+decomposes it without needing another probe:
+
+```
+43.5 usleep/s ÷ 11.5 fps = 3.78 slices/frame      (macOS: 3.5 — splice identical)
+740 ms/s      ÷ 11.5 fps = 64.3 ms/frame sleeping
+87.0 − 64.3              = 22.7 ms/frame computing
+so the guest asks for 83.3 − 22.7 = 60.6 ms and gets 64.3
+3.7 ms overshoot ÷ 3.78 slices ≈ 1.0 ms per slice
+```
+
+1.0 ms per slice is what the probe measured for the timer itself (0.63 ms for a
+sub-millisecond request, 1.67 ms at 1 ms). The probe's 84.0 ms prediction assumed
+~3.5 slices; the real frame takes 3.78, and the difference is that extra slice
+plus VM noise. **Left alone deliberately** — biasing the request down to cancel
+a 1 ms overshoot would be fitting the port to one VM's timer, and 4% on an engine
+[designed at 12 Hz](frame-timing.md) is not perceptible. The number to watch if
+this is ever revisited is slices/frame, not fps.
+
 ## The Windows build — 2026-08-03
 
 **`theoc.exe` builds, links and packages.** Nothing has run on Windows, so this
@@ -441,50 +480,77 @@ cannot continue, so everything after is undefined. The ignore is now **bounded**
 diagnosis, instead of leaving someone to infer it from a repeating log. A healthy
 run aborts zero times.
 
-### The game runs on Windows — 2026-08-04
+### The game runs on Windows — done 2026-08-04
 
-With the lock fix, **it runs.** Past `Start`, into the game, rendering and
-playable enough to recognise. Three hosts now run the same 2000 i386 binaries
-off the same source.
+**Windows is playable, and the port is closed.** Three hosts now run the same
+2000 i386 binaries from the same source, with no `#ifdef` in any unit but
+`traps.cpp`.
 
-Two things that were *ranked* as risks and turned out not to be, which is worth
-recording because the ranking was wrong in a useful direction:
+The instrumented 6-minute run above is the structural half. Everything it could
+not reach was then **played**: save/load and a full netgame, both reported
+working. Save/load was the one that mattered, because it is the only failure in
+this port that is silent — `O_BINARY` is applied at every open, and had it been
+missed anywhere, CRLF translation would have corrupted a `.tsg` on write and
+nothing would have complained until a campaign failed to reload. Multiplayer
+matters because **Winsock is the largest rewritten surface in the port** and
+until now only its single-instance-lock corner had ever executed.
+
+*Provenance: as with [Linux](#confirmed-by-play), the play confirmation is the
+maintainer's report from an interactive session, not an instrumented run. Right
+kind of evidence for "does it work", wrong kind for any number — which is why
+every figure in this section comes from the log instead.*
+
+**Two risks were ranked and both were wrong, in the useful direction:**
 
 - **Path handling never bit.** `resolve_path`'s `guest[0] == '/'` test is still
-  not how Windows spells "absolute", and it was the prime suspect for the next
-  failure — but every path the game actually asks for is relative to the data
-  root, so the branch is never taken. It is a latent defect, not a live one; see
-  the list below.
-- **Nothing else needed a Windows-specific fix at all.** The gap between "boots
-  to `Start`" and "runs" was one latent bug shared by all three platforms plus a
-  sleep primitive. That is the dual-image architecture paying off: the guest is
-  the same binary everywhere, so a host port only has to be right about the OS
-  boundary.
+  not how Windows spells "absolute", and it was the standing prime suspect for
+  the next failure. Every path the game actually asks for is relative to the
+  data root, so the branch is simply never taken. Latent, not live.
+- **Nothing else needed a Windows-specific fix at all.** The whole distance from
+  "boots to `Start`" to "playable" was one latent bug shared by all three
+  platforms, plus a sleep primitive. That is the dual-image architecture paying
+  off: the guest is the same binary everywhere, so a host port only has to be
+  right about the OS boundary — which is finite and enumerable, and was
+  enumerated in M0.
 
-**Not yet done: a proper playtest**, and comparison against screenshots from the
-original. "Runs and looks right" is not the standard [Linux was held
-to](#confirmed-by-play).
+The clean-exit counters, for a baseline to compare future runs against:
+
+```
+implemented imports hit: 64  (3575613 calls)
+UNIMPLEMENTED hit:       0  (0 calls)
+guest heap:              13.4 MB live, 32.1 MB frontier, 128 MB arena
+Guest-libmvos: Init=ok OpenSub=ok Start=ok
+```
+
+Heap was flat at 31.4 MB live and `+0.00 MB/s` frontier across the entire
+province sit; fds 2, stubs 144 B, guest ESP constant — the same figures both
+other platforms report.
 
 ### What is still not known
 
-Remaining risks, in order:
+Nothing here blocks playing the game. In rough order of how much they would
+change if someone looked:
 
-1. **Timing under real load.** The fix is in (above), but the measurement behind
-   it was taken in a VM on an idle box, and the probe's `--busy N` mode — the
-   multiplayer case, three instances on one host — has still never been run.
-   Bare metal remains unmeasured too.
-2. **Path handling**, latent. `resolve_path` builds `/`-separated paths and
-   treats `guest[0] == '/'` as absolute. Unreached today; it would surface the
-   moment a data root moves somewhere that makes the guest emit an absolute
-   path, and it would surface as a file-not-found, not as an obvious Windows
-   error.
-3. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
+1. **Timing under contention, and on bare metal.** Every timing number this
+   project has for Windows comes from one idle VM. The probe's `--busy N` mode
+   was written precisely for the three-instances-on-one-host case and has still
+   never been run, and the [Linux multiplayer
+   paragraph](#confirmed-by-play) already explains why an impression of
+   slowness under those conditions would not be usable evidence.
+2. **Audio is very slightly noisier than macOS.** Province steady state ran
+   `underrun=0/s` in 170 of 191 samples, the rest 7–766 frames/s — at most ~17 ms
+   of audio in a second, and below anything audible. macOS reports a flat zero.
+   Unexplained rather than understood; the large spikes (94k, 26k, 20k) are all
+   at scene loads and are the [already-documented](frame-timing.md) load stall,
+   not this.
+3. **Path handling**, latent, as above. It would surface as a file-not-found
+   rather than as an obvious Windows error, which is the bad way for it to
+   surface.
+4. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
    `std::system`. Compiles; will do nothing useful. Off by default.
-4. **`CloseSubsystems` is still skipped** — and Windows is the platform
+5. **`CloseSubsystems` is still skipped** — pre-existing on all three platforms,
+   not a Windows regression, and Windows is the platform
    [host-architecture.md](host-architecture.md) names as the revisit trigger.
-5. **Multiplayer has never been tried on Windows.** Winsock is the largest
-   rewritten surface in the port and only its single-instance-lock corner has
-   been exercised by a run.
 
 ## Which binary does the Windows port run?
 
@@ -767,13 +833,28 @@ Linux is the reference implementation that makes any Windows divergence
 diagnosable. But the estimate for Windows should not be discounted on the
 strength of a seam that does not exist.
 
-**Introduce `port/src/platform/` rather than sprinkling `#ifdef`s** — at Winsock,
-which is where it finally earns its keep. The macOS-isms are concentrated —
-sockets, sleep, clock, filesystem, one shell-out — so a thin interface with three
-implementations keeps `traps.cpp` readable. Scattering conditionals through a
-4000-line file is how this stops being maintainable. Two sites did not earn an
-interface, which is why Linux correctly did not build one; Windows touches every
-item on that list.
+~~**Introduce `port/src/platform/` rather than sprinkling `#ifdef`s**~~ — at
+Winsock, which is where it finally earns its keep. The macOS-isms are
+concentrated — sockets, sleep, clock, filesystem, one shell-out — so a thin
+interface with three implementations keeps `traps.cpp` readable. Scattering
+conditionals through a 4000-line file is how this stops being maintainable. Two
+sites did not earn an interface, which is why Linux correctly did not build one;
+Windows touches every item on that list.
+
+> **This prediction was wrong, and the port is finished without it.** Windows did
+> *not* touch every item on that list. Clock and filesystem needed nothing beyond
+> a one-line `theoc_mkdir` and `O_BINARY` at the open sites; the shell-out is
+> `THEOC_WATCHDOG_SAMPLE`, still unported and off by default. What Windows
+> actually needed was **two** contiguous blocks in `traps.cpp` — Winsock, and
+> `theoc_sleep_us` — sitting next to each other, plus scattered `O_BINARY` flags
+> that an interface would not have collected anyway.
+>
+> The reasoning ("scattering conditionals is how this stops being maintainable")
+> is still right; the premise it rested on — that the macOS-isms were spread
+> across five subsystems — was an inventory made before anyone had ported
+> anything. Three platforms now build from two adjacent `#if` blocks. Should a
+> fourth host or a genuinely different subsystem arrive, revisit; until then a
+> directory holding two functions is worse than the two functions.
 
 Also waiting, already known: **teardown**. `CloseSubsystems` is deliberately
 skipped because process exit on macOS reclaims everything it would release, and a
