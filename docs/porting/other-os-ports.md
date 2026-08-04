@@ -426,7 +426,13 @@ guessing does not work and the loader is the oracle.
 
 Two things measured rather than assumed:
 
-- **119 MB**, of which `avcodec-61.dll` alone is 89.6 MB. The closure is seven
+- **119 MB**, of which `avcodec-61.dll` alone is 89.6 MB. (The
+  [before/after table](#both-bundles-minus-the-ffmpeg-nobody-uses) below records
+  **131 MB** for the same bundle. Both are real `du` readings taken a day apart —
+  2026-08-03 here, 2026-08-04 there, with the timing probe added in between — and
+  the pre-swap bundle no longer exists to re-measure. Neither figure is load-
+  bearing: the point either makes is "about 120 MB of ffmpeg this port cannot
+  reach".) The closure is seven
   DLLs against Linux's ~160-library graph, but that is **not** because it carries
   less — this ffmpeg links its codec dependencies *into* the av\* DLLs. The Linux
   note therefore still stands: the port only decodes MPEG-1 cutscenes, and a
