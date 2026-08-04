@@ -560,8 +560,21 @@ void TrapLayer::watchdog_loop(double stall_sec) {
         // executing), grab a native stack of ourselves right now. Aggregate
         // profiles can't isolate a 1.5s window in a 40s run; this samples
         // exactly the stall.
+        //
+        // macOS only, and it now says so. `sample` is an Apple developer tool;
+        // the redirect syntax below is a POSIX shell's, not cmd.exe's; and
+        // std::system on a host without either produces a shell error whose
+        // return code this used to print as a plain `rc=`, which reads like the
+        // sampler ran and failed rather than like the feature not existing. A
+        // diagnostic that lies about itself is worse than one that is absent —
+        // and this is a stall, i.e. exactly when someone is least able to
+        // afford a misleading line. Linux could plausibly use a `gdb -p …
+        // -batch -ex "thread apply all bt"`, but shipping that untested into
+        // the one code path that only runs when something is already wrong is
+        // not a trade worth making; it needs a Linux stall to verify against.
         static const char* sample_to = std::getenv("THEOC_WATCHDOG_SAMPLE");
         if (sample_to && db == 0) {
+#if defined(__APPLE__)
             char cmd[512];
             std::snprintf(cmd, sizeof cmd,
                           "sample %d 1 -file '%s' >/dev/null 2>&1",
@@ -569,6 +582,18 @@ void TrapLayer::watchdog_loop(double stall_sec) {
             int rc = std::system(cmd);
             std::fprintf(stderr, "  [watchdog] host stack -> %s (rc=%d)\n",
                          sample_to, rc);
+#else
+            static bool said = false;
+            if (!said) {
+                said = true;
+                std::fprintf(stderr,
+                             "  [watchdog] THEOC_WATCHDOG_SAMPLE is macOS-only "
+                             "(it shells out to `sample`); no host stack "
+                             "captured. The stall line above still names the "
+                             "last trap, which is the other half of the "
+                             "answer — add THEOC_SLOWLOG to time it.\n");
+            }
+#endif
         }
         last_frame = now;                  // re-report once per stall_sec
     }
@@ -627,6 +652,30 @@ void TrapLayer::audio_push(const void* data, size_t nbytes) {
     }
 }
 
+// ---- "is this path absolute?" — two spellings, and the guest only knows one --
+// The guest is a Linux binary on every host, so a path *it* produces is absolute
+// iff it starts with '/'. The host is not: on Windows an absolute path is a
+// drive (`C:\`, `C:/`), a UNC share (`\\host\share`) or — for the awkward
+// drive-relative case — a leading separator. Both spellings have to be
+// recognised here because the strings arriving at resolve_path have two
+// origins: the guest, and the host via $THEOC_DATA / $THEOC_CD.
+//
+// Testing only for '/' therefore had a Windows-shaped hole in both directions:
+// a host path like `D:\theocracy` did not read as absolute, and a guest path
+// like `/home/x/y` read as absolute and was passed through to a Windows API
+// that resolves a leading '\' against the *current drive* — a real location,
+// silently the wrong one. See other-os-ports.md, "What is still not known".
+static bool path_is_absolute(const std::string& p) {
+    if (p.empty()) return false;
+    if (p[0] == '/') return true;
+#if defined(_WIN32)
+    if (p[0] == '\\') return true;                       // UNC, or drive-relative
+    if (p.size() >= 2 && std::isalpha((unsigned char)p[0]) && p[1] == ':')
+        return true;                                     // C:\… or C:/…
+#endif
+    return false;
+}
+
 std::string TrapLayer::resolve_path(const std::string& guest) const {
     if (guest.empty()) return guest;
     // Device nodes are never real files on the Mac host.
@@ -654,7 +703,27 @@ std::string TrapLayer::resolve_path(const std::string& guest) const {
         if (ends(".mpg") || ends(".MPG") || ends(".mpeg"))
             return cd_root + "/movie/" + guest;
     }
-    if (guest[0] == '/') return guest;                    // other absolute paths
+    if (path_is_absolute(guest)) {
+#if defined(_WIN32)
+        // A Unix-absolute path that got this far is one we have no honest
+        // mapping for: /dev and /mnt/cdrom are handled above, and anything else
+        // names a Linux filesystem this host does not have. Passing it through
+        // is what every platform has always done and is kept — but on Windows
+        // it silently resolves against the current drive, so say so once rather
+        // than let it read as a missing file. Warn, don't fail: the branch has
+        // never fired in a run, and guessing a translation would be worse.
+        if (guest[0] == '/') {
+            static std::set<std::string> warned;
+            if (warned.insert(guest).second)
+                std::fprintf(stderr,
+                             "  [path] guest asked for the Unix-absolute path "
+                             "'%s'; Windows will resolve it against the current "
+                             "drive. No mapping exists — see other-os-ports.md\n",
+                             guest.c_str());
+        }
+#endif
+        return guest;                                     // other absolute paths
+    }
     // Guest uses "data/…"; install root is $THEOC_DATA (default data/game).
     return data_root_ + "/" + guest;
 }

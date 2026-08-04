@@ -543,14 +543,48 @@ change if someone looked:
    Unexplained rather than understood; the large spikes (94k, 26k, 20k) are all
    at scene loads and are the [already-documented](frame-timing.md) load stall,
    not this.
-3. **Path handling**, latent, as above. It would surface as a file-not-found
-   rather than as an obvious Windows error, which is the bad way for it to
-   surface.
-4. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
-   `std::system`. Compiles; will do nothing useful. Off by default.
+3. ~~**Path handling**~~ — **fixed 2026-08-04**, see below. Still worth knowing
+   that no run has ever exercised the branch.
+4. ~~**`THEOC_WATCHDOG_SAMPLE`**~~ — **fixed 2026-08-04**: it now says it is
+   macOS-only instead of appearing to run. Still macOS-only.
 5. **`CloseSubsystems` is still skipped** — pre-existing on all three platforms,
    not a Windows regression, and Windows is the platform
    [host-architecture.md](host-architecture.md) names as the revisit trigger.
+
+### Two latent defects closed — 2026-08-04
+
+Neither changes what any run does today. Both were found by porting rather than
+by failing, which is the argument for having done the port at all.
+
+**`resolve_path` tested `guest[0] == '/'` for "is this absolute", and that has a
+Windows-shaped hole in *both* directions.** A host path such as `D:\theocracy`
+did not read as absolute; and a guest path such as `/home/x/y` read as absolute
+and was handed straight to a Windows API, which resolves a leading separator
+against the **current drive** — a real location, silently the wrong one, and it
+would have surfaced as a missing file rather than as anything recognisably a
+path bug. Now a `path_is_absolute()` helper knows both spellings (`/`, plus
+`C:\`, `C:/`, `\\host\share` and a bare leading `\` on Windows).
+
+The Unix-absolute case still **passes through unchanged**, because there is no
+honest mapping for it: `/dev` and `/mnt/cdrom` are already handled above it, and
+anything else names a Linux filesystem the host does not have. It now warns
+once, per distinct path. Inventing a translation would be guessing, and the
+branch has never fired in a run — the log of the 6-minute Windows session shows
+the guest asking only for `/dev/dsp` and relative paths (`save/save4.tsg`,
+`movie/intro.mpg`).
+
+**`THEOC_WATCHDOG_SAMPLE` shelled out to `sample` on every platform.** It is an
+Apple developer tool, and the command's redirect syntax is a POSIX shell's
+rather than `cmd.exe`'s, so off macOS `std::system` returned a shell error whose
+code was printed as a bare `rc=` — which reads as *the sampler ran and failed*
+rather than as *the feature does not exist here*. It now says which. That
+mattered more than its size suggests: the line only ever prints during a stall,
+i.e. exactly when the reader can least afford a misleading one.
+
+Linux could plausibly use `gdb -p … -batch -ex "thread apply all bt"`. Not
+shipped: putting unverified code in the one path that runs only when something
+is already wrong is a bad trade, and verifying it needs a Linux stall to point
+it at.
 
 ## Which binary does the Windows port run?
 
