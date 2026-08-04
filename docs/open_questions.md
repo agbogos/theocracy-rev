@@ -9,10 +9,20 @@ to the [Closed](#closed) table rather than deleted, and a new item takes the
 next free number rather than filling a gap. Numbers are therefore not in
 reading order — that is deliberate.
 
-Three states: **open** (a real unanswered question), **moot** (was a question
-only because the pure-HLE approach needed it; the current architecture runs the
-real engine instead), **closed** (answered — the answer lives in a subsystem
-doc, and the table below says which).
+Four states:
+
+- **open** — a real unanswered question someone might answer.
+- **won't chase** — also unanswered, but deliberately: answering it would change
+  nothing we care about. Distinguished from *open* so that a reader does not
+  mistake a decision for a gap. Reopening one needs a reason, not just interest.
+- **moot** — was a question only because the pure-HLE approach needed it; the
+  current architecture runs the real engine instead.
+- **closed** — answered, and the answer lives in a subsystem doc that the
+  [table below](#closed) names.
+
+**An item states its question, not its answer.** When an answer arrives the item
+moves to the closed table and the substance goes to a subsystem doc; an item that
+has grown an answer underneath it is a bug in this file, not a feature.
 
 ---
 
@@ -53,12 +63,10 @@ understand in order to run it.*
     multiplayer game start to finish, and `NetGame_AssignTeams` parses the team
     info, but **neither is called directly**: both sit in function tables
     (`0x85906a0` / `0x85907d4` / `0x84bccb4`), so entry is indirect and the
-    caller is unread. Note this is now a *pure RE* question, not a blocker —
-    multiplayer was verified end-to-end on 2026-07-26 (a real netgame ran
-    through lobby, map selection and play), so the path evidently works; we
-    simply have not read who takes it. Answering it would also close the
-    remaining half of #6, since the dispatcher is where the tick-sync receive
-    side is reachable from.
+    caller is unread. Pure archaeology — multiplayer plays, so the path
+    demonstrably works; nobody has read who takes it. Worth doing because it
+    would also close the remaining half of #6: the dispatcher is where the
+    tick-sync receive side is reachable from.
 
 ## Open — front-end / flow (game binary)
 
@@ -70,49 +78,36 @@ understand in order to run it.*
 
 ## Open — engine (libmvos)
 
-13. **`cGD` graphics device** — base vs. `_LFB8/15/16/24/32` backend dispatch
-    (the vtable layout), and the bitmap / palette pipeline around it. *Partly
-    answered:* the present model is documented in
-    [porting/vvc_x-backend.md](porting/vvc_x-backend.md), and the **LFB16 blit
-    family is fully decompiled** — `port/src/blit.cpp` carries byte-exact
-    transliterations of `LFB16_PutBitmap`, `VLineAlfa`, `PutBitmap8`,
-    `PutBitmap8_AMask` and `PutBitmap8C1_AMask` (**file** offsets `0x5c4e0`,
-    `0x5c940`, `0x5c9b0`, `0x5cb70`, `0x5cbb0` — add `0x10000` for Ghidra),
-    including the RLE packet format
-    (`[count][flag]`, `flag == 0` ⇒ transparent run, else palette indices with
-    index 0 as a hole) and the cdecl-despite-`__regparm` calling convention.
-    Still open: the other depth backends, and how the vtable selects between
-    them.
+13. **`cGD` depth backends other than LFB16** — how the vtable selects between
+    `_LFB8/15/24/32`, and the bitmap / palette pipeline around them. LFB16 itself
+    is done: the present model is in
+    [porting/vvc_x-backend.md](porting/vvc_x-backend.md) and the blit family is
+    decompiled byte-exact into `port/src/blit.cpp`. The port only ever runs at
+    16bpp, so this is archaeology rather than a gap in the port.
 14. **`LoadDevicePlugins` internals** (`0xa4990`) — how the 4 device globals and
     the input-plugin handshake are wired. (The enclosing question — the
     Open/Close subsystem pairs — is closed; see the table.)
 16. **Asset loaders** — the `c…` (runtime) ↔ `s…` (on-disk) pairings: FLC video,
     `sSPR1` / `sTER1` sprites & terrain, bitmap / font / sample / palette
-    formats. *Moot for the port* (the real engine loads them all), but this is
-    the single largest remaining piece of the **file-format** archaeology, and
-    the one a data-modding or asset-viewer effort would need.
-
-## Open — port / host
-
-30. **Where the +18 KB/cycle guest-heap growth comes from** — the 20-cycle soak
-    (2026-07-25) measured guest heap live rising very linearly from 11.65 to
-    12.01 MB, i.e. ~7000 load/unload cycles to exhaust the 128 MB arena. Not
-    chased: harmless at that rate, and G15's 50 MB/cycle class of bug is gone.
-    Answering it needs an allocation-site histogram, which is the tool to build
-    if it ever matters.
-
-    **Reproduced exactly on 2026-08-03, on both platforms**, after the sleep/
-    present rewrite: macOS and Linux agree on all 20 cycles to two decimals,
-    live *and* frontier (11.65 → 12.01 MB live, 28.74 → 29.74 MB frontier).
-    So the growth is deterministic and host-independent — whatever it is, it
-    is the guest allocating, not the port leaking. See
-    [porting/other-os-ports.md](porting/other-os-ports.md).
+    formats. Moot for the port (the real engine loads them all), but this is the
+    single largest remaining piece of the **file-format** archaeology, and the
+    one a data-modding or asset-viewer effort would need.
 
 ## Minor / deferred
 
 18. Map loader `FUN_081c7a00` → actual file read (deferred).
 19. Multiplayer scope — battle-only (tactical) vs. full strategic
     (`scenarioID = -1` + battle-map load suggests standalone tactical battles).
+
+---
+
+## Won't chase
+
+Real questions, deliberately not being answered, with what would change that.
+
+| # | Question | Why not, and what would reopen it |
+|---|---|---|
+| 30 | Which allocation site produces the guest heap's +18 KB/cycle | Measured, bounded and understood well enough: ~7000 realm↔province cycles to exhaust the 128 MB arena, and [heap-growth-trials.md](porting/heap-growth-trials.md) showed **every** activity saturating rather than growing without limit. It is also **deterministic and host-independent** — macOS and Linux agree on all 20 cycles to two decimals, live and frontier — so it is the guest allocating, not the port leaking. Answering it needs an allocation-site histogram that does not exist. Reopen if a session ever actually exhausts the arena, or if the per-cycle figure moves. |
 
 ---
 

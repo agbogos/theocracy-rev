@@ -81,16 +81,19 @@ Phosphor mask, curvature, bloom, proper scanline falloff. SDL2's render API has
 Metal. That drags the whole display layer off `SDL_Renderer`, which is a real
 architectural change, unlike options 1 and 2.
 
-## Recommendation
+## Recommendation — as made on 2026-07-26
 
 Options 1 (+2 as a knob) are roughly **1–2 hours total** — not a track item,
-despite it having been filed as one. Option 1 alone is probably enough. Do it
-whenever there is an appetite; it does not block anything and nothing blocks it.
+despite it having been filed as one. Option 1 alone is probably enough. It does
+not block anything and nothing blocks it.
 
 Cutscenes probably keep their current smooth/fractional path either way: they are
 video, `MpegMovie::fit_frame` has already bilinear-resampled them, and none of
-the pixel-preservation arguments apply. Worth re-checking once 1 lands, since
-sharp-bilinear may make a single unified path good enough for both.
+the pixel-preservation arguments apply.
+
+> **All three predictions held.** Both options shipped on 2026-08-02 inside the
+> estimate; cutscenes did keep the smooth path, and a unified path was
+> considered and not needed. See [What landed](#what-landed-2026-08-02).
 
 ---
 

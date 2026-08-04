@@ -17,7 +17,7 @@ Why this boundary works (all confirmed by RE — see the contract inventory belo
 
 - The game links **only `libmvos.so` and libc** — every OS dependency (X11, OSS, pthreads, fork, sockets, CD, dlopen) sits *behind* the libmvos API.
 - The game imports just **232 symbols**; libmvos exports 1,843 with full GNU-v2-mangled signatures (types recoverable mechanically).
-- **libmvos owns `main()`** (game imports it; libmvos file addr `0x951e0`, Ghidra `0xa51e0` — decompile still TODO). So *our native runtime is `main()`* — we control the entire boot sequence.
+- **libmvos owns `main()`** (game imports it; libmvos file addr `0x951e0`, Ghidra `0xa51e0`). So *our native runtime is `main()`* — we control the entire boot sequence. It was later decompiled in full; the 10-step boot is in [../subsystems/application-bootstrap.md](../subsystems/application-bootstrap.md).
 
 ## Architecture
 
@@ -88,11 +88,16 @@ Note: the four input/video device globals are all produced by the *video* `LoadD
 
 ## Hard parts / risks
 
+> **Written as predictions, before anything ran. Three of the five are now
+> settled, and are marked inline.** Kept in their original form because the
+> corrections are the interesting part — this is the risk list that a plausible
+> argument produced, against what building the thing actually found.
+
 1. **Inlined accessors bake MVOS object layouts into the game.** Any MVOS object the game touches directly (cString 32-byte block, cNode/cList links, cMemBlock fields, cVVC layout, sInput, cRectangle/cDimension/cColor PODs…) must match original layout exactly. Recover layouts from ctors in Ghidra (several already documented in `structs/` and memory doc).
 2. **Native→guest virtual dispatch.** Our native code must call through *guest* vtables when an object is game-subclassed, and through native paths when it's ours. Convention: HLE objects carry guest-visible vtables whose slots are trap addresses; game-subclassed objects carry guest vtables naturally. Dispatch = always read the vtable from guest memory and call whatever's there (trap → native, code addr → Unicorn).
-3. **Green-thread correctness** — blocking primitives (`cSemaphore::Lock`, pipe reads, `Sleep`) are the yield points; guest code presumably assumes preemption. Audit which game threads exist before deciding whether cooperative-with-forced-preemption (Unicorn timeout hook) is needed.
-4. **g++ 2.95 exception handling** runs entirely inside guest code (game carries its own sjlj runtime) — should Just Work, but `Fatal` paths that unwind across the HLE boundary would not. `Fatal` doesn't return, so treat it as terminate-with-message.
-5. **The 5.6 MB unknown**: game logic may do things we haven't seen (direct `/proc` reads etc.). Mitigated by: syscalls can't happen except through imports (all trapped) — any surprise shows up as a trap we haven't implemented yet, loudly.
+3. **Green-thread correctness** — blocking primitives (`cSemaphore::Lock`, pipe reads, `Sleep`) are the yield points; guest code presumably assumes preemption. Audit which game threads exist before deciding whether cooperative-with-forced-preemption (Unicorn timeout hook) is needed. — **Settled: no preemption is needed.** The guest's threads are the sound mixer and the timer, both green-run inside the emulation, and the port has exactly one real host thread (the watchdog). See [host-architecture.md](host-architecture.md), "The green run".
+4. **g++ 2.95 exception handling** runs entirely inside guest code (game carries its own sjlj runtime) — should Just Work, but `Fatal` paths that unwind across the HLE boundary would not. `Fatal` doesn't return, so treat it as terminate-with-message. — **Settled: it did Just Work**, and no unwind ever crossed the boundary.
+5. **The 5.6 MB unknown**: game logic may do things we haven't seen (direct `/proc` reads etc.). Mitigated by: syscalls can't happen except through imports (all trapped) — any surprise shows up as a trap we haven't implemented yet, loudly. — **Settled: there was no surprise.** The mitigation was the right one and it never had to fire: a full boot into gameplay reports **0 unimplemented traps**, over 3.58M import calls in a 6-minute run.
 
 ## Milestones
 

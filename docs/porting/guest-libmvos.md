@@ -92,7 +92,7 @@ UNIMPLEMENTED: 3 low-freq (see trap report)
 ### Landed
 - Libc: `strncmp`, `__strtol_internal`, `__strtod_internal`, `gettimeofday`, `strcat`, sockets/`pipe`/`fcntl`/`sem_*`/`setitimer` stubs
 - **Synthetic `dlopen`/`dlsym`**: `QueryDevice` + `Create*Device` → guest device objects
-- **Flag/EnvSystem/singleton sync** (game↔mvos COPY split — permanent linker fix still TODO)
+- **Flag/EnvSystem/singleton sync** (game↔mvos COPY split — a workaround; the permanent linker fix landed in [G12](#g12--r_386_copy-shared-storage-done) and deleted all of it)
 - Minimal `data/game/mvos.cfg` + mvos.cfg loader @ `0x94640`
 - **`cIntuition` construction** after OpenSubsystems
 - **HLE `OpenDisplay`** (patch libmvos entry → SDL RGB565 window)
