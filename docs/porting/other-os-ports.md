@@ -533,6 +533,13 @@ cost a log diff to find. One `fprintf` would have named it immediately.
 > successes turns a host-side failure into a guest-side non-sequitur.** The
 > visible symptom here was a message about running two copies of the game.
 
+**Confirmed fixed by play, 2026-08-04.** The rebuilt bundle boots, and the two
+things the borrowed initialisation had invalidated were both re-verified on it:
+**multiplayer works**, and **cutscenes play** — which is also the first
+end-to-end confirmation of the minimal ffmpeg on Windows, previously verified
+only on Linux amd64 and arm64. Nothing in the Windows port is now resting on a
+result obtained from the pre-fix binary.
+
 ### The game runs on Windows — done 2026-08-04
 
 **Windows is playable, and the port is closed.** Three hosts now run the same

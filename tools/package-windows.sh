@@ -192,8 +192,9 @@ WHAT YOU MUST SUPPLY
     Point at them with THEOC_DATA and THEOC_CD if they are elsewhere.
 
 STATUS ON WINDOWS
-    Playable, verified by play on 2026-08-04: a full session, save/load, and a
-    netgame. Cross-compiled from macOS; no Windows machine builds it.
+    Playable, verified by play on 2026-08-04: a full session, save/load, a
+    netgame and cutscene playback. Cross-compiled from macOS; no Windows
+    machine builds it.
 
     Timing was the one real risk — the frame model needs sub-millisecond sleeps
     and Windows' default scheduler granularity is ~15.6 ms — and it is fixed
