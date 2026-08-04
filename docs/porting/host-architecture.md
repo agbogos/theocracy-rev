@@ -379,11 +379,26 @@ The reasoning:
   one moment a fault is most annoying and least diagnosable — a crash *after* the
   session is otherwise over. Zero upside, non-zero downside.
 
-**When to revisit.** If the host is ever ported to a platform where process exit
-does not reclaim as cleanly, or where an audio/video device left open by the
-guest's own bookkeeping matters — Windows being the obvious candidate — this is
-the first thing to reconsider. The entry point is `MVOS_BASE + 0x950e0`, called
-with no arguments, after `Start` returns and before the video hold.
+**Settled 2026-08-04, after three platforms.** Windows was the named candidate
+for this being wrong — a platform where an audio or video device left open by the
+guest's own bookkeeping might matter. It shipped and was played, and nothing
+surfaced: no device left claimed after exit, no handle warning, no second-launch
+failure on any of macOS, Linux or Windows. The decision above is therefore closed
+rather than pending, and it is not carried on any worklist.
+
+**What would reopen it**, narrowed by that evidence to two things, neither of
+which is a platform:
+
+- **The host stops being one-shot** — an in-process restart, a "quit to menu that
+  re-runs `Init`", or a test harness that boots the guest twice. Everything the
+  argument rests on is "the process is about to exit", and none of it survives
+  that.
+- **A guest-side resource that outlives the process** appears — the current list
+  is empty by inspection, but a future HLE addition (a named object, a lock file,
+  a device claimed outside our own SDL handles) would put something on it.
+
+If either happens the entry point is `MVOS_BASE + 0x950e0`, called with no
+arguments, after `Start` returns and before the video hold.
 
 ### Game-space addresses in the host
 

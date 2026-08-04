@@ -547,9 +547,12 @@ change if someone looked:
    that no run has ever exercised the branch.
 4. ~~**`THEOC_WATCHDOG_SAMPLE`**~~ — **fixed 2026-08-04**: it now says it is
    macOS-only instead of appearing to run. Still macOS-only.
-5. **`CloseSubsystems` is still skipped** — pre-existing on all three platforms,
-   not a Windows regression, and Windows is the platform
-   [host-architecture.md](host-architecture.md) names as the revisit trigger.
+5. ~~**`CloseSubsystems` is still skipped**~~ — **closed 2026-08-04, as a
+   decision rather than a fix.** Windows was the platform
+   [host-architecture.md](host-architecture.md) named as the revisit trigger, on
+   the theory that a device left open by the guest's bookkeeping would matter
+   there. It played, and nothing surfaced on any of the three hosts. The revisit
+   trigger is now the host stopping being one-shot, not a fourth platform.
 
 ### Two latent defects closed — 2026-08-04
 
@@ -890,8 +893,10 @@ Windows touches every item on that list.
 > fourth host or a genuinely different subsystem arrive, revisit; until then a
 > directory holding two functions is worse than the two functions.
 
-Also waiting, already known: **teardown**. `CloseSubsystems` is deliberately
-skipped because process exit on macOS reclaims everything it would release, and a
-platform where that is less true is the stated revisit trigger — see
-[host-architecture.md](host-architecture.md), "Why teardown skips
-`CloseSubsystems`".
+**Teardown was on this list and is now off it.** `CloseSubsystems` is skipped
+because process exit reclaims everything it would release, and "a platform where
+that is less true" was the stated revisit trigger. Windows was that platform, it
+played, and nothing surfaced — so the skip is a closed decision, not a deferred
+item. See [host-architecture.md](host-architecture.md), "Why teardown skips
+`CloseSubsystems`", for what would reopen it (the host ceasing to be one-shot —
+not a fourth host).
