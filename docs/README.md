@@ -64,7 +64,7 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 | Find your way around the emulator source | [porting/host-architecture.md](porting/host-architecture.md) |
 | Debug something that is broken right now | [porting/diagnostics.md](porting/diagnostics.md) |
 | Read the binaries without repeating our mistakes | [reference/re-methodology.md](reference/re-methodology.md) |
-| Know what is still unknown | [open_questions.md](open_questions.md) |
+| Know what is still unknown | each doc's own **"Open threads"** section — start with [subsystems/simulation-step.md](subsystems/simulation-step.md) |
 
 ## The port — current
 
@@ -86,9 +86,9 @@ hosts are playable and verified by play. One task is outstanding — a bare-meta
 Windows timing run, blocked on hardware until ~2026-08-18 — and it qualifies a
 measurement rather than blocking anything. Beyond it,
 [native-rewrite.md](porting/native-rewrite.md) is the one remaining *direction*
-and [open_questions.md](open_questions.md) is what is still unknown. The second
-entry below is kept here rather than moved because it is the record of how a
-host port is done in this project, not a plan.
+and what is still unknown lives in each doc's own **"Open threads"** section.
+The second entry below is kept here rather than moved because it is the record
+of how a host port is done in this project, not a plan.
 
 - [porting/native-rewrite.md](porting/native-rewrite.md) — **the long game.** Replace the emulated engine with native C++ one function at a time, game playable at every step, until Unicorn has nothing left to run. Why this is not the superseded pure-HLE plan (we now have a running system to check each piece against), the seam that already exists (`blit.cpp`'s five native LFB16 overrides), what makes a good candidate, and the hard parts — shared guest memory, the GUI toolkit, and knowing when to stop.
 - [porting/other-os-ports.md](porting/other-os-ports.md) — **Windows and Linux hosts — both done.** Structured from an audit of `port/src` rather than porting lore. The reusable core (four of seven units already travel; all of `docs/` transfers); three things that look like blockers and are not (`fork`/`execlp` are stubs, one host thread, no host `mmap`); why **Linux is a subtraction** — the BSD translations are written host-macro → guest-constant, so on Linux they are the identity and there is nothing to neutralise (measured on both platforms, correcting an earlier inference that they would be *actively wrong*) — and the one thing that must stay; Windows' real risk order, led by sub-millisecond sleep against a ~15.6 ms scheduler — probed standalone before a line of `traps.cpp` was touched, then fixed with a waitable timer and re-measured in-game; the prediction that Windows would force a `port/src/platform/` directory into existence, and **why it was wrong** (three platforms build from two adjacent `#if` blocks); and **which binary Windows should run** — the Linux one, since the Linux binaries ship unprotected while the Windows build does not run as shipped on modern Windows, and a Windows executable would be a different compilation to which none of this repo's addresses apply.
@@ -100,7 +100,6 @@ host port is done in this project, not a plan.
 - [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS** archive format, byte-exact, plus the `RSA4096` XOR joke-cipher over config/text files. Extractor: `tools/phls_extract.py`.
 - [reference/game-data-census.md](reference/game-data-census.md) — survey of the extracted tree (7191 files): formats ↔ engine structs, what feeds the simulation (`selap.txt` balance) vs. what is front-end.
 - [overview.md](overview.md) — libmvos technical report: binary facts, the CD distribution inventory, the **AmigaOS-heritage argument**, and the ~200-class map by subsystem.
-- [open_questions.md](open_questions.md) — the ledger of what is still unknown: open threads, the ones the pivot made moot, and a closed table pointing at where each answer landed. IDs are stable and cited from commits — never renumber.
 
 ## Game internals (`theocracy.real`)
 
@@ -161,14 +160,14 @@ accurate and still cited; the *approach* is not current.
 | Game↔engine ABI contract | inventoried (232 imports / 348 exports / copy relocs) |
 | Game flow / main loop | first pass done |
 | In-game loop & simulation | first pass done |
-| SimulationStep (one tick) | first pass done (units manager is the next target, open question #1) |
+| SimulationStep (one tick) | first pass done (units manager is the next target — [simulation-step.md](subsystems/simulation-step.md), "Open threads") |
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp` |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted |
 | **macOS port — guest-libmvos (current)** | **PLAYABLE, single-player and multiplayer** — dual-image emulator; single-player runs end to end (menu → realm → units, war, save/load) with cutscenes and audio, 0 unimplemented traps. Multiplayer verified end-to-end 2026-07-26: the shipped dedicated server runs under the same emulator, so both ends stay original code and the wire protocol never had to be reversed |
 | **Linux port** | **DONE 2026-08-03 — playable, confirmed by play.** Two BSD-isms were the entire compile delta (`sin_len`, `SO_NOSIGPIPE`). Boot, province, sockets and a 20-cycle soak verified headless in a container — the soak is *bit-identical* to macOS, live heap and frontier, all 20 cycles. Then played on real hardware: interactive input, save/load, and a full netgame (server + two clients). `tools/package-linux.sh` builds a relocatable bundle. See [porting/other-os-ports.md](porting/other-os-ports.md) |
 | **Windows port** | **DONE 2026-08-04 — playable, verified by play**: a full session, save/load, a netgame and cutscene playback. Three hosts run the same i386 binaries from the same source, with no `#ifdef` outside `traps.cpp`. Two things mattered beyond the build, and both are written up in [porting/other-os-ports.md](porting/other-os-ports.md): **sub-millisecond sleep** (the risk ranked first, and the only one that was real — a waitable timer fixed it, and contention runs to 2× oversubscription closed the question), and **two implicit initialisations the port was relying on without having chosen to** — POSIX's auto-binding `listen()`, and a `WSAStartup` that a third-party DLL happened to make. Both were latent on every platform. One item outstanding: a bare-metal timing run (~2026-08-18), which qualifies a measurement rather than blocking anything. |
 | **Windows port — build** | **BUILDS 2026-08-03.** `tools/package-windows.sh` cross-builds from macOS with mingw-w64 — no Windows machine is involved — producing a 7.3 MB bundle of seven DLLs taken from the real import closure, timing probe included. `traps.cpp` needed 11 fixes; the load-bearing ones were that Winsock SOCKETs are a **separate namespace from CRT fds** (libmvos polls sockets through plain `read`/`write`), `O_BINARY` everywhere (CRLF translation would silently corrupt saves and packs), and a `WSAGetLastError`→Linux-errno table. Cross-compiling also found a **real latent bug in the working macOS build** — `video.cpp` used `std::floor` without `<cmath>`. It runs the *Linux* binary. See [porting/other-os-ports.md](porting/other-os-ports.md) |
-| **macOS port — next** | **Nothing outstanding.** Playability closed 2026-08-02; the modernisation list closed 2026-08-03, two of its last three items as *won't-do* once their premises were checked. Province stays at its designed 12fps and [porting/frame-timing.md](porting/frame-timing.md) says why with evidence; `THEOC_PROVINCE_MS` is the one pacing control the engine admits. Next directions: [porting/native-rewrite.md](porting/native-rewrite.md); still-unknown: [open_questions.md](open_questions.md) |
+| **macOS port — next** | **Nothing outstanding.** Playability closed 2026-08-02; the modernisation list closed 2026-08-03, two of its last three items as *won't-do* once their premises were checked. Province stays at its designed 12fps and [porting/frame-timing.md](porting/frame-timing.md) says why with evidence; `THEOC_PROVINCE_MS` is the one pacing control the engine admits. Next direction: [porting/native-rewrite.md](porting/native-rewrite.md). |
 | **Release engineering** | **`v1.0.0` tagged 2026-08-04.** Every run prints its `git describe` identity as its first log line, and both packaging scripts name the bundle and its README the same way, so a tester's log identifies its own build — see [porting/diagnostics.md](porting/diagnostics.md), "The first line names the build". Bundles are `dist/theoc-{linux-amd64,linux-arm64,windows-x64}-<version>/` at 37 / 37 / 7.3 MB. |
 | RE findings audit | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Method distilled into [reference/re-methodology.md](reference/re-methodology.md) |
 | Everything else | mapped only (see [overview.md](overview.md)) |

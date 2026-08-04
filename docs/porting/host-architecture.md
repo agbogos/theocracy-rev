@@ -347,7 +347,7 @@ these were the only decisions in it that had no other home.)
   underruns/s); see [frame-timing.md](frame-timing.md).
 - **Guest heap grows ~18 KB per load/unload cycle** — measured very linearly over
   a 20-cycle soak, i.e. ~7000 cycles to exhaust the 128 MB arena. Left unchased;
-  attributing it needs an allocation-site histogram, which is open question #30.
+  attributing it needs an allocation-site histogram that does not exist; see [heap-growth-trials.md](heap-growth-trials.md).
 
 **One harness lesson worth keeping**, from `THEOC_LONGRUN` silently capping every
 session at ten minutes: it armed the watchdog but left `THEOC_START_SEC` at its

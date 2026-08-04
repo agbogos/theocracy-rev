@@ -61,3 +61,12 @@ python3 tools/phls_extract.py data/cd/tdat.pck /tmp/game-dec --decrypt
 # or decrypt an already-extracted tree in place:
 python3 tools/theocracy_crypt.py --tree /tmp/game-dec
 ```
+
+## Open threads
+
+- **The asset loaders** — the `c…` (runtime) ↔ `s…` (on-disk) pairings: FLC
+  video, `sSPR1` / `sTER1` sprites and terrain, and the bitmap / font / sample /
+  palette formats. Moot for the port, since the real engine loads all of them,
+  but this is **the single largest remaining piece of file-format archaeology**
+  and the one a data-modding or asset-viewer effort would need first.
+- **The map loader** `FUN_081c7a00` → the actual file read.

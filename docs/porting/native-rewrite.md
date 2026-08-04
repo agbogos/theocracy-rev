@@ -67,7 +67,7 @@ Roughly in the order these matter:
   subclasses.
 - **The game binary, eventually.** `theocracy.real` is `.symtab`-stripped and
   its simulation is still largely a black box
-  ([open_questions.md](../open_questions.md), #1). Retiring Unicorn means
+  ([simulation-step.md](../subsystems/simulation-step.md), "Open threads"). Retiring Unicorn means
   understanding it, not just the engine.
 - **Knowing when to stop.** A port that is 90% native and permanently mid-flight
   is worse than either endpoint. There is no deadline here, but there should be

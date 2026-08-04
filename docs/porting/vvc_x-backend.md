@@ -122,3 +122,16 @@ Hardcoded default plugin paths (the `_x` = X11 family), each wrapped by a `cLib*
 Video-device **selection** (caller `FUN_000a4fae`): reads a configured device name; default is **`xf86`** (→ `libmvos_vvc_x.so`), alternative `glide`. So the input/mouse/pointer are **separate plugins** from `vvc_x` (same `Create*Device`/`QueryDevice` ABI), not duplicated inside it — `vvc_x` owns the X window/present + event pump; the input plugins are the device objects.
 
 **Port note:** plugins are `dlopen`'d by **relative name with `RTLD_LAZY`** → they must be reachable via `LD_LIBRARY_PATH` / rpath / cwd. Point `LD_LIBRARY_PATH` at the game's lib dir. The whole X11 device family (`*_x.so`) is what you run or replace.
+
+## Open threads
+
+Archaeology. The port only ever runs at 16bpp, so none of this is a gap in it.
+
+- **The other `cGD` depth backends** — `_LFB8` / `_LFB15` / `_LFB24` / `_LFB32`,
+  and how the vtable selects between them. LFB16 is done: the blit family is
+  transliterated byte-exact into `port/src/blit.cpp` (file offsets `0x5c4e0`,
+  `0x5c940`, `0x5c9b0`, `0x5cb70`, `0x5cbb0` — add `0x10000` for Ghidra),
+  including the RLE packet format (`[count][flag]`, `flag == 0` ⇒ transparent
+  run, else palette indices with index 0 as a hole) and the
+  cdecl-despite-`__regparm` convention.
+- **The bitmap / palette pipeline** around those backends.

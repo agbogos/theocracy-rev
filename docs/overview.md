@@ -97,10 +97,15 @@ The API recreates AmigaOS concepts on Linux: `cIntuition`+`cScreen`/`ActivateScr
 
 ## Open questions / next steps
 
-Tracked in one place — **[open_questions.md](open_questions.md)** — with stable IDs
-and a closed table. This file deliberately keeps no second list; the four items
-that used to sit here have since split three ways: the `cApplication` bootstrap
-is **done** (see above), the `cGD` backend dispatch and the `c…`↔`s…` asset-loader
-pairings are still open as **#13** and **#16**, and the
-`cHeap_Compatibility`/`cHeapBlock` relation to `cSystemMemory` remains an open
-thread in [memory-and-containers.md](subsystems/memory-and-containers.md).
+**Each doc owns its own open threads** — there is no central ledger, and this
+file deliberately keeps no second list. The four items that used to sit here
+split three ways: the `cApplication` bootstrap is **done** (see above), the `cGD`
+backend dispatch went to
+[porting/vvc_x-backend.md](porting/vvc_x-backend.md) and the `c…`↔`s…`
+asset-loader pairings to
+[reference/game-data-census.md](reference/game-data-census.md), and
+`cHeap_Compatibility`/`cHeapBlock` vs `cSystemMemory` remains an open thread in
+[memory-and-containers.md](subsystems/memory-and-containers.md).
+
+None of them blocks anything: the port runs the real engine, so every one is
+archaeology that a native rewrite would need and today's build does not.

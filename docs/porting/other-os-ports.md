@@ -962,7 +962,7 @@ Two things follow, and the second is the one that mattered:
 
 - **The guest heap is deterministic and host-independent.** Same allocation
   sequence, same totals, different kernel. That also sharpens
-  [open question #30](../open_questions.md): the +18 KB/cycle is the *guest*
+  the [heap-growth trials](heap-growth-trials.md): the +18 KB/cycle is the *guest*
   allocating, not the port leaking.
 - **The 2026-08-03 sleep/present/cursor rewrite did not perturb allocation at
   all** — these numbers reproduce the 2026-07-25 baseline exactly. That closes

@@ -98,5 +98,19 @@ protocol. Running the shipped `server` binary under emulation keeps both ends
 original, so the format above is for *diagnosis*, not for reimplementation.
 
 ## Open threads
+
+Archaeology, not blockers — multiplayer works end to end on all three hosts.
+
 - The faction roster template `DAT_08645240` (11 × 0x10) — decode fields (name/color/type/AI).
-- Whether multiplayer is battle-only (tactical) vs. full strategic — the `scenarioID=-1` + battle-map load suggests **standalone tactical battles**.
+- Whether multiplayer is battle-only (tactical) vs. full strategic — the
+  `scenarioID=-1` + battle-map load suggests **standalone tactical battles**.
+  Note this is now answerable by *playing* rather than by reading: if a netgame
+  never offers a realm/campaign layer, that is the answer.
+- **What dispatches the netgame session.** `FUN_0829c300` is the whole
+  multiplayer game start to finish and `NetGame_AssignTeams` parses the team
+  info, but **neither is called directly** — both sit in function tables
+  (`0x85906a0` / `0x85907d4` / `0x84bccb4`), so entry is indirect and the caller
+  is unread. Worth doing because the dispatcher is also where the tick-sync
+  *receive* side is reachable from, which is the unread half of lockstep (see
+  [game-loop-and-simulation.md](game-loop-and-simulation.md)).
+- **The realm-select UI** that writes `g_LocalFactionTable` (multiplayer only).

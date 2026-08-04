@@ -87,7 +87,7 @@ The `theocracy` launcher runs the game with CWD `~/.theocracy`, containing a
 `data` symlink (→ the extracted tree) and a copied `mvos.cfg`. So our HLE
 filesystem root should expose `./data/…` (→ `data/game/data`) and `./mvos.cfg`.
 **`mvos.cfg` is not in the packs** — `inst.linux` installs it. **Resolved**
-(open question #28): rather than reversing the installer, we ship a hand-authored
+: rather than reversing the installer, we ship a hand-authored
 minimal `data/game/mvos.cfg`, reconstructed from the `EnvSystem` keys the boot
 actually reads — `[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`,
 `[sound] card`, `[network] enable`. It is tracked in git via a `.gitignore`

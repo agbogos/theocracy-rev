@@ -20,8 +20,11 @@ holds tasks only; the reasoning goes in `docs/`, which it links to. (The older
 in git.)
 
 Directions rather than tasks: `docs/porting/native-rewrite.md` (retire Unicorn
-gradually) and `docs/porting/other-os-ports.md`. What is still *unknown* is
-`docs/open_questions.md` — stable IDs, cited from outside, never renumbered.
+gradually) and `docs/porting/other-os-ports.md`. What is still *unknown* lives in
+each doc's own **"Open threads"** section — the central `docs/open_questions.md`
+ledger was retired on 2026-08-04 because everything in it was archaeology that
+no longer gated anything, and keeping it in sync with the subsystem docs cost
+more than it returned.
 
 Findings live in `docs/`, not in commit messages. If a finding has no doc that
 owns it, that means a doc is missing.

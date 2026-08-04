@@ -108,10 +108,23 @@ Note: the four input/video device globals are all produced by the *video* `LoadD
 - **M4** — Movies, CD audio, save/load, fullscreen polish → shippable Mac app.
 - **M5 (optional, long-term)** — incremental native lift: hook individual game functions, replace with native C++ verified against emulated originals → gradually a true native port (devilutionX-style, but with a running product from day one).
 
-## Open items
-- ~~Decompile libmvos `main`~~ **DONE** — boot sequence above.
-- `LoadDevicePlugins` (`0xa4990`) internals — confirm all four device globals + input-plugin handshake.
-- eBMType enum: full value set (2/4/5/6/7 known from vvc_x; 0/8 unsupported; meaning of 6 vs 7?).
-- Census of game-side `cThread` subclasses (search game vtables containing `cThread` methods).
-- Game data acquisition: CD ISO needed; `inst.linux` is **unstripped** with zlib + `Unpack(cString,cString,cDirEntry)` — RE it to write a native extractor for the CD archives.
-- The ~30 libc imports: exact list + semantics audit (`__strtod_internal` etc. are glibc-internal names — implement by behavior, not name).
+## Open items — all resolved or made moot
+
+Every one of these is settled. Listed with its outcome, because **this is the
+list that stops dead work being re-proposed**: three of them were questions
+*only* because this plan needed them, and would become live again only if the
+project went back to native-replacing the engine wholesale.
+
+| Item | Outcome |
+|---|---|
+| Decompile libmvos `main` | **Done** — the 10-step boot is in [../subsystems/application-bootstrap.md](../subsystems/application-bootstrap.md). |
+| `LoadDevicePlugins` (`0xa4990`) internals | **Still open**, and now owned by [../subsystems/application-bootstrap.md](../subsystems/application-bootstrap.md). Not needed by the port: the `dlopen`/`dlsym` handshake is synthesised by the trap layer. |
+| `eBMType` enum — full value set (2/4/5/6/7 from vvc_x; 6 vs 7 unknown) | **Moot.** Only needed to author bitmap ctors natively; the engine's own ctors run. |
+| Census of game-side `cThread` subclasses | **Moot.** It sized a native green-thread scheduler; the guest's own threading runs under the HLE `cThread`/pipe shim. |
+| MVOS object layouts the game inlines — a systematic pass | **Moot.** It was the layout-compatibility surface for hand-built HLE objects; the objects are real now, so the layouts are too. (`cString`/`cNode`/`cMemBlock` were done anyway — [../subsystems/memory-and-containers.md](../subsystems/memory-and-containers.md).) |
+| Game data acquisition; RE `inst.linux` to write an extractor | **Done, and the installer never had to be reversed** — the pack format was cracked directly. See [../reference/phls-format.md](../reference/phls-format.md). |
+| The ~30 libc imports: exact list + semantics audit | **Done** — implemented in the HLE OS shim; a full boot into gameplay reports **0 unimplemented traps**. |
+
+The X11-plugin *port gotchas* this plan also carried (match the X visual depth;
+set `LD_LIBRARY_PATH` for the `RTLD_LAZY` relative-name `dlopen`) are moot for
+the same reason: the X11 plugin was replaced wholesale by the SDL backend.
