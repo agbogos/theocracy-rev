@@ -461,8 +461,18 @@ private:
     uint32_t fps_heap_base_ = guestmap::HEAP_BASE;  // heap growth per interval
     int      fps_timer_fires_ = 0;
     int      fps_sound_fires_ = 0;
-    uint64_t fps_usleep_us_ = 0;       // host µs slept in usleep() this window
+    uint64_t fps_usleep_us_ = 0;       // host µs *requested* in usleep() this window
     int      fps_usleep_calls_ = 0;
+
+    // Sleep-slice accounting. The frame model sleeps in tick-bounded slices, so
+    // slices/frame — not fps — is the number that says whether the host's sleep
+    // primitive is keeping up, and the requested-vs-elapsed gap is that
+    // primitive's own floor. Measured rather than hand-derived from the line
+    // above, because on Windows exactly that arithmetic was the whole residual.
+    // See docs/porting/other-os-ports.md, "the fix lands, with a residual".
+    void     sleep_accounted(uint32_t us);
+    uint64_t fps_sleep_act_us_ = 0;    // µs actually elapsed in those sleeps
+    int      fps_sleep_slices_ = 0;    // individual host sleeps this window
     int      fps_gettime_calls_ = 0;
     int      fps_select_calls_ = 0;
 

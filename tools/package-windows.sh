@@ -169,20 +169,28 @@ WHAT YOU MUST SUPPLY
     Point at them with THEOC_DATA and THEOC_CD if they are elsewhere.
 
 STATUS ON WINDOWS
-    This build has been produced by cross-compiling and has NOT been verified
-    on Windows. The known risk is timing: the frame model needs sub-millisecond
-    sleeps, and Windows' default scheduler granularity is ~15.6 ms. If pacing
-    looks wrong, that is the first thing to measure — see win-timing-probe.exe
-    and docs/porting/other-os-ports.md.
+    Playable, verified by play on 2026-08-04: a full session, save/load, and a
+    netgame. Cross-compiled from macOS; no Windows machine builds it.
+
+    Timing was the one real risk — the frame model needs sub-millisecond sleeps
+    and Windows' default scheduler granularity is ~15.6 ms — and it is fixed
+    with a high-resolution waitable timer. All of it was measured in a VM, so
+    if pacing looks wrong on your machine, measure before believing it:
+    win-timing-probe.exe ships beside this file and needs no arguments.
 
 DIAGNOSTICS
     Every knob is an environment variable named THEOC_*. Start with:
       set THEOC_FPS=1        frame/heartbeat/sleep instrumentation
       set THEOC_WATCHDOG=1   says whether the guest is spinning or the host is
     The full catalogue is docs/porting/diagnostics.md.
+
+    On THEOC_FPS's sleep column, "(N slices/frame, +M ms each)" is the host
+    timing check: N should be ~3-4, and N x M is how much of the frame is the
+    sleep timer's own floor. See docs/porting/diagnostics.md.
 TXT
 
 SIZE=$(du -sh "$OUT" | cut -f1)
 echo ">>> done: $OUT ($SIZE)"
 echo
-echo "    NOT verified on Windows — cross-built only. See README.txt."
+echo "    Cross-built from this host; the port itself is verified by play on"
+echo "    Windows (2026-08-04). Run win-timing-probe.exe on any new machine."

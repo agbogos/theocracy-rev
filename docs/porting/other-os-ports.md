@@ -533,10 +533,11 @@ change if someone looked:
 
 1. **Timing under contention, and on bare metal.** Every timing number this
    project has for Windows comes from one idle VM. The probe's `--busy N` mode
-   was written precisely for the three-instances-on-one-host case and has still
-   never been run, and the [Linux multiplayer
-   paragraph](#confirmed-by-play) already explains why an impression of
-   slowness under those conditions would not be usable evidence.
+   was written precisely for the three-instances-on-one-host case, and the
+   [Linux multiplayer paragraph](#confirmed-by-play) already explains why an
+   impression of slowness under those conditions would not be usable evidence.
+   **What closes this is below** — two probe runs and one bare-metal run, all
+   specified, none of them requiring a code change.
 2. **Audio is very slightly noisier than macOS.** Province steady state ran
    `underrun=0/s` in 170 of 191 samples, the rest 7–766 frames/s — at most ~17 ms
    of audio in a second, and below anything audible. macOS reports a flat zero.
@@ -553,6 +554,57 @@ change if someone looked:
    the theory that a device left open by the guest's bookkeeping would matter
    there. It played, and nothing surfaced on any of the three hosts. The revisit
    trigger is now the host stopping being one-shot, not a fourth platform.
+
+### What closes the timing item — 2026-08-04
+
+Three runs and no code change. Two of them can be done today; the third waits on
+hardware. The in-game half is already done and shipped.
+
+**The in-game half — done.** `[fps]` now prints **`(N slices/frame, +M ms
+each)`** directly, measured at the sleep call. The 2026-08-04 residual above was
+decomposed by hand out of three separate columns to reach "≈1.0 ms per slice";
+that arithmetic is now the instrument's job, on every host, so the next person to
+question timing on unfamiliar hardware reads it instead of deriving it. See
+[diagnostics.md](diagnostics.md), "Reading the sleep slices".
+
+**Two probe runs in the VM.** The probe already ships inside the bundle:
+
+```
+win-timing-probe.exe --busy 12
+win-timing-probe.exe --busy 24
+```
+
+**Not `--busy 4`.** The VM has 12 logical CPUs, and four spinning threads on
+twelve never force the scheduler to choose — it would measure the idle case
+again while looking like a contention test. The point is to oversubscribe: 12
+matches the CPU count, 24 doubles it, and the multiplayer case that raised this
+(three instances on one host) sits between them. Compare against the idle table
+above; the columns that matter are test 2's median lateness and test 3's
+frame/ticks-per-frame.
+
+**One bare-metal run**, when hardware exists — see the note below. Same three
+invocations (idle, `--busy 12`, `--busy 24`), plus one ordinary game session with
+`THEOC_FPS=1` to read the two new columns in situ.
+
+**What would count as a problem**, decided in advance so the result is not read
+after the fact:
+
+- **slices/frame falling toward ~1** — the heartbeat has collapsed into the frame
+  rate, which is a defect and not a slow host.
+- **slices/frame × overshoot exceeding ~8 ms** — that is ~10% of an 83 ms frame,
+  the point at which this stops being invisible and becomes a game-speed error,
+  since the limiter is elapsed-based.
+- **median tick lateness above ~16 ms** — half a heartbeat interval, past which a
+  tick is closer to the next one than to its own.
+
+Anything short of those is the timer's floor under load, which is a number to
+record rather than a thing to fix.
+
+> **Bare metal is scheduled, not abandoned.** No bare-metal Windows machine is
+> available to this project; one becomes available to the author **from roughly
+> 2026-08-18** via a third party. Until then every Windows figure in this
+> document describes one VM and should be read that way. This is the whole
+> remaining content of the item — the VM half is answerable now.
 
 ### Two latent defects closed — 2026-08-04
 

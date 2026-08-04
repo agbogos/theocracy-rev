@@ -63,7 +63,7 @@ then falls into whatever that variable's zero case is.
 
 | Variable | Argument / units | Default | What it does |
 |---|---|---|---|
-| `THEOC_FPS` | presence | off | Per-second `[fps]` line on stderr: fps, guest blocks/s and blocks/frame (the saturation check), heartbeat and mixer redirect rates, `usleep` ms/s and call count, `gettimeofday`/s, `select`/s, audio queue depth in seconds and underruns/s, guest heap live MB and frontier growth MB/s. The tool that split throughput-bound from timing-bound; its heap column also caught the G14 `cIntuition` corruption. **Since 2026-08-03 the fps figure is not a proxy for sim rate**: the async-cursor path presents out-of-band, so province reports ~30 presents/s while `cProvince_Do` still steps 12×/s. To read the *simulation* rate, use the `usleep` call count — the game issues one frame-limiter sleep per sim step, so `usleep` calls ÷ ~3.5 slices ≈ sim Hz — or set `THEOC_LEGACY_CURSOR=1` to put presents back on the frame. |
+| `THEOC_FPS` | presence | off | Per-second `[fps]` line on stderr: fps, guest blocks/s and blocks/frame (the saturation check), heartbeat and mixer redirect rates, `usleep` ms/s and call count, `gettimeofday`/s, `select`/s, audio queue depth in seconds and underruns/s, guest heap live MB and frontier growth MB/s. The tool that split throughput-bound from timing-bound; its heap column also caught the G14 `cIntuition` corruption. **Since 2026-08-03 the fps figure is not a proxy for sim rate**: the async-cursor path presents out-of-band, so province reports ~30 presents/s while `cProvince_Do` still steps 12×/s. To read the *simulation* rate, use the `usleep` call count — the game issues one frame-limiter sleep per sim step, so `usleep` calls ÷ ~3.5 slices ≈ sim Hz — or set `THEOC_LEGACY_CURSOR=1` to put presents back on the frame. Since 2026-08-04 the sleep column also carries **`(N slices/frame, +M ms each)`** — see "Reading the sleep slices" below, which is the first thing to look at when timing is questioned on a new host. |
 | `THEOC_PROFILE` | presence | off | Size-weighted guest basic-block histogram (Σ instruction bytes ≈ work), rolling top-15 dumped every 3s so the window tracks whatever is on screen. Host trap/stub/scratch pages (≥ `0x50000000`) are excluded; addresses are labelled `game 0x…` / `mvos+0x…` for the two Ghidra DBs. Armed just before `Start`, so boot and `.ctors` are not in the sample. Found the hot blit functions. |
 | `THEOC_TRACE` | presence | off | 32-entry ring of the last basic-block entries, dumped (oldest-first, labelled) when `Start` faults. Essential exactly when the EBP walk cannot help: at `eip=0` the frame pointer is usually 0 too, and this is then the only thing that shows how control got there. |
 | `THEOC_WATCHDOG` | seconds | off; **10s** when the value is ≤ 1 | Host thread, armed on the first present. Polls the present counter every 250ms; after the given stall it samples `exec_blocks` and the trap sequence over 500ms and reports uptime, stall length, guest running/not-running, the last guest EIP, the last trap name and live heap. **Arms the guest block counter itself** — its whole verdict is read off `exec_blocks`, and that counter used to be armed by `THEOC_FPS` alone (see "A counter nobody armed" below). |
@@ -144,6 +144,44 @@ Not diagnostics, but they shape every run and belong in one list.
 | **A multi-hour session.** | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. **Press `Alt+M` whenever the activity changes** — battle, reload, panel, idle. Without markers a session is one undifferentiated slope and every segment boundary is a guess; with them the tool prints a per-segment table (fitted MB/h, MB/1k frames, mean fps and blk/frame between one marker and the next) and rules them onto the chart. A controlled trial is one marked segment. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. **Growth per 1k frames is the figure to compare across runs**, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
 | **It leaks over a long session.** | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. **Watch `live`, not `frontier`** — see the note below. Note there is no allocation-site histogram; attributing a slow leak would need one built. |
 | **A missing import.** | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
+
+### Reading the sleep slices — the host-timing check
+
+**Added 2026-08-04.** The sleep column of `[fps]` reads:
+
+```
+sleep 677ms/s in 43 usleep (3.18 slices/frame, +2.78ms each)
+```
+
+The guest's frame limiter does not sleep its 83 ms in one call. The `usleep`
+handler splits it into slices bounded by the next 30 Hz tick, so a frame is
+paced by *several* host sleeps and what matters is how many, and how far each
+one overruns what was asked. Both are now counted at the call rather than
+derived afterwards:
+
+- **slices/frame** — host sleeps ÷ frames in the window. The frame model wants
+  ~3–4. **~1 means the heartbeat has collapsed into the frame rate**, which is
+  the exact defect the re-entrant sleep was built to fix, and it is the number
+  to watch rather than fps ([frame-timing.md](frame-timing.md)).
+- **+N ms each** — elapsed minus requested, averaged over those same sleeps.
+  This is the host sleep primitive's **own floor**. It is never zero anywhere
+  and a non-zero value is not a fault; the question is always "how does it
+  compare to this platform's figure below", and whether slices/frame × overshoot
+  is enough to explain a slow frame.
+
+Reference figures, each stated with how it was taken, because they are not
+comparable to each other:
+
+| Host | slices/frame | overshoot/slice | How measured |
+|---|---|---|---|
+| Windows (VM, waitable timer) | 3.78 | ~1.0 ms | derived by hand from a 6-min in-game run, 2026-08-04 — [other-os-ports.md](other-os-ports.md) |
+| macOS (`usleep`) | ~3.0 | **+2.1 … +3.2 ms** | this instrument, 2026-08-04, but a **headless `SDL_VIDEODRIVER=dummy` run** that sat at 10.4 fps rather than the usual 12 — not the reference config |
+
+The macOS row is the one to re-take: it is the first direct measurement of that
+platform's floor and it is higher than the Windows figure it was assumed to beat,
+but it comes from a run whose frame rate was already off, so it cannot yet be
+told apart from that run being contended. **One interactive macOS run with
+`THEOC_FPS=1` settles it** and nothing else is needed.
 
 ### Live set vs. frontier — why the growth figures moved
 

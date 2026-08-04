@@ -838,6 +838,29 @@ static inline void theoc_sleep_us(uint32_t us) {
 static inline void theoc_sleep_us(uint32_t us) { if (us) ::usleep(us); }
 #endif
 
+// Sleep one slice of the frame model and account for it.
+//
+// The guest's frame limiter does not sleep its 83 ms in one go — it sleeps in
+// slices bounded by the next 30 Hz tick, so what actually paces the game is
+// "how many slices per frame, and how much does each one overshoot". Both are
+// measured here rather than derived afterwards. The Windows port's residual
+// (+4.4% on the province frame) was decomposed by hand from three separate
+// [fps] columns to reach "≈1.0 ms per slice, i.e. the timer's own floor"; this
+// prints that number directly, on every host, which is what a future
+// timing question on unfamiliar hardware needs.
+//
+// Two clock reads per slice at ~40 slices/s is free, and the same steady_clock
+// the rest of the instrument uses — so the overshoot is measured on the clock
+// it would be compared against.
+void TrapLayer::sleep_accounted(uint32_t us) {
+    auto t0 = std::chrono::steady_clock::now();
+    theoc_sleep_us(us);
+    auto el = std::chrono::duration_cast<std::chrono::microseconds>(
+                  std::chrono::steady_clock::now() - t0).count();
+    ++fps_sleep_slices_;
+    fps_sleep_act_us_ += (uint64_t)(el < 0 ? 0 : el);
+}
+
 // ---- O_BINARY: the quiet data-corruption hazard ------------------------------
 // Windows opens files in *text* mode by default, which translates \n <-> \r\n on
 // the way through and stops reading at a 0x1a byte. Every file this port touches
@@ -1538,7 +1561,7 @@ void TrapLayer::register_builtins() {
         if (legacy) {  // pre-2026-08-03 blind sleep, for A/B
             uint32_t us = req > 100000 ? 100000 : req;
             fps_usleep_us_ += us;
-            theoc_sleep_us(us);
+            sleep_accounted(us);
             return 0;
         }
 
@@ -1609,7 +1632,7 @@ void TrapLayer::register_builtins() {
                 if ((uint64_t)until < slice) slice = (uint32_t)until;
             }
             if (!slice) continue;   // tick is due; next pass delivers it
-            theoc_sleep_us(slice);
+            sleep_accounted(slice);
             fps_usleep_us_ += slice;
             remaining -= slice;
         }
@@ -3178,14 +3201,29 @@ void TrapLayer::fps_tick(Machine& m) {
     uint64_t underrun; size_t qdepth;
     { std::lock_guard<std::mutex> lock(audio_mu_);
       underrun = audio_underrun_; audio_underrun_ = 0; qdepth = audio_q_.size(); }
+
+    // Slices/frame and per-slice overshoot: the two numbers that say whether the
+    // host's sleep primitive can pace this frame model. Overshoot is elapsed
+    // minus requested over the same set of sleeps, so it is the primitive's own
+    // floor and nothing else — it is not a fault reading, every sleep primitive
+    // has one. Compare against the per-platform figures in
+    // docs/porting/diagnostics.md rather than against zero.
+    double slices_per_frame = fps_frames_ ? (double)fps_sleep_slices_ / fps_frames_ : 0;
+    double over_ms = fps_sleep_slices_ && fps_sleep_act_us_ > fps_usleep_us_
+                         ? (double)(fps_sleep_act_us_ - fps_usleep_us_)
+                               / fps_sleep_slices_ / 1000.0
+                         : 0.0;
+
     std::fprintf(stderr,
         "[fps] %.1f fps | guest %.1fM blk/s (%.2fM/frame) | "
         "heartbeat %.0f/s mixer %.0f/s\n"
-        "      sleep %.0fms/s in %d usleep | gettimeofday %d/s | select %d/s | "
+        "      sleep %.0fms/s in %d usleep (%.2f slices/frame, +%.2fms each) | "
+        "gettimeofday %d/s | select %d/s | "
         "audio q=%.2fs underrun=%llu/s | heap %.1fMB live (+%.2fMB/s frontier)\n",
         fps, bps / 1e6, bpf / 1e6,
         fps_timer_fires_ / secs, fps_sound_fires_ / secs,
         (fps_usleep_us_ / 1000.0) / secs, fps_usleep_calls_,
+        slices_per_frame, over_ms,
         (int)(fps_gettime_calls_ / secs), (int)(fps_select_calls_ / secs),
         qdepth / 44100.0, (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)),
         heap_live_ / 1048576.0,
@@ -3199,6 +3237,8 @@ void TrapLayer::fps_tick(Machine& m) {
     fps_sound_fires_ = 0;
     fps_usleep_us_ = 0;
     fps_usleep_calls_ = 0;
+    fps_sleep_act_us_ = 0;
+    fps_sleep_slices_ = 0;
     fps_gettime_calls_ = 0;
     fps_select_calls_ = 0;
 }
