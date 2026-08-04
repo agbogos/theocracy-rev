@@ -423,7 +423,8 @@ Two things measured rather than assumed:
   note therefore still stands: the port only decodes MPEG-1 cutscenes, and a
   minimally-configured ffmpeg would cut this dramatically. (The first draft of
   the packaging script claimed "~50 MB" from reasoning rather than measurement,
-  and was wrong by 2.5x.)
+  and was wrong by 2.5x.) **Done 2026-08-04 — the bundle is now 7.3 MB**; see
+  [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses).
 - **Stripping `theoc.exe` takes it from 14.1 MB to 2.4 MB**, and the symbols are
   regenerable by rebuilding.
 
@@ -897,10 +898,88 @@ Two consequences worth knowing:
 - **~190 MB**, almost all of it ffmpeg's codec dependencies (x264, x265, vpx,
   theora, srt, zmq…). The port only ever decodes MPEG-1 cutscenes, so a
   minimally-configured ffmpeg would cut this dramatically — worth doing if the
-  bundle is ever distributed rather than just tested.
+  bundle is ever distributed rather than just tested. **Done 2026-08-04 — 37 MB**;
+  see [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses).
 - **glibc ≥ 2.36 and libstdc++ from GCC 12** on the target, inherited from the
   bookworm base. For an older target, build the image `FROM` an older base
   rather than bundling around it.
+
+## Both bundles, minus the ffmpeg nobody uses
+
+**Done 2026-08-04.** Both bundles were ~90% ffmpeg that this port cannot reach.
+`tools/build-ffmpeg-min.sh` builds a minimal one; the package scripts pass it to
+cmake as `-DTHEOC_FFMPEG_PREFIX=` and are otherwise unchanged.
+
+| Bundle | Before | After |
+|---|---|---|
+| Windows x64 | 131 MB | **7.3 MB** |
+| Linux amd64 | 189 MB | **37 MB** |
+
+`avcodec` carries it: 89.6 MB → 613 KB on Windows, and on Linux the entire codec
+dependency graph (x264, x265, vpx, theora, srt, zmq, and their own dependencies)
+stops being reachable from the binary at all, so the closure walk never bundles
+it. What is left on Linux is SDL2, Unicorn and the X11/Wayland/ALSA/Pulse client
+libraries, which is the floor for that bundling policy.
+
+### What the port actually decodes, measured
+
+All 27 files under `data/cd/movie/` probe identically — **MPEG-PS containing
+mpeg1video and mp2 44.1 kHz stereo** — and `port/src/mpeg.cpp` additionally uses
+swscale (YUV→RGB565) and swresample (audio format). The engine's own FLC video
+never touches ffmpeg; that is guest code decoding into the LFB.
+
+### The trap: "what the files contain" is not the enable list
+
+Configuring for exactly that — `--enable-decoder=mpeg1video,mp2
+--enable-demuxer=mpegps` — builds cleanly, shrinks the bundle, and **decodes
+nothing**:
+
+```
+[mpeg] probed stream 0 failed
+[mpeg] Could not find codec parameters for stream 0 (Video: none, none)
+[smpeg] decode failed, will skip frames
+```
+
+An MPEG-PS elementary stream whose type the container does not state is
+identified by libavformat *probing* it, and the probe works by asking the **raw**
+demuxers — `mpegvideo`, `mp3` — to recognise their own bitstream. With those
+disabled the codec id stays `NONE` and no decoder is ever looked up, however
+enabled the decoder is. The probe also reports MPEG-2 for MPEG-1 video, so
+`mpeg2video` is enabled alongside `mpeg1video`; it decodes both and shares their
+code, so it is free.
+
+**The reason this is verified rather than reasoned about** is in the third line
+above: the port logs the failure and *carries on to the menu*. A bundle 95%
+smaller with every cutscene silently missing presents as a clean success.
+
+### How it was verified, with no display
+
+Headless in the container, both architectures, reading the decode log rather than
+the screen:
+
+```
+[mpeg] decoded 'data/cd/movie/ubi_logo.mpg' 480x360 249 frames @ 24.0 fps, audio 198144 samp (9.0s)
+[mpeg] decoded 'data/cd/movie/logo.mpg'     608x300 476 frames  @ 24.0 fps, audio 438336 samp (19.9s)
+[mpeg] decoded 'data/cd/movie/intro.mpg'    608x300 1192 frames @ 24.0 fps, audio 1096128 samp (49.7s)
+```
+
+Frame and sample counts are identical on amd64 and arm64, and identical to what
+the full-fat ffmpeg produced. **Windows is verified as far as cross-building
+allows** — same configure line, same sonames, closure resolved, bundle built —
+but nothing has *played* a cutscene there since the change; that is a task in
+[`todo.md`](../../todo.md).
+
+Two smaller things this dragged out:
+
+- **`nasm` had to join the Dockerfile.** ffmpeg's configure refuses to build on
+  x86-64 without an assembler, so an amd64 bundle build failed in the container
+  before it reached the port. arm64 never hit it — there is no x86 asm to
+  assemble — which is a good reminder that the emulated-arch build is not a
+  rehearsal for the real one.
+- **Both package scripts now wipe their build directory first.** `find_library`
+  caches, so a tree left over from a run with a different ffmpeg prefix keeps
+  linking the old one and ships it silently. One extra minute of compiling
+  against a failure that looks like the prefix not working at all.
 
 ## Sequencing
 

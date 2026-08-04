@@ -55,7 +55,24 @@ ARCH="'"$ARCH"'"
 OUT="'"$OUT"'"
 BUILD="port/build-linux-$ARCH"
 
-cmake -S port -B "$BUILD" >/dev/null
+# A minimal ffmpeg, if tools/build-ffmpeg-min.sh has produced one, replaces the
+# distro libavcodec and with it the whole codec dependency graph — x264, x265,
+# vpx, theora, srt, zmq — none of which this port can reach. Optional: without
+# it the bundle is simply the old size.
+FFMPEG_MIN="/src/port/deps-ffmpeg-linux-$ARCH"
+FFMPEG_ARG=""
+if [ -f "$FFMPEG_MIN/lib/libavcodec.so" ]; then
+  FFMPEG_ARG="-DTHEOC_FFMPEG_PREFIX=$FFMPEG_MIN"
+  echo "    using the minimal ffmpeg at $FFMPEG_MIN"
+else
+  echo "    no minimal ffmpeg (tools/build-ffmpeg-min.sh linux $ARCH) — using the distro one"
+  FFMPEG_MIN=""
+fi
+
+# Configure from scratch: find_library caches, so a tree left from a run with a
+# different ffmpeg prefix would keep linking the old one and ship it silently.
+rm -rf "$BUILD"
+cmake -S port -B "$BUILD" $FFMPEG_ARG >/dev/null
 cmake --build "$BUILD" -j"$(nproc)" >/dev/null
 echo "    built $BUILD/theoc"
 
@@ -81,7 +98,11 @@ cp "$BUILD/theoc" "$OUT/bin/theoc"
 # takes THEOC_SYSTEM_LIBS=1 to ignore the bundle if that ever bites.
 DENY="^(ld-linux|libc\.so|libm\.so|libpthread|libdl\.so|librt\.so|libresolv|libnsl|libanl|libstdc\+\+|libgcc_s)"
 
+# ldd needs the minimal ffmpeg on the search path to resolve it — it is not in
+# any system directory. Without this it reports "not found" and the bundle would
+# ship without the very libraries it was just linked against.
 n=0
+LD_LIBRARY_PATH="${FFMPEG_MIN:+$FFMPEG_MIN/lib}" \
 ldd "$OUT/bin/theoc" | awk "/=> \//{print \$3}" | sort -u | while read -r so; do
   base=$(basename "$so")
   if echo "$base" | grep -Eq "$DENY"; then continue; fi

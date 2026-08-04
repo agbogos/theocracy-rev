@@ -26,10 +26,11 @@
 #     dependencies (x264, x265, vpx, theora...) are *statically linked into*
 #     avcodec-61.dll here rather than sitting beside it as separate .so files.
 #     Measured, because the first version of this comment guessed and was wrong:
-#     131 MB total, of which avcodec-61.dll alone is 89.6 MB and avformat-61.dll
-#     21.1 MB. So the Linux note still applies — the port only ever decodes
-#     MPEG-1 cutscenes, and a minimally-configured ffmpeg would cut this
-#     dramatically. It is simply concentrated in one file instead of scattered.
+#     131 MB total, of which avcodec-61.dll alone was 89.6 MB and avformat-61.dll
+#     21.1 MB. Since 2026-08-04 that is gone: tools/build-ffmpeg-min.sh builds an
+#     ffmpeg holding only the MPEG-1/MP2 path this port decodes, avcodec drops to
+#     613 KB and the bundle to 7.3 MB. See docs/porting/other-os-ports.md,
+#     "Both bundles, minus the ffmpeg nobody uses".
 #   * There is no system-integration hazard. On Linux, bundling libX11/libGL
 #     would have been actively harmful because they must match the host's
 #     display server and drivers. The Windows equivalents (d2d1, DWrite, USP10,
@@ -59,10 +60,31 @@ command -v x86_64-w64-mingw32-g++ >/dev/null 2>&1 || {
   exit 1
 }
 
+# A minimal ffmpeg, if one has been built, replaces the staged full-fat one —
+# 113 MB of unreachable codecs down to 2.7 MB. Optional on purpose: without it
+# the bundle is simply the old size, so packaging never depends on having run
+# another build first.
+FFMPEG_MIN="${THEOC_FFMPEG_PREFIX:-$ROOT/port/deps-ffmpeg-win}"
+if [ -f "$FFMPEG_MIN/lib/libavcodec.dll.a" ]; then
+  echo ">>> using the minimal ffmpeg at $FFMPEG_MIN"
+else
+  echo ">>> no minimal ffmpeg — using the staged one (bundle will be ~130 MB)"
+  echo "    build it with: tools/build-ffmpeg-min.sh windows"
+  FFMPEG_MIN=""
+fi
+
+# Configure from scratch. find_library caches its result, so a build directory
+# left over from a run with a different ffmpeg prefix would keep linking the old
+# one and the bundle would silently ship yesterday's DLLs — cost: one extra
+# minute of compiling, against a failure mode that looks like the prefix not
+# working at all.
+rm -rf "$BUILD"
+
 echo ">>> configuring"
 cmake -S "$ROOT/port" -B "$BUILD" \
       -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
       -DTHEOC_WIN_DEPS="$DEPS" \
+      -DTHEOC_FFMPEG_PREFIX="$FFMPEG_MIN" \
       -DCMAKE_BUILD_TYPE=Release >/dev/null
 
 echo ">>> building"
@@ -85,7 +107,8 @@ SYSTEM_RE='^(kernel32|kernelbase|user32|advapi32|ws2_32|gdi32|gdiplus|ole32|olea
 
 # Where a non-system DLL might live: the staged prefix, then the toolchain
 # (libwinpthread-1.dll and friends).
-SEARCH="$DEPS/bin
+SEARCH="${FFMPEG_MIN:+$FFMPEG_MIN/bin}
+$DEPS/bin
 $DEPS/lib
 /opt/homebrew/Cellar/mingw-w64/*/toolchain-x86_64/x86_64-w64-mingw32/bin
 /usr/lib/gcc/x86_64-w64-mingw32

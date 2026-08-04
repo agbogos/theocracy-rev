@@ -22,6 +22,12 @@
 # matters for the optional oracle, which is not this image's job.
 FROM debian:bookworm-slim
 
+# nasm is not for the port — it is for tools/build-ffmpeg-min.sh, which builds
+# the bundle's minimal ffmpeg in this image. ffmpeg's configure *fails* on x86-64
+# without an assembler ("nasm/yasm not found or too old"), so an amd64 bundle
+# build stops here rather than in the port. It is absent on arm64 builds' critical
+# path (no x86 asm to assemble) but costs nothing to have in both.
+#
 # libunicorn-dev in bookworm is Unicorn 2.x, which is what the host requires.
 # Verified at image build time below rather than trusted — a silent fall back to
 # 1.x would fail deep in machine.cpp with a confusing error.
@@ -37,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libavutil-dev \
         libswscale-dev \
         libswresample-dev \
+        nasm \
         python3 \
     && rm -rf /var/lib/apt/lists/*
 

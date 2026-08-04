@@ -32,17 +32,35 @@ if(THEOC_PREFIX)
   set(_theoc_lib_hint "${THEOC_PREFIX}/lib")
 endif()
 
+# THEOC_FFMPEG_PREFIX overrides *only* the libav* family, searched ahead of
+# everything else. It exists for the packaged bundles: a stock ffmpeg carries
+# every encoder and codec ever written and is ~90% of the bundle, while this port
+# decodes exactly one thing (MPEG-1 video + MP2 audio out of an MPEG-PS file).
+# tools/build-ffmpeg-min.sh builds that minimal ffmpeg; the package scripts point
+# here at it. Unset — the normal case — nothing changes and the system ffmpeg is
+# used, which is what every development build wants.
+set(THEOC_FFMPEG_PREFIX "" CACHE PATH "Prefix of a minimal ffmpeg, searched before THEOC_PREFIX")
+set(_theoc_av_inc_hint "${_theoc_inc_hint}")
+set(_theoc_av_lib_hint "${_theoc_lib_hint}")
+if(THEOC_FFMPEG_PREFIX)
+  list(PREPEND _theoc_av_inc_hint "${THEOC_FFMPEG_PREFIX}/include")
+  list(PREPEND _theoc_av_lib_hint "${THEOC_FFMPEG_PREFIX}/lib")
+endif()
+
 find_path(UNICORN_INCLUDE_DIR unicorn/unicorn.h        HINTS ${_theoc_inc_hint})
 find_path(SDL2_INCLUDE_DIR    SDL2/SDL.h               HINTS ${_theoc_inc_hint})
-find_path(LIBAV_INCLUDE_DIR   libavformat/avformat.h   HINTS ${_theoc_inc_hint})
+find_path(LIBAV_INCLUDE_DIR   libavformat/avformat.h   HINTS ${_theoc_av_inc_hint} NO_DEFAULT_PATH)
+find_path(LIBAV_INCLUDE_DIR   libavformat/avformat.h   HINTS ${_theoc_av_inc_hint})
 
 find_library(UNICORN_LIBRARY     unicorn     HINTS ${_theoc_lib_hint})
 find_library(SDL2_LIBRARY        SDL2        HINTS ${_theoc_lib_hint})
-find_library(AVFORMAT_LIBRARY    avformat    HINTS ${_theoc_lib_hint})
-find_library(AVCODEC_LIBRARY     avcodec     HINTS ${_theoc_lib_hint})
-find_library(AVUTIL_LIBRARY      avutil      HINTS ${_theoc_lib_hint})
-find_library(SWSCALE_LIBRARY     swscale     HINTS ${_theoc_lib_hint})
-find_library(SWRESAMPLE_LIBRARY  swresample  HINTS ${_theoc_lib_hint})
+foreach(_av avformat avcodec avutil swscale swresample)
+  string(TOUPPER "${_av}" _AV)
+  # Two passes: the ffmpeg prefix wins outright when set (NO_DEFAULT_PATH stops
+  # a system copy being picked up first), then the normal search as a fallback.
+  find_library(${_AV}_LIBRARY ${_av} HINTS ${_theoc_av_lib_hint} NO_DEFAULT_PATH)
+  find_library(${_AV}_LIBRARY ${_av} HINTS ${_theoc_av_lib_hint})
+endforeach()
 
 # Report *everything* missing at once. A one-at-a-time failure on a fresh box
 # turns "install the dependencies" into five separate rounds of cmake.

@@ -55,8 +55,13 @@ set(CMAKE_RC_COMPILER  ${TOOLCHAIN_PREFIX}-windres)
 set(THEOC_WIN_DEPS "${CMAKE_CURRENT_LIST_DIR}/../deps-win"
     CACHE PATH "Prefix holding staged Windows SDL2/Unicorn/ffmpeg")
 
-set(CMAKE_FIND_ROOT_PATH "${THEOC_WIN_DEPS}")
-set(CMAKE_PREFIX_PATH    "${THEOC_WIN_DEPS}")
+# A minimal ffmpeg (tools/build-ffmpeg-min.sh) lives in its own prefix and must
+# be inside the find root, or CMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY below would
+# reject it however it was hinted. Listed first so it wins over the staged
+# full-fat ffmpeg in deps-win.
+set(THEOC_FFMPEG_PREFIX "" CACHE PATH "Prefix of a minimal ffmpeg, searched first")
+set(CMAKE_FIND_ROOT_PATH "${THEOC_FFMPEG_PREFIX}" "${THEOC_WIN_DEPS}")
+set(CMAKE_PREFIX_PATH    "${THEOC_FFMPEG_PREFIX}" "${THEOC_WIN_DEPS}")
 
 # Look for the host's own tools, but never for its libraries or headers —
 # without this, find_library would happily hand a cross build /opt/homebrew's

@@ -53,28 +53,19 @@ plus one ordinary game session with `THEOC_FPS=1`.
 This is the last thing standing between the Windows port and having no caveats
 on any of its timing numbers.
 
+### 4. Windows: watch one cutscene — VM, 1 min
+
+The bundle's ffmpeg was replaced with a minimal build on 2026-08-04 (131 MB →
+7.3 MB). Rebuild with `tools/package-windows.sh`, copy it over, and confirm the
+intro plays with video **and** sound.
+
+Why it needs a human: the failure mode is silent. The port logs `[smpeg] decode
+failed, will skip frames` and carries straight on to the menu, so a broken build
+looks like a working one unless someone watches. Identical config is verified
+decoding on Linux amd64 and arm64, so this is confirmation, not a real risk.
+
 ---
 
 ## CLAUDE
 
-### 4. Bundle size reduction — not started
-
-Both bundles are enormous for the same reason, in different shapes:
-
-| Bundle | Size | Where it goes |
-|---|---|---|
-| Windows | ~131 MB | `avcodec-61.dll` 89.6 MB + `avformat-61.dll` 21.1 MB (codecs statically linked in) |
-| Linux | ~190 MB | the same codecs as separate `.so` files — x264, x265, vpx, theora, srt, zmq — pulled in as `DT_NEEDED` of Debian's libavcodec |
-
-`port/src/mpeg.cpp` decodes **MPEG-1 video + MP2 audio out of an MPEG-PS file**,
-plus swscale for YUV→RGB565 and swresample for the audio rate. Everything else
-in those libraries is dead weight.
-
-Plan: one `tools/build-ffmpeg-min.sh` that builds a `--disable-everything`
-ffmpeg with just those decoders/demuxers/parsers into a prefix, and point both
-package scripts at it with the `-DTHEOC_PREFIX=` override that already exists.
-Shared, not static, so the closure walk in both scripts keeps working unchanged.
-No CMake surgery — that is what makes this cheap.
-
-Verifiable without a display: sizes are packaging, and cutscene decode checks
-headless in the container with the dummy driver.
+Nothing queued.

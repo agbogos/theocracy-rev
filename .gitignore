@@ -19,6 +19,9 @@
 # ── Build artifacts ───────────────────────────────────────────────────────
 /port/build/
 /port/build-linux/
+# Per-arch container build trees. The amd64 one was committed by accident in
+# 96c3db7 (32 files, including the binary) and untracked on 2026-08-04.
+/port/build-linux-*/
 /port/build-win/
 # Staged third-party Windows dependencies (SDL2 / Unicorn / ffmpeg headers,
 # import libs and DLLs) for the mingw-w64 cross build. Third-party binaries:
@@ -45,3 +48,10 @@ __pycache__/
 
 # Packaged bundles — rebuild with tools/package-linux.sh
 /dist/
+
+# Minimal ffmpeg for the bundles — source tarball, build trees and install
+# prefixes. All regenerable with tools/build-ffmpeg-min.sh; third-party source
+# and binaries, so the same rule as port/deps-win/ applies: never committed.
+/port/ffmpeg-src/
+/port/deps-ffmpeg-win/
+/port/deps-ffmpeg-linux-*/
