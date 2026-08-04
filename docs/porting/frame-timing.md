@@ -217,6 +217,17 @@ and every re-entry counts as a fresh call — 12 × 3.5 ≈ 43. That is the spli
 working, and `heartbeat 30/s` alongside `sleep 605ms/s` is the thing the old
 design could not do: full-duration sleeps *and* a 30 Hz tick.
 
+> **This is what makes the host's sleep primitive load-bearing.** ~3.5 slices
+> per frame means the requested duration is uniform over (0, 33.3 ms] and the
+> tail slice before each tick is *routinely sub-millisecond*. A host that cannot
+> express that does not add jitter — it overshoots the deadline the slice
+> existed to stop at, and because the limiter is elapsed-based the error lands
+> on **game speed**. On POSIX `usleep` resolves this and there is nothing to do;
+> on Windows the default ~15.6 ms scheduler tick made the province frame 94 ms
+> against 83.3 ms until `theoc_sleep_us()` was built on a high-resolution
+> waitable timer. Measurements and the design in
+> [other-os-ports.md](other-os-ports.md), "The probe's answer".
+
 **And it exposed a wrong assumption.** Realm reported `sleep 0ms/s in 0 usleep`
 — `RealmGameLoop` **never calls the frame limiter at all**. It has no pacing of
 its own, so "let realm run at its natural rate" was meaningless: uncapped it

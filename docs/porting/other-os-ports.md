@@ -287,11 +287,34 @@ Four things fall out, and the third was not predicted:
 > bare-metal run is still wanted, and there is no bare-metal Windows available to
 > this project.
 
-**Not yet done: the port does not use any of this.** `traps.cpp` still calls
-`::usleep`, which on mingw is the ~15.6 ms path — i.e. today's `theoc.exe` is
-the naive column. The fix is a Windows `sleep_us()` built on
-`CreateWaitableTimerEx`, which is the first thing `port/src/platform/` should
-hold.
+### What shipped — 2026-08-04
+
+`theoc_sleep_us()` in `traps.cpp`, in the platform block beside `theoc_mkdir()`,
+replacing `::usleep` at its three call sites (the `THEOC_LEGACY_SLEEP` A/B path,
+the tick-bounded slice loop that is the real one, and the `THEOC_FRAME_MS`
+present-to-present cap). On POSIX it *is* `::usleep`; the Windows branch is the
+waitable timer.
+
+Three decisions inside it, each of which the probe's table settles:
+
+- **One timer handle for the process, created on first use and never closed.**
+  At ~40 slices/s, a create/close pair per sleep is a syscall round trip per
+  slice buying nothing.
+- **No `timeBeginPeriod` on the timer path** — row 3 of the four findings above.
+  It is a system-wide side effect with a power cost and it measured as noise.
+- **The fallback skips the coarse waitable timer** that `CreateWaitableTimerEx`
+  degrades to when the flag is rejected (pre-Windows-10-1803), and goes straight
+  to `timeBeginPeriod(1)` + `Sleep()`. A coarse waitable timer rides the same
+  15.6 ms tick as `Sleep` and would buy nothing over it, where
+  `timeBeginPeriod` measured 2.0 ms. The fallback announces itself on stderr —
+  it is a 2%-slow province frame, which is exactly the kind of thing that gets
+  misdiagnosed as a performance problem a year later.
+
+It stayed **inline in `traps.cpp`**. There is still no `port/src/platform/`
+directory and it has still not been earned: this is the second host difference
+to want a home there and, like the Winsock work, it is one narrow `#if` block
+next to the other one. Three would be an argument; two is a directory holding
+two functions.
 
 ## The Windows build — 2026-08-03
 
@@ -418,21 +441,50 @@ cannot continue, so everything after is undefined. The ignore is now **bounded**
 diagnosis, instead of leaving someone to infer it from a repeating log. A healthy
 run aborts zero times.
 
+### The game runs on Windows — 2026-08-04
+
+With the lock fix, **it runs.** Past `Start`, into the game, rendering and
+playable enough to recognise. Three hosts now run the same 2000 i386 binaries
+off the same source.
+
+Two things that were *ranked* as risks and turned out not to be, which is worth
+recording because the ranking was wrong in a useful direction:
+
+- **Path handling never bit.** `resolve_path`'s `guest[0] == '/'` test is still
+  not how Windows spells "absolute", and it was the prime suspect for the next
+  failure — but every path the game actually asks for is relative to the data
+  root, so the branch is never taken. It is a latent defect, not a live one; see
+  the list below.
+- **Nothing else needed a Windows-specific fix at all.** The gap between "boots
+  to `Start`" and "runs" was one latent bug shared by all three platforms plus a
+  sleep primitive. That is the dual-image architecture paying off: the guest is
+  the same binary everywhere, so a host port only has to be right about the OS
+  boundary.
+
+**Not yet done: a proper playtest**, and comparison against screenshots from the
+original. "Runs and looks right" is not the standard [Linux was held
+to](#confirmed-by-play).
+
 ### What is still not known
 
-The boot now gets past the lock, but **that has not been re-run**, and nothing
-past `Start` has ever executed on Windows. Remaining risks, in order:
+Remaining risks, in order:
 
-1. **Timing** — measured (above), fix identified, **not implemented**. Today's
-   `theoc.exe` still calls mingw's `::usleep` and is the naive ~15.6 ms column.
-2. **Path handling.** `resolve_path` builds `/`-separated paths and the guest
-   supplies Unix ones. Windows APIs accept `/`, but nothing here has tested a
-   drive-letter root, and `guest[0] == '/'` as the "is absolute" test is simply
-   not how Windows spells that.
+1. **Timing under real load.** The fix is in (above), but the measurement behind
+   it was taken in a VM on an idle box, and the probe's `--busy N` mode — the
+   multiplayer case, three instances on one host — has still never been run.
+   Bare metal remains unmeasured too.
+2. **Path handling**, latent. `resolve_path` builds `/`-separated paths and
+   treats `guest[0] == '/'` as absolute. Unreached today; it would surface the
+   moment a data root moves somewhere that makes the guest emit an absolute
+   path, and it would surface as a file-not-found, not as an obvious Windows
+   error.
 3. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
    `std::system`. Compiles; will do nothing useful. Off by default.
 4. **`CloseSubsystems` is still skipped** — and Windows is the platform
    [host-architecture.md](host-architecture.md) names as the revisit trigger.
+5. **Multiplayer has never been tried on Windows.** Winsock is the largest
+   rewritten surface in the port and only its single-instance-lock corner has
+   been exercised by a run.
 
 ## Which binary does the Windows port run?
 

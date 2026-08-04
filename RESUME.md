@@ -1,4 +1,4 @@
-# Resume note — Windows port, 2026-08-03
+# Resume note — Windows port, 2026-08-04
 
 **Ephemeral. Delete this file when the Windows port is either working or
 abandoned** — the durable knowledge belongs in `docs/`, and this repo
@@ -7,75 +7,41 @@ let this become its replacement).
 
 ## Where things stand
 
-macOS: playable. Linux: done and confirmed by play. **Windows: builds, boots,
-and has never got past `Start`.**
+macOS: playable. Linux: done and confirmed by play. **Windows: runs.** Past
+`Start`, into the game.
 
-Everything below is written up properly in
-[`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md) — read "The
-Windows build" and the two sections after it. This file is only the *state*, not
-the findings.
+Both of the previous session's two steps are done. The single-instance lock fix
+was confirmed by the user's run, and `theoc_sleep_us()` on
+`CreateWaitableTimerEx(HIGH_RESOLUTION)` is implemented, built and packaged —
+`dist/theoc-windows-x64/` is current and contains it.
 
-Last session: cross-toolchain set up, `traps.cpp` ported to Winsock2, bundle
-built, first Windows run attempted. It boots identically to macOS all the way
-into `Start`, then hit a bug that turned out to be **latent on every platform**
-(the single-instance lock faked `bind` without binding; POSIX `listen()` forgave
-it by auto-binding, Winsock did not). Fixed and repackaged, **not retested**.
+The findings are written up in
+[`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md): "The probe's
+answer" now ends with a "What shipped" section, and "The game runs on Windows"
+replaces the old first-run narrative's open ends. This file is only the *state*.
 
-## Next two steps, in order
+## What is left before this file can be deleted
 
-### 1. USER: retest `dist/theoc-windows-x64/` on the Windows VM
+**A proper playtest, with comparison against the old screenshots** — the
+standard Linux was held to ("Confirmed by play"), not "it runs and looks right".
+That is the user's, and it is the only thing standing between here and done.
 
-Already built and waiting — it contains the lock fix. Nothing to rebuild first.
-Run `theoc.bat`. Expect it to get past "You can run only one Theocracy in the
-same time!" and further into `Start`.
+Worth exercising while playing, in rough priority:
 
-**Expect province to run slow** (~13%) if it renders. That is step 2, not a new
-bug.
+1. **Province frame rate.** The timer fix predicts ~84 ms/frame where the naive
+   build measured 94. `THEOC_FPS=1` prints it. If province still runs visibly
+   slow, that is the one regression this session could have caused.
+2. **Save/load.** The `O_BINARY` work is untested by a real save — CRLF
+   translation would corrupt `.tsg` silently.
+3. **Multiplayer.** Never tried on Windows, and Winsock is the largest
+   rewritten surface in the port.
 
-Ask for the output. If it fails, the prime suspect is **path handling**:
-`resolve_path` tests `guest[0] == '/'` for "is absolute", which is not how
-Windows spells that.
+Then: delete this file, and fold anything left into `docs/`.
 
-### 2. ME: implement `sleep_us()` on `CreateWaitableTimerEx`
-
-The probe already ran and decided this — **do not re-measure, and do not
-re-litigate the design.** Results are in other-os-ports.md, "The probe's answer".
-The short version:
-
-- naive `Sleep()` → 15.9 ms for a 0.1 ms request; province frame 94 ms vs 83.3
-- `CreateWaitableTimerEx(HIGH_RESOLUTION)` → 0.63 ms; province frame 84.0 ms
-- **`timeBeginPeriod(1)` adds nothing on top of the timer** — measured. Do not
-  add it; raising system-wide timer resolution is a global side effect with a
-  power cost, for no gain.
-
-Implementation shape, consistent with what is already in the file:
-
-- Add `theoc_sleep_us()` next to `theoc_mkdir()` in the platform block near the
-  top of `traps.cpp` (~line 700). Keep it a narrow `#if defined(_WIN32)` helper.
-  There is still no `port/src/platform/` directory and it has not earned one —
-  the Winsock work stayed inline too.
-- Windows: **one** timer handle created once and reused (creating one per sleep
-  is a syscall per slice at ~40 slices/s). `SetWaitableTimer` with a negative
-  relative due time in 100 ns units, then `WaitForSingleObject`.
-- Fall back to `timeBeginPeriod(1)` + `Sleep()` if `CreateWaitableTimerEx`
-  rejects `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION` (pre-Windows-10-1803). The
-  probe reports which one it got; mirror that.
-- POSIX: `::usleep(us)`, unchanged.
-
-**Three call sites**, all in `traps.cpp`:
-
-| Line | Context |
-|---|---|
-| ~1402 | `THEOC_LEGACY_SLEEP` blind-sleep A/B path |
-| ~1473 | the real one — the tick-bounded slice loop |
-| ~4349 | the `THEOC_FRAME_MS` present-to-present cap |
-
-Then rebuild both platforms and re-run `tools/package-windows.sh`.
-
-## Things that cost time last session
+## Things that cost time in earlier sessions
 
 - **The shell is zsh with `noclobber`.** `>` on an existing file silently fails
-  and you read a stale log and misdiagnose. Use `>|`. This bit me twice.
+  and you read a stale log and misdiagnose. Use `>|`.
 - **Don't relaunch the game** — the user drives runs (see CLAUDE.md). Ask for
   output; absence of a log line is evidence.
 - `pkg-config` is required by Unicorn's bundled `qemu/configure`, which runs
@@ -84,8 +50,8 @@ Then rebuild both platforms and re-run `tools/package-windows.sh`.
 - The macOS clang LSP reports dozens of errors on `traps.cpp` because it cannot
   find `unicorn/unicorn.h` / `windows.h`. **Ignore them**; trust the actual
   builds.
-- Ghidra was never needed for any of this. If it becomes needed, ask the user
-  which binary is loaded — the MCP shows one at a time.
+- Ghidra has not been needed for any of the Windows work. If it becomes needed,
+  ask the user which binary is loaded — the MCP shows one at a time.
 
 ## Build commands
 

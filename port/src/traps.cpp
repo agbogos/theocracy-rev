@@ -17,6 +17,11 @@
 #if defined(_WIN32)
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
+// After winsock2.h, never before: windows.h would otherwise drag in the
+// original winsock.h and the two collide. Needed for the waitable-timer sleep
+// (CreateWaitableTimerEx) and, on its fallback path, timeBeginPeriod.
+#  include <windows.h>
+#  include <mmsystem.h>
 #else
 #  include <arpa/inet.h>
 #  include <netdb.h>
@@ -697,6 +702,71 @@ typedef socklen_t socklen_t_compat;
 #  define THEOC_CLOSESOCKET(fd) ::close(fd)
 #  define THEOC_SOCK_CAST(p)    (p)
 static inline int theoc_mkdir(const char* p) { return ::mkdir(p, 0755); }
+#endif
+
+// ---- sub-millisecond sleep ---------------------------------------------------
+// The one place where a host difference is a *gameplay* difference rather than a
+// compile error. This port sleeps in slices bounded by the next 30Hz heartbeat —
+// tens of sub-millisecond sleeps per second — and the game's frame limiter is
+// elapsed-based, so a sleep that overshoots does not merely jitter, it slows the
+// simulation. On POSIX ::usleep resolves this to well under a millisecond and
+// there is nothing to do. On Windows the default scheduler tick is ~15.6 ms, and
+// mingw's ::usleep is a Sleep() wrapper riding it: measured, that ran the
+// province frame at 94 ms against an 83.3 ms target (~13% slow) with the
+// heartbeat 9 ms late every tick.
+//
+// CreateWaitableTimerEx(HIGH_RESOLUTION) is the fix and the whole fix: 0.63 ms
+// for a 0.1 ms request, province frame 84.0 ms. Measured alternatives and why
+// they are not here — docs/porting/other-os-ports.md, "The probe's answer":
+//
+//  * timeBeginPeriod(1) on top of the timer buys nothing (0.647 vs 0.655 ms,
+//    i.e. noise), and raising the timer resolution is a system-wide side effect
+//    with a power cost. So it appears below only on the path that has no timer.
+//  * a *coarse* waitable timer, which is what CreateWaitableTimerEx degrades to
+//    if the flag is rejected, rides the same 15.6 ms tick as Sleep and would buy
+//    nothing over it. The probe measures that fallback; the port skips straight
+//    past it to timeBeginPeriod + Sleep, which measured 2.0 ms.
+#if defined(_WIN32)
+#  ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION   // pre-Win10-1803 SDK headers
+#    define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#  endif
+static inline void theoc_sleep_us(uint32_t us) {
+    if (!us) return;
+    // One handle for the process, not one per sleep: at ~40 slices/s a create +
+    // close pair per sleep is pure syscall overhead. Created on first use; the
+    // host runs one thread, and a function-local static is race-free regardless.
+    static HANDLE timer = []() -> HANDLE {
+        HANDLE h = CreateWaitableTimerExW(nullptr, nullptr,
+                                          CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                                          TIMER_ALL_ACCESS);
+        if (h) return h;
+        // No high-resolution timer (pre-1803). Raise the scheduler tick for this
+        // process once and live with Sleep()'s whole-millisecond granularity.
+        timeBeginPeriod(1);
+        std::fprintf(stderr,
+                     "[timing] no high-resolution waitable timer (err %lu) — "
+                     "falling back to timeBeginPeriod(1)+Sleep; expect the "
+                     "province frame ~2%% slow\n",
+                     (unsigned long)GetLastError());
+        return nullptr;
+    }();
+    if (timer) {
+        // Relative due time, in negative 100 ns units.
+        LARGE_INTEGER due;
+        due.QuadPart = -(LONGLONG)us * 10;
+        if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+            WaitForSingleObject(timer, INFINITE);
+            return;
+        }
+    }
+    // Round up: Sleep(0) is "yield the rest of the quantum", a different
+    // operation, and would return early from a sleep the caller asked for.
+    DWORD ms = (DWORD)((us + 999) / 1000);
+    if (!ms) ms = 1;
+    Sleep(ms);
+}
+#else
+static inline void theoc_sleep_us(uint32_t us) { if (us) ::usleep(us); }
 #endif
 
 // ---- O_BINARY: the quiet data-corruption hazard ------------------------------
@@ -1399,7 +1469,7 @@ void TrapLayer::register_builtins() {
         if (legacy) {  // pre-2026-08-03 blind sleep, for A/B
             uint32_t us = req > 100000 ? 100000 : req;
             fps_usleep_us_ += us;
-            if (us) ::usleep(us);
+            theoc_sleep_us(us);
             return 0;
         }
 
@@ -1470,7 +1540,7 @@ void TrapLayer::register_builtins() {
                 if ((uint64_t)until < slice) slice = (uint32_t)until;
             }
             if (!slice) continue;   // tick is due; next pass delivers it
-            ::usleep(slice);
+            theoc_sleep_us(slice);
             fps_usleep_us_ += slice;
             remaining -= slice;
         }
@@ -4346,7 +4416,7 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
                         // every capped frame reports as an 83ms "slow" section
                         // and buries the real ones.
                         slow_credit_ms_ += (double)(target - elapsed) / 1000.0;
-                        ::usleep((useconds_t)(target - elapsed));
+                        theoc_sleep_us((uint32_t)(target - elapsed));
                     }
                 }
             }
