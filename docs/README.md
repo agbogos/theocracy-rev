@@ -75,12 +75,17 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 
 ## The port — what's next
 
-The worklist (`task_fifo.md`) was **retired on 2026-08-03** when its last item
-closed. There is no worklist file, and as of **2026-08-04 the other-OS ports are
-finished too** — so [native-rewrite.md](porting/native-rewrite.md) is the one
-remaining *direction*, and [open_questions.md](open_questions.md) is what is
-still unknown. The second entry below is kept here rather than moved because it
-is the record of how a host port is done in this project, not a plan.
+Open tasks are in **[`todo.md`](../todo.md)** at the repo root — three runs the
+author has to make on his own machines, and one size-reduction job. It holds
+tasks only; the reasoning stays in these docs. (It replaces `task_fifo.md`,
+retired 2026-08-03; the gap between them is why this section said "there is no
+worklist file" for a day.)
+
+Beyond those tasks, as of **2026-08-04 the other-OS ports are finished** — so
+[native-rewrite.md](porting/native-rewrite.md) is the one remaining *direction*,
+and [open_questions.md](open_questions.md) is what is still unknown. The second
+entry below is kept here rather than moved because it is the record of how a
+host port is done in this project, not a plan.
 
 - [porting/native-rewrite.md](porting/native-rewrite.md) — **the long game.** Replace the emulated engine with native C++ one function at a time, game playable at every step, until Unicorn has nothing left to run. Why this is not the superseded pure-HLE plan (we now have a running system to check each piece against), the seam that already exists (`blit.cpp`'s five native LFB16 overrides), what makes a good candidate, and the hard parts — shared guest memory, the GUI toolkit, and knowing when to stop.
 - [porting/other-os-ports.md](porting/other-os-ports.md) — **Windows and Linux hosts — both done.** Structured from an audit of `port/src` rather than porting lore. The reusable core (four of seven units already travel; all of `docs/` transfers); three things that look like blockers and are not (`fork`/`execlp` are stubs, one host thread, no host `mmap`); why **Linux is a subtraction** — the BSD translations are written host-macro → guest-constant, so on Linux they are the identity and there is nothing to neutralise (measured on both platforms, correcting an earlier inference that they would be *actively wrong*) — and the one thing that must stay; Windows' real risk order, led by sub-millisecond sleep against a ~15.6 ms scheduler — probed standalone before a line of `traps.cpp` was touched, then fixed with a waitable timer and re-measured in-game; the prediction that Windows would force a `port/src/platform/` directory into existence, and **why it was wrong** (three platforms build from two adjacent `#if` blocks); and **which binary Windows should run** — the Linux one, since the Linux binaries ship unprotected while the Windows build does not run as shipped on modern Windows, and a Windows executable would be a different compilation to which none of this repo's addresses apply.

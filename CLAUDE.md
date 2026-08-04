@@ -12,9 +12,14 @@ port is one goal; the reverse-engineering write-up in `docs/` is the other.
 2. `docs/porting/host-architecture.md` before touching `port/src`;
    `docs/porting/diagnostics.md` before debugging anything.
 
-There is **no worklist file**. `task_fifo.md` was retired on 2026-08-03 when the
-last item closed; its history is in git and everything it knew was moved into
-`docs/`. What is next is `docs/porting/native-rewrite.md` (retire Unicorn
+**Open tasks live in `todo.md`** (since 2026-08-04), split into what needs the
+user's machine/hardware and what an agent can do unattended. Put a task there
+rather than in prose — burying one in a paragraph is how it gets missed. It
+holds tasks only; the reasoning goes in `docs/`, which it links to. (The older
+`task_fifo.md` was retired on 2026-08-03 and is not coming back — its history is
+in git.)
+
+Directions rather than tasks: `docs/porting/native-rewrite.md` (retire Unicorn
 gradually) and `docs/porting/other-os-ports.md`. What is still *unknown* is
 `docs/open_questions.md` — stable IDs, cited from outside, never renumbered.
 
