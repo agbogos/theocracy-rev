@@ -3,11 +3,11 @@
 #
 #   tools/package-linux.sh [amd64|arm64]     (default: amd64)
 #
-# Output: dist/theoc-linux-<arch>/ containing
+# Output: dist/theoc-linux-<arch>-<version>/ containing
 #   theoc            the launcher (run this)
 #   bin/theoc        the actual binary
 #   lib/*.so*        bundled dependencies
-#   README.txt
+#   README.txt      (carries the build identity, as does the binary's banner)
 #
 # Runs entirely in a container, so `ldd` sees the *target* architecture rather
 # than the build host's. On Apple Silicon, arm64 is native and amd64 goes

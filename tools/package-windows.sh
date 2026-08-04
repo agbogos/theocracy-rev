@@ -3,7 +3,7 @@
 #
 #   tools/package-windows.sh
 #
-# Output: dist/theoc-windows-x64/ containing
+# Output: dist/theoc-windows-x64-<version>/ containing
 #   theoc.bat        the launcher (run this)
 #   bin/theoc.exe    the actual binary
 #   bin/*.dll        bundled dependencies

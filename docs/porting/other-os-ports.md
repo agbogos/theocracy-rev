@@ -1,18 +1,27 @@
 # Other-OS ports — Windows and Linux
 
-**Status: Linux done and played. Windows builds but has never run.** Both were
-brought up on 2026-08-03. Linux is confirmed by play — see
-[Confirmed by play](#confirmed-by-play).
+**Status: both done and played.** Linux was brought up and confirmed by play on
+2026-08-03, Windows on 2026-08-04 — see [Confirmed by play](#confirmed-by-play)
+and [The game runs on Windows](#the-game-runs-on-windows--done-2026-08-04).
+Three hosts now run the same 2000 i386 binaries from the same source, with no
+`#ifdef` in any unit but `traps.cpp`.
 
-Windows now **compiles, links and packages** to
-`dist/theoc-windows-x64/` via `tools/package-windows.sh`, cross-built from macOS
-with mingw-w64 and no Windows machine in the loop. That is the whole claim: **not
-one instruction has executed on Windows**, so nothing here says the game works.
-The audited risk list below has measurements against it now — they moved three
-of its five items — and the one risk that survived, sub-millisecond sleep, is
-still unmeasured because measuring it needs a Windows host. See
-[What the cross compiler says](#what-the-cross-compiler-says) and
-[The Windows build](#the-windows-build--2026-08-03).
+Both bundles are cross-built from macOS with no machine of the target OS in the
+loop: `tools/package-windows.sh` → `dist/theoc-windows-x64-<version>/` (mingw-w64),
+`tools/package-linux.sh [amd64|arm64]` → `dist/theoc-linux-<arch>-<version>/`
+(a container).
+
+One item is outstanding: a **bare-metal Windows timing run**, blocked on hardware
+until ~2026-08-18. It qualifies a measurement rather than blocking anything — see
+[The contention runs](#the-contention-runs--2026-08-04).
+
+> **This document is written forwards, and is kept that way on purpose.** The
+> risk list below was authored from an audit *before anything was compiled*, and
+> the corrections that follow it are left as corrections rather than folded back
+> in. Three of its five items were moved by measurement, one was the real risk,
+> and one prediction (that Windows would force a `port/src/platform/` directory)
+> was simply wrong. Reading it in order is the point; reading only the top is
+> what this status block is for.
 
 ## The reusable core is bigger than it looks
 
@@ -362,7 +371,7 @@ section is about what the compiler and linker settled, not about the game
 working. Produced entirely by cross-compiling from macOS:
 
 ```sh
-tools/package-windows.sh          # -> dist/theoc-windows-x64/
+tools/package-windows.sh          # -> dist/theoc-windows-x64-<version>/
 ```
 
 ### Staging the dependencies took longer than the port
@@ -409,7 +418,7 @@ where one namespace covers both).
 
 ### The bundle
 
-`dist/theoc-windows-x64/` — launcher, `bin/theoc.exe`, seven DLLs, the timing
+`dist/theoc-windows-x64-<version>/` — launcher, `bin/theoc.exe`, seven DLLs, the timing
 probe, README. The DLL list is **not hand-written**: it is the transitive import
 closure of `theoc.exe` walked with `objdump` and filtered against a denylist of
 DLLs that ship with Windows, because the Linux bundle already established that
@@ -997,7 +1006,7 @@ province differential already gives above.
 
 `tools/package-linux.sh [amd64|arm64]` builds and packages in one step, entirely
 in a container so `ldd` sees the *target* architecture. Output is
-`dist/theoc-linux-<arch>/` — a launcher, `bin/theoc`, `lib/`, and a README.
+`dist/theoc-linux-<arch>-<version>/` — a launcher, `bin/theoc`, `lib/`, and a README.
 Verified self-contained by running it in a bare `debian:bookworm-slim` with no
 development packages installed: 0 loader errors, 215/215 constructors, video up.
 
