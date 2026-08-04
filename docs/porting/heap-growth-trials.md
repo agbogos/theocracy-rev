@@ -278,3 +278,17 @@ The general lesson, which is [diagnostics.md](diagnostics.md)'s lesson again fro
 the other side: an instrument that reads *exactly zero* deserves suspicion, and
 so does one that reads a confident, plausible number the first time it is
 pointed at something real.
+
+## Open threads
+
+Listed here only so that grepping the docs for "Open threads" finds them; the
+substance is in [Where this landed](#where-this-landed) and is not repeated.
+
+- **Which allocation site produces the ~18 KB/cycle.** Deliberately not chased —
+  it is bounded, deterministic and host-independent (macOS and Linux agree to two
+  decimals across 20 cycles, live *and* frontier), so it is the guest allocating
+  rather than the port leaking. Needs an allocation-site histogram that does not
+  exist. Reopen on evidence, not suspicion: see the reopen conditions above.
+- **Host RSS**, separately unattributed and not guest-arena memory.
+- **`blk/frame` in province reading 4× apart** between trials 2 and 3 for
+  nominally the same activity.

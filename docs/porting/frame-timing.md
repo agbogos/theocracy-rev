@@ -108,6 +108,27 @@ Result: province **12fps → ~40fps**, heartbeat back to a solid **30Hz**.
 > Corollary: this fixes the game clock **everywhere**, not just province — any
 > screen that was heartbeat-starved now ticks at the correct rate.
 
+#### The slice loop is self-limiting — measured 2026-08-04
+
+A property of this loop that was not designed in, and is worth knowing before
+anyone "improves" it: **per-slice sleep overshoots do not accumulate across a
+frame.** The loop charges *real elapsed* time against the remaining budget and
+recomputes the next slice, so one slice that overshoots by 20 ms consumes the
+rest of the frame instead of extending it. The frame floor is the budget plus
+roughly **one** overshoot, not N of them.
+
+Measured on a Windows VM under deliberate CPU contention: between one spinning
+thread per core and two per core, the **single-shot sleep median degraded 4×**
+(6.6 → 26.7 ms) while the **province frame moved 0.9 ms** (97.9 → 98.8). It also
+means a host-timing budget expressed as `slices × overshoot` is the wrong model —
+a mistake this project made when writing the acceptance criteria for that very
+run. See [other-os-ports.md](other-os-ports.md), "The contention runs".
+
+`THEOC_FPS=1` now reports both terms directly as `(N slices/frame, +M ms each)`;
+[diagnostics.md](diagnostics.md), "Reading the sleep slices", has the per-host
+reference figures and the warning that overshoot must be measured in the played
+configuration or not at all.
+
 ---
 
 ## Bug 2 — frame-tied simulation ("turbo" province)

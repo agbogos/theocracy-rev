@@ -1,6 +1,21 @@
 # Guest libmvos — architecture pivot
 
-**Status: G1 bring-up achieved (2026-07-22).** Pure-HLE MVOS (`mvos.cpp` / `video.cpp`) is left in tree but **not linked**. The host now maps **both** `theocracy.real` and `libmvos.so.0.9` under Unicorn and HLE-only the OS boundary.
+**Status: done and playable on macOS, Linux and Windows; tagged `v1.0.0`
+(2026-08-04).** The host maps **both** `theocracy.real` and `libmvos.so.0.9`
+under Unicorn and HLE-only the OS boundary. Pure-HLE MVOS (`mvos.cpp`) is left
+in tree but **not linked**.
+
+> **This document is a milestone log, written forwards from the 2026-07-22
+> pivot.** G1 is the first bring-up, not the current state; read it in order or
+> jump to the milestone you need. Later entries are full debugging narratives —
+> symptom, wrong theories, root cause — and several correct an earlier entry, so
+> a claim here is only current if nothing after it revises it. The structural
+> view of the same system is [host-architecture.md](host-architecture.md); the
+> other two hosts are [other-os-ports.md](other-os-ports.md).
+>
+> Milestones marked *(partial)* were partial **when written**. Everything G1–G21
+> describes has since been finished and verified by play on all three hosts,
+> including the netgame G21 left mid-bring-up.
 
 ## Why
 
@@ -264,9 +279,14 @@ THEOC_SKIP_MOVIES=1 ./port/build/theoc   # fast boot
 ./port/build/theoc                       # real intros
 ```
 
-### Remaining debt
-- Long-session stability, multiplayer
-- Province-view performance (also on Win VM)
+### Remaining debt — as of G10; all four are now closed
+- ~~Long-session stability~~ — closed by the [heap-growth trials](heap-growth-trials.md)
+  (2026-08-02): every controlled activity saturates, nothing threatens the arena.
+- ~~Multiplayer~~ — G19–G21 below, then played end to end on all three hosts.
+- ~~Province-view performance~~ — closed **won't-do**: it was never a
+  performance problem. Province is *designed* at 12 fps and
+  [frame-timing.md](frame-timing.md) has the evidence; `THEOC_PROVINCE_MS` is
+  the one pacing control the engine admits.
 - *(R_386_COPY shared storage — fixed in G12)*
 - *(Fatal/abort policy — loud mode added in G13; default stays non-fatal)*
 
@@ -867,7 +887,14 @@ real, and sockets additionally carry `SO_NOSIGPIPE` (the BSD equivalent of the
 per-send `MSG_NOSIGNAL` Linux code uses) so a write returns `EPIPE` instead.
 Verified with three abrupt client disconnects: exit 0, all three accepted.
 
-## G21 — netgame bring-up: server + 2 clients in a lobby (partial)
+## G21 — netgame bring-up: server + 2 clients in a lobby (partial at the time)
+
+> **Finished after this was written.** A full netgame — lobby, map selection
+> and play — was verified on macOS (2026-07-26), Linux (2026-08-03) and
+> Windows (2026-08-04, and re-verified there after the `WSAStartup` fix).
+> What remains open about multiplayer is archaeology, not function:
+> [multiplayer-and-factions.md](../subsystems/multiplayer-and-factions.md),
+> "Open threads".
 
 `[network] enable=1` in `mvos.cfg`, then three emulated processes on one Mac.
 **Two clients join a lobby on the real dedicated server and see each other.**
