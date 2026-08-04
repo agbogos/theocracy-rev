@@ -11,24 +11,35 @@ hardware or a judgement only you have. **CLAUDE** is work I can do unattended.
 
 ## YOU
 
-### 1. Windows probe under contention — VM, ~5 min
+### 1. Windows: re-run the rebuilt bundle — VM, 2 min
 
-The probe already ships in the bundle. In `dist/theoc-windows-x64/`:
+`dist/theoc-windows-x64/` has been rebuilt with the `WSAStartup` fix. Copy it
+over and run it. Expected in the log, right after `[start]`:
 
 ```
-win-timing-probe.exe --busy 12
-win-timing-probe.exe --busy 24
+  [net] socket(type=1) -> guest fd 4
+  [net] bind(:5043) faked OK — single-instance lock
 ```
 
-Send me both outputs; I write them into
-[`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md).
+If instead you see `[net] socket(type=1) FAILED -> linux errno N`, send me N —
+the diagnosis was wrong and that number says what is actually happening.
 
-- Not `--busy 4` — four spinners on twelve logical CPUs measures the idle case
-  while looking like a contention test.
-- Acceptance criteria are already written down there, under "What closes the
-  timing item", so the numbers can't be rationalised after the fact.
+This supersedes the cutscene check: the previous bundle never reached a cutscene,
+so while you are in there, confirm the intro plays with **video and sound** (the
+minimal ffmpeg's failure mode is silent — the port logs `[smpeg] decode failed,
+will skip frames` and carries on to the menu).
 
-### 2. Windows on bare metal — blocked until ~2026-08-18
+### 2. Windows: re-verify the netgame — VM, ~10 min
+
+The netgame was verified by play on 2026-08-04, but on a binary where sockets
+only worked because a full-fat ffmpeg DLL had initialised Winsock for it. That
+verification does not carry over to the current build. Two instances on the one
+VM is enough — the single-instance lock is faked precisely so that works.
+
+See [`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md),
+"The same Fatal, a second time".
+
+### 3. Windows on bare metal — blocked until ~2026-08-18
 
 Hardware arrives via a third party around then. When it does, on that machine:
 
@@ -40,19 +51,11 @@ win-timing-probe.exe --busy <core count x 2>
 
 plus one ordinary game session with `THEOC_FPS=1`.
 
-This is the last thing standing between the Windows port and having no caveats
-on any of its timing numbers.
-
-### 3. Windows: watch one cutscene — VM, 1 min
-
-The bundle's ffmpeg was replaced with a minimal build on 2026-08-04 (131 MB →
-7.3 MB). Rebuild with `tools/package-windows.sh`, copy it over, and confirm the
-intro plays with video **and** sound.
-
-Why it needs a human: the failure mode is silent. The port logs `[smpeg] decode
-failed, will skip frames` and carries straight on to the menu, so a broken build
-looks like a working one unless someone watches. Identical config is verified
-decoding on Linux amd64 and arm64, so this is confirmation, not a real risk.
+Two specific things only bare metal answers, both recorded in
+[`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md), "The
+contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
+what happens on a machine where nothing has already raised the global timer
+resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ---
 

@@ -768,6 +768,15 @@ default exemption, two clients both boot to Realm Shell, 0 faults, 0 unimplement
 > which holds nothing and leaves a socket every platform can `listen()` on. See
 > [other-os-ports.md](other-os-ports.md).
 
+> **The same Fatal returned on 2026-08-04, from one step earlier.** This time
+> `socket()` itself was failing on Windows, because the port had never called
+> `WSAStartup` and had been getting away with it only while a network-capable
+> ffmpeg DLL did it first. Worth knowing here because **the symptom is
+> indistinguishable**: any host-side failure anywhere on this path surfaces as
+> the engine's "you can run only one Theocracy" message, so that message means
+> "the lock could not be opened", not "the port is taken". See
+> [other-os-ports.md](other-os-ports.md), "The same Fatal, a second time".
+
 Single-player is unaffected: the lock path is the only socket use on that route.
 
 ### Follow-up: errno translation is not a socket-call concern

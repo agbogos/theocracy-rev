@@ -178,12 +178,17 @@ uint32_t do_sscanf(Machine& m, uint32_t esp) {
 }
 }  // namespace
 
+// Defined with the other socket helpers below; declared here because the
+// constructor is the one caller and it comes first in the file.
+namespace { void net_init(); }
+
 using namespace guestmap;
 
 TrapLayer::TrapLayer(std::vector<std::string> names)
     : names_(std::move(names)), hits_(names_.size(), 0), heap_next_(HEAP_BASE) {
     if (const char* e = std::getenv("THEOC_DATA")) data_root_ = e;
     else data_root_ = "data/game";
+    net_init();
     register_builtins();
 }
 
@@ -950,10 +955,39 @@ int last_socket_errno() {
         case WSAEAFNOSUPPORT:  return 97;
         case WSAEPROTONOSUPPORT: return 93;
         case WSAESHUTDOWN:     return 108;
+        // No Linux equivalent — it cannot happen once net_init() has run. Mapped
+        // to ENETDOWN rather than left to the default so that it is
+        // distinguishable in the log from a genuinely unknown error; libmvos
+        // collapses both to its own 5 anyway.
+        case WSANOTINITIALISED: return 100;  // ENETDOWN
         default:               return 5;     // EIO — libmvos's own "unknown"
     }
 #else
     return to_linux_errno(errno);
+#endif
+}
+
+// Winsock has to be started per process before *any* socket call; POSIX has no
+// equivalent, so there was nothing to port and the call was simply never
+// written. It went unnoticed because something else in the process had already
+// made it: the staged full-fat ffmpeg's DLLs pull in network-capable transports
+// whose own initialisation calls WSAStartup, so `socket()` succeeded for free.
+// Replacing that with a minimal ffmpeg (--disable-network) on 2026-08-04 took
+// the accident away and every socket call began failing with WSANOTINITIALISED
+// — which the guest's single-instance lock reads as "port 5043 is taken".
+//
+// Same shape as the listen()-auto-binds bug this file already documents: an
+// implicit initialisation nobody chose to depend on, load-bearing until a
+// platform declined to provide it. Called once from the TrapLayer constructor
+// rather than lazily, so the failure (if any) is reported at boot next to the
+// rest of the host's setup instead of inside a trap.
+void net_init() {
+#if defined(_WIN32)
+    WSADATA wsa{};
+    int rc = WSAStartup(MAKEWORD(2, 2), &wsa);
+    if (rc != 0)
+        std::fprintf(stderr, "  [net] WSAStartup failed (%d) — sockets are dead, "
+                    "and the game will report the single-instance lock as taken\n", rc);
 #endif
 }
 
@@ -1672,12 +1706,25 @@ void TrapLayer::register_builtins() {
         int dom = (int)arg(m, esp, 0), type = (int)arg(m, esp, 1),
             proto = (int)arg(m, esp, 2);
         if (dom != (int)kGuestAfInet) {   // IPX etc. — not supported, fail cleanly
+            std::fprintf(stderr, "  [net] socket(domain=%d) refused — not AF_INET\n", dom);
             set_errno(m, 97);             // EAFNOSUPPORT (Linux)
             return (uint32_t)-1;
         }
         // SOCK_STREAM=1 / SOCK_DGRAM=2 agree between Linux and BSD.
         int hfd = (int)::socket(AF_INET, type, proto);
-        if (hfd < 0) { set_errno(m, last_socket_errno()); return (uint32_t)-1; }
+        // Log the failure, not just the success. Both early exits above and here
+        // used to return silently, so a host that could not make a socket at all
+        // showed up in the log as the *absence* of the "-> guest fd" line — and
+        // the visible symptom was the guest's unrelated-sounding "You can run
+        // only one Theocracy in the same time!". That cost a log-diff to find
+        // when WSAStartup went missing; one fprintf would have named it.
+        if (hfd < 0) {
+            int le = last_socket_errno();
+            std::fprintf(stderr, "  [net] socket(type=%d) FAILED -> linux errno %d\n",
+                         type, le);
+            set_errno(m, le);
+            return (uint32_t)-1;
+        }
         // Address reuse by default: the game rebinds its listen port across
         // sessions, and BSD's TIME_WAIT would otherwise refuse for ~a minute.
         //

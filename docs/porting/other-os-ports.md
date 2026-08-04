@@ -481,6 +481,58 @@ cannot continue, so everything after is undefined. The ignore is now **bounded**
 diagnosis, instead of leaving someone to infer it from a repeating log. A healthy
 run aborts zero times.
 
+### The same Fatal, a second time: `WSAStartup` was never called — 2026-08-04
+
+The bundle rebuilt with the [minimal ffmpeg](#both-bundles-minus-the-ffmpeg-nobody-uses)
+failed in `Start` with the identical message — "You can run only one Theocracy in
+the same time!", 32 ignored aborts, `Start aborted` — on a build whose *only*
+change was which ffmpeg it linked. Everything before `Start` was byte-for-byte
+the healthy boot: 79 COPY relocs, 34,994 relocs, 10/10 and 215/215 constructors,
+all nine subsystem flags, plugins, audio, `cIntuition`.
+
+**The tell was an absence.** Where macOS logs
+
+```
+  [start] THEOC_START_SEC unlimited
+  [net] socket(type=1) -> guest fd 4
+  [net] bind(:5043) faked OK — single-instance lock
+```
+
+Windows logged `[start]` and then went straight to `[abort]`. Not a *different*
+`[net]` line — no `[net]` line at all. The socket trap only printed on success,
+so a host that could not create a socket showed up as a gap.
+
+**Root cause: nothing in the port ever called `WSAStartup`.** Winsock requires a
+per-process initialisation before any socket call; POSIX has no equivalent, so
+there was nothing to port and the call was simply never written. Every
+`socket()` returned `WSANOTINITIALISED`, the guest's IPC lock could not open, and
+the engine reports that as the port being taken.
+
+**Why it worked for a month anyway.** The staged full-fat ffmpeg's DLLs carry
+network-capable transports whose own initialisation calls `WSAStartup`, so by the
+time the guest asked for a socket, Winsock was already up. Cutting ffmpeg down to
+`--disable-network` removed the accident, and with it a netgame that had been
+verified by play. **The bundle-size work caused this**; the size result stands,
+but the Windows netgame verification of 2026-08-04 was obtained on a binary that
+was only working by borrowed initialisation.
+
+**This is the listen()-auto-binds bug again, in a different costume** — an
+implicit initialisation nobody chose to depend on, load-bearing right up until a
+component declined to provide it. The difference is that this one was hidden
+behind a third-party DLL rather than a kernel behaviour, so no amount of reading
+the port's own source would have found it.
+
+Fixed by calling `WSAStartup(2.2)` once from the `TrapLayer` constructor, next to
+the rest of host setup, so a failure is reported at boot rather than inside a
+trap. `WSANOTINITIALISED` is now mapped explicitly (to `ENETDOWN`) instead of
+falling through to the generic unknown-error 5, and **`socket()` logs its
+failures** — both early returns used to be silent, which is the whole reason this
+cost a log diff to find. One `fprintf` would have named it immediately.
+
+> The lesson is not "call `WSAStartup`". It is that **a trap which logs only its
+> successes turns a host-side failure into a guest-side non-sequitur.** The
+> visible symptom here was a message about running two copies of the game.
+
 ### The game runs on Windows — done 2026-08-04
 
 **Windows is playable, and the port is closed.** Three hosts now run the same
@@ -578,9 +630,8 @@ win-timing-probe.exe --busy 24
 **Not `--busy 4`.** The VM has 12 logical CPUs, and four spinning threads on
 twelve never force the scheduler to choose — it would measure the idle case
 again while looking like a contention test. The point is to oversubscribe: 12
-matches the CPU count, 24 doubles it, and the multiplayer case that raised this
-(three instances on one host) sits between them. Compare against the idle table
-above; the columns that matter are test 2's median lateness and test 3's
+matches the CPU count and 24 doubles it. Compare against the idle table above;
+the columns that matter are test 2's median lateness and test 3's
 frame/ticks-per-frame.
 
 **One bare-metal run**, when hardware exists — see the note below. Same three
@@ -606,6 +657,71 @@ record rather than a thing to fix.
 > 2026-08-18** via a third party. Until then every Windows figure in this
 > document describes one VM and should be read that way. This is the whole
 > remaining content of the item — the VM half is answerable now.
+
+### The contention runs — 2026-08-04
+
+Both ran in the VM, 12 logical CPUs, waitable-timer rows quoted (that is the
+path the port takes). The idle column is the table earlier in this section.
+
+| | idle | `--busy 12` | `--busy 24` |
+| --- | --- | --- | --- |
+| single 0.100 ms sleep, **min** | — | 1.37 ms | **0.84 ms** |
+| single 0.100 ms sleep, median | ~0.6 ms | 6.64 ms | 26.66 ms |
+| 30 Hz tick, median lateness | ~0.1 ms | **6.24 ms** | **22.96 ms** |
+| province frame, median | 87.0 ms | 97.9 ms | 98.8 ms |
+| ticks/frame | ~3.5 | 2.87 | 2.93 |
+
+**Against the criteria, which is the point of having written them down first:**
+
+- **slices/frame falling toward ~1** — did not happen. 2.87 and 2.93, barely
+  moved from idle. The heartbeat does not collapse into the frame rate under any
+  load tested. **Passes.**
+- **median tick lateness above ~16 ms** — 6.24 ms at `--busy 12`, **22.96 ms at
+  `--busy 24`**. Passes at saturation, fails at 2× oversubscription.
+- **overshoot exceeding ~8 ms of the frame** — **fails both**, at +14.6 ms and
+  +15.5 ms. But this criterion was mis-specified, and saying so is not the same
+  as excusing the result; see below.
+
+**The mis-specified criterion.** It was written as "slices/frame × overshoot",
+which assumes the per-slice overshoots *add up* across a frame. They do not: the
+slice loop charges **real elapsed** time against the remaining budget and
+recomputes the next slice, so one slice that overshoots by 20 ms eats the
+remainder of the frame instead of extending it. The measurement shows this
+directly — between `--busy 12` and `--busy 24` the single-shot median degrades
+**4×** (6.6 → 26.7 ms) while the frame moves **0.9 ms** (97.9 → 98.8). The frame
+floor is the 83.3 ms budget plus roughly *one* overshoot, not N of them. The loop
+is self-limiting, which is a property worth knowing and was not designed in.
+
+**What the runs actually found is not a timer problem.** Under load all four
+sleep methods converge — at `--busy 24`: `Sleep()` 101.9 ms, `Sleep()+tbp`
+98.9 ms, timer 98.8 ms, timer+tbp 99.1 ms. The waitable timer is never *worse*,
+so the port's choice stands, but its advantage shrinks from decisive to ~3 ms
+because the binding constraint has changed. The min column proves which: at
+`--busy 24` the timer still fires a 0.1 ms sleep in **0.84 ms**, where
+`Sleep()+timeBeginPeriod(1)`'s best case is 10.99 ms. The timer's resolution is
+intact; what costs 26 ms is waiting for a CPU to run on afterwards. No sleep
+primitive fixes that, and nothing in `traps.cpp` should try.
+
+So the honest statement of the residual: **with no idle core available the
+province frame stretches from 83 ms to ~98 ms — 12 fps down to ~10.2, about 15%
+slow.** That is a real game-speed error, because the limiter is elapsed-based,
+and it is a limit of the host rather than a defect in the port.
+
+**Two corrections to what this section said before the runs.** First, it claimed
+the three-instances-on-one-host multiplayer case "sits between" `--busy 12` and
+`--busy 24`. It does not, and the claim oversold the test: a Theocracy instance
+spends most of its frame asleep, so three of them are nowhere near twelve
+CPU-saturating spinners. `--busy 12` is already well past the case that raised
+this. Second, the VM reported `NtQueryTimerResolution current: 1.0000 ms` before
+the probe started anything — something else on that machine had already raised
+the global timer resolution, so neither run measured the 15.625 ms default. The
+port does not call `timeBeginPeriod`, and test 1's min column says it does not
+need to, but "a machine where nothing has raised the global resolution" remains
+untested and is now part of what bare metal answers.
+
+**Status: the sleep-primitive question is closed.** The waitable timer is the
+right call, it holds up to 2× oversubscription, and no code change is indicated.
+What is left is one bare-metal run, for the reasons above and in the note.
 
 ### Two latent defects closed — 2026-08-04
 
