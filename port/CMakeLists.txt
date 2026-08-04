@@ -4,6 +4,44 @@ project(theoc CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ---- Build identity ----------------------------------------------------------
+#
+# Every run prints this in its first line, so a log names the build that
+# produced it. That exists for one reason: a tester's report is only actionable
+# if we know which binary they ran, and this port ships bundles that differ in
+# ways a tester cannot see (the 2026-08-04 minimal-ffmpeg and WSAStartup changes
+# both altered behaviour without altering anything visible in the UI).
+#
+# Resolved at CONFIGURE time, not build time. That means the string goes stale
+# if you commit and rebuild without reconfiguring — accepted, because the two
+# packaging scripts `rm -rf` their build directory and so always reconfigure,
+# and those are the only builds that reach anyone else. A build-time custom
+# command would be correct in general and would also re-link on every single
+# build, which is a poor trade for a developer loop.
+#
+# -dirty is deliberate: a bundle built from an uncommitted tree says so, which
+# is exactly the case where a bug report is otherwise unreproducible.
+# THEOC_VERSION= overrides it for a tarball build with no git present.
+set(THEOC_VERSION "" CACHE STRING "Build identity; defaults to git describe")
+if(NOT THEOC_VERSION)
+  find_package(Git QUIET)
+  if(GIT_FOUND)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+      OUTPUT_VARIABLE THEOC_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+  endif()
+endif()
+# Not an error: building from an exported tree with no git and no override is a
+# legitimate thing to do. Say so in the banner rather than printing nothing,
+# because a blank version reads as a bug in the stamping.
+if(NOT THEOC_VERSION)
+  set(THEOC_VERSION "unknown")
+endif()
+message(STATUS "theoc build identity: ${THEOC_VERSION}")
+
 # ---- Dependency discovery ----------------------------------------------------
 #
 # Plain find_path/find_library rather than pkg-config. The .pc files ship with
@@ -111,6 +149,10 @@ target_link_libraries(theoc PRIVATE
   Threads::Threads)
 
 target_compile_options(theoc PRIVATE -Wall -Wextra -Wno-unused-parameter)
+
+# Only main.cpp is stamped, so editing the version does not rebuild the world.
+set_source_files_properties(src/main.cpp PROPERTIES
+  COMPILE_DEFINITIONS "THEOC_VERSION=\"${THEOC_VERSION}\"")
 
 # ---- Windows host ------------------------------------------------------------
 # Two things, both of which fail confusingly if missed:

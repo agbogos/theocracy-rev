@@ -15,6 +15,14 @@
 #include "machine.hpp"
 #include "traps.hpp"
 
+// Normally set by CMake to `git describe --tags --always --dirty`. The fallback
+// is here so this file still compiles if someone builds it by hand, and it says
+// "unknown" rather than nothing so that a log missing its version is legible as
+// such instead of looking like the banner changed.
+#ifndef THEOC_VERSION
+#define THEOC_VERSION "unknown"
+#endif
+
 using namespace guestmap;
 
 // The nine cApplication requirement flags. Resolved BY NAME from whichever
@@ -126,7 +134,11 @@ int main(int argc, char** argv) {
     if (argc > 1) game_path = argv[1];
     if (argc > 2) mvos_path = argv[2];
 
-    std::fprintf(stderr, "=== Theocracy guest-libmvos host ===\n");
+    // Build identity in the banner, not behind a flag. A tester who sends a log
+    // has then already told us which binary they ran, without being asked and
+    // without knowing they did — which is the only version-reporting scheme
+    // that survives contact with people who are not developers.
+    std::fprintf(stderr, "=== Theocracy guest-libmvos host %s ===\n", THEOC_VERSION);
     std::fprintf(stderr, "exe:  %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
 
     elf32::Image game(game_path);

@@ -41,7 +41,16 @@ esac
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="theoc-linux-$ARCH"
-OUT="dist/theoc-linux-$ARCH"
+
+# Build identity, resolved on the HOST and passed in. Not inside the container:
+# the image has no git, and a bind-mounted .git owned by another uid trips
+# git's dubious-ownership check even where it does. Doing it here also keeps
+# the bundle's name and the binary's banner from ever disagreeing.
+VERSION=$(git -C "$REPO" describe --tags --always --dirty 2>/dev/null || echo unknown)
+case "$VERSION" in
+  *-dirty) echo "==> WARNING: building $VERSION — uncommitted changes are in this bundle" >&2 ;;
+esac
+OUT="dist/theoc-linux-$ARCH-$VERSION"
 
 : "${CONTAINER:=nerdctl}"   # Rancher Desktop on macOS; set CONTAINER=docker elsewhere
 
@@ -53,6 +62,7 @@ echo "==> building and packaging in the container"
 set -eu
 ARCH="'"$ARCH"'"
 OUT="'"$OUT"'"
+VERSION="'"$VERSION"'"
 BUILD="port/build-linux-$ARCH"
 
 # A minimal ffmpeg, if tools/build-ffmpeg-min.sh has produced one, replaces the
@@ -72,7 +82,7 @@ fi
 # Configure from scratch: find_library caches, so a tree left from a run with a
 # different ffmpeg prefix would keep linking the old one and ship it silently.
 rm -rf "$BUILD"
-cmake -S port -B "$BUILD" $FFMPEG_ARG >/dev/null
+cmake -S port -B "$BUILD" $FFMPEG_ARG -DTHEOC_VERSION="$VERSION" >/dev/null
 cmake --build "$BUILD" -j"$(nproc)" >/dev/null
 echo "    built $BUILD/theoc"
 
@@ -143,9 +153,12 @@ exec "$here/bin/theoc" "$@"
 LAUNCH
 chmod +x "$OUT/theoc" "$OUT/bin/theoc"
 
-cat > "$OUT/README.txt" <<"DOC"
+cat > "$OUT/README.txt" <<DOC
 Theocracy — guest-libmvos port (Linux)
 ======================================
+Build: $VERSION
+DOC
+cat >> "$OUT/README.txt" <<"DOC"
 
 Run:   ./theoc
 
@@ -181,5 +194,7 @@ echo "    wrote $OUT/theoc and $OUT/README.txt"
 '
 
 echo
-echo "==> done: $REPO/$OUT"
+echo "==> done: $REPO/$OUT (build $VERSION)"
 du -sh "$REPO/$OUT" 2>/dev/null || true
+echo "    Every run prints '$VERSION' in its first log line, so a tester's log"
+echo "    identifies its own build."

@@ -47,8 +47,16 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEPS="${THEOC_WIN_DEPS:-$ROOT/port/deps-win}"
 BUILD="$ROOT/port/build-win"
-OUT="$ROOT/dist/theoc-windows-x64"
 TOOLCHAIN_FILE="cmake/toolchain-mingw-w64.cmake"
+
+# Build identity, in the directory name and inside the binary. Resolved here
+# rather than left to CMake so that the bundle's name and its banner line can
+# never disagree, and so a tester's bug report identifies its build twice over.
+VERSION=$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo unknown)
+case "$VERSION" in
+  *-dirty) echo ">>> WARNING: building $VERSION — uncommitted changes are in this bundle" >&2 ;;
+esac
+OUT="$ROOT/dist/theoc-windows-x64-$VERSION"
 
 command -v x86_64-w64-mingw32-g++ >/dev/null 2>&1 || {
   echo "error: x86_64-w64-mingw32-g++ not found. brew install mingw-w64" >&2
@@ -85,6 +93,7 @@ cmake -S "$ROOT/port" -B "$BUILD" \
       -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
       -DTHEOC_WIN_DEPS="$DEPS" \
       -DTHEOC_FFMPEG_PREFIX="$FFMPEG_MIN" \
+      -DTHEOC_VERSION="$VERSION" \
       -DCMAKE_BUILD_TYPE=Release >/dev/null
 
 echo ">>> building"
@@ -174,9 +183,12 @@ set "THEOC_HERE=%~dp0"
 "%THEOC_HERE%bin\theoc.exe" %*
 BAT
 
-cat >"$OUT/README.txt" <<'TXT'
+cat >"$OUT/README.txt" <<TXT
 Theocracy — macOS/Linux/Windows port (Windows x86-64 build)
 ===========================================================
+Build: $VERSION
+TXT
+cat >>"$OUT/README.txt" <<'TXT'
 
 Run theoc.bat.
 
@@ -214,7 +226,9 @@ DIAGNOSTICS
 TXT
 
 SIZE=$(du -sh "$OUT" | cut -f1)
-echo ">>> done: $OUT ($SIZE)"
+echo ">>> done: $OUT ($SIZE, build $VERSION)"
 echo
 echo "    Cross-built from this host; the port itself is verified by play on"
 echo "    Windows (2026-08-04). Run win-timing-probe.exe on any new machine."
+echo "    Every run prints '$VERSION' in its first log line, so a tester's"
+echo "    log identifies its own build."
