@@ -174,14 +174,16 @@ comparable to each other:
 
 | Host | slices/frame | overshoot/slice | How measured |
 |---|---|---|---|
+| macOS (`usleep`) | 3.00–3.17 | **+0.64 ms** (0.50–0.80) | this instrument, 2026-08-04, interactive province at 11.5 fps via `THEOC_AUTO_PROVINCE=1`, 19 samples |
 | Windows (VM, waitable timer) | 3.78 | ~1.0 ms | derived by hand from a 6-min in-game run, 2026-08-04 — [other-os-ports.md](other-os-ports.md) |
-| macOS (`usleep`) | ~3.0 | **+2.1 … +3.2 ms** | this instrument, 2026-08-04, but a **headless `SDL_VIDEODRIVER=dummy` run** that sat at 10.4 fps rather than the usual 12 — not the reference config |
 
-The macOS row is the one to re-take: it is the first direct measurement of that
-platform's floor and it is higher than the Windows figure it was assumed to beat,
-but it comes from a run whose frame rate was already off, so it cannot yet be
-told apart from that run being contended. **One interactive macOS run with
-`THEOC_FPS=1` settles it** and nothing else is needed.
+**Take this reading in the real configuration or not at all.** The first macOS
+measurement was made headless under `SDL_VIDEODRIVER=dummy` and read **+2.1 …
++3.2 ms**, 3–5× the true figure, which briefly made macOS look *worse* than the
+Windows VM. The dummy-driver run was sitting at 10.4 fps rather than 12, and the
+frame rate being off was the visible tell. Overshoot is a scheduling
+measurement: it absorbs whatever else the machine is doing, so a headless or
+contended run inflates it and is not comparable to a session anyone plays.
 
 ### Live set vs. frontier — why the growth figures moved
 

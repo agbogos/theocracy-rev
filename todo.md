@@ -28,17 +28,7 @@ Send me both outputs; I write them into
 - Acceptance criteria are already written down there, under "What closes the
   timing item", so the numbers can't be rationalised after the fact.
 
-### 2. macOS sleep floor — one interactive run, no extra work
-
-Next time you launch normally, add `THEOC_FPS=1` and send me one `[fps]` line.
-
-The new sleep column reads `(N slices/frame, +M ms each)`. The only reading so
-far is +2.1–3.2 ms/slice from a headless run that sat at 10.4 fps instead of 12,
-which is not trustworthy — see
-[`docs/porting/diagnostics.md`](docs/porting/diagnostics.md), "Reading the sleep
-slices". One clean line replaces it.
-
-### 3. Windows on bare metal — blocked until ~2026-08-18
+### 2. Windows on bare metal — blocked until ~2026-08-18
 
 Hardware arrives via a third party around then. When it does, on that machine:
 
@@ -53,7 +43,7 @@ plus one ordinary game session with `THEOC_FPS=1`.
 This is the last thing standing between the Windows port and having no caveats
 on any of its timing numbers.
 
-### 4. Windows: watch one cutscene — VM, 1 min
+### 3. Windows: watch one cutscene — VM, 1 min
 
 The bundle's ffmpeg was replaced with a minimal build on 2026-08-04 (131 MB →
 7.3 MB). Rebuild with `tools/package-windows.sh`, copy it over, and confirm the
