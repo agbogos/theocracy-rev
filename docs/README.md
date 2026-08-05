@@ -99,6 +99,7 @@ of how a host port is done in this project, not a plan.
 - [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) — **M0 deliverable**: the GNU-v2 demangling problem and its solution, the full API (252 classes / 2400 exports / the 232-symbol boundary), and the honest limits of symbol-derived headers. Artifacts in `data/`, tooling in `tools/`.
 - [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS** archive format, byte-exact, plus the `RSA4096` XOR joke-cipher over config/text files. Extractor: `tools/phls_extract.py`.
 - [reference/game-data-census.md](reference/game-data-census.md) — survey of the extracted tree (7191 files): formats ↔ engine structs, what feeds the simulation (`selap.txt` balance) vs. what is front-end.
+- [reference/original-os-setup.md](reference/original-os-setup.md) — **running the shipped binaries on their intended OS**, in a VM: why Debian Woody and not Windows XP, the 16-bit-or-nothing colour depth, the fullscreen-and-CD launch ritual, and OSS audio via AC97 + `i810_audio`. The configuration in which the game is *entirely* original code, and therefore the reference the port is judged against — with each workaround tied to the finding that later explained it, or marked as still unexplained.
 - [overview.md](overview.md) — libmvos technical report: binary facts, the CD distribution inventory, the **AmigaOS-heritage argument**, and the ~200-class map by subsystem.
 
 ## Game internals (`theocracy.real`)
@@ -111,6 +112,7 @@ being rewritten or abandoned.
 - [subsystems/simulation-step.md](subsystems/simulation-step.md) — one deterministic tick, and the argument for lockstep (command queue + shared seeded RNG + discrete ticks).
 - [subsystems/multiplayer-and-factions.md](subsystems/multiplayer-and-factions.md) — the 11-faction roster, the `+0x2c` battle-mode flag, the netgame session lifecycle, and the decoded team-info packet.
 - [subsystems/save-format.md](subsystems/save-format.md) — **the `.tsg` save format and the bug that kills long campaigns.** Every save appends a byte-identical group to each of 44 province lists whose length is a *single byte* counting 17-byte units, so the counter dies at 255 — after 51 saves. Also: the 72-byte header is 54 bytes of uninitialised stack, written to disk with live guest pointers in it. The fix, why it is anchored on the counter rather than the repetition, and why it refuses files it does not fully recognise.
+- [subsystems/calendar.md](subsystems/calendar.md) — **the in-game calendar**: 20-day months, 18 months plus 5 leftover days to the year, and a date stored as one little-endian count of days since Year 0. Both conversions with worked examples, the three other places the same units show up, and the three things a hex-editing session could not see — where the field is, how wide it really is, and what happens to the 5 days that have no month. Derived from editing saves, **not yet checked against the code**.
 - [subsystems/dev-console.md](subsystems/dev-console.md) — the developer console: never compiled out, gated behind one never-taken branch in single-player, and **half-wired even in multiplayer** (the command console is never given a `cShell`, so a typed command is dropped). The Alt+key dispatcher and eKey matrix, all four writers of the battle-mode flag, why the realm screen has no opener at any address, and how `THEOC_CONSOLE=1` opens it without patching the game.
 - [structs/cGameSession.md](structs/cGameSession.md) — the session struct, full `0x58` layout with per-field evidence.
 - [structs/cTribe.md](structs/cTribe.md) — the faction struct (`0x84`): diplomacy relation codes, resources, the roster template.
@@ -160,6 +162,7 @@ accurate and still cited; the *approach* is not current.
 | Game↔engine ABI contract | inventoried (232 imports / 348 exports / copy relocs) |
 | Game flow / main loop | first pass done |
 | In-game loop & simulation | first pass done |
+| In-game calendar | **rule known, code unread** — 20-day months, day-count encoding, both conversions ([subsystems/calendar.md](subsystems/calendar.md)). Established by editing saves and reading the game back, so it is known to work; the field offset, its true width and the 5 monthless days are open |
 | SimulationStep (one tick) | first pass done (units manager is the next target — [simulation-step.md](subsystems/simulation-step.md), "Open threads") |
 | macOS port — M0 (API inventory + headers) | DONE — GNU-v2 demangler, 252-class inventory, 232-symbol boundary, `include/mvos_api.hpp` |
 | macOS port — M1/M2 pure-HLE (native-replace) | **superseded** — worked to a live render loop, then pivoted |

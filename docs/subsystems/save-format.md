@@ -28,6 +28,7 @@ what puts `cProvince` and the map path into the file.
 ```c
 char local_ac[64];  undefined1 local_6c[8];   // contiguous on the stack
 strcpy(local_ac, local_64);                   // ~10-char date, e.g. "1429/6/18"
+                                              // see calendar.md for the date rule
 Write__5cFilePCvUl(&file, local_ac, 0x48);    // writes all 72
 ```
 
