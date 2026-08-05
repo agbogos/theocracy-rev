@@ -27,13 +27,21 @@ what puts `cProvince` and the map path into the file.
 
 ```c
 char local_ac[64];  undefined1 local_6c[8];   // contiguous on the stack
-strcpy(local_ac, local_64);                   // ~10-char date, e.g. "1429/6/18"
-                                              // see calendar.md for the date rule
+strcpy(local_ac, local_64);                   // the save name, e.g. "1429/06/18"
 Write__5cFilePCvUl(&file, local_ac, 0x48);    // writes all 72
 ```
 
-`local_ac` only ever receives the date string; the remaining 54 bytes are never
-initialised and are written to disk anyway. Every save leaks stack. In real
+`local_ac` only ever receives the save name; the remaining 54 bytes are never
+initialised and are written to disk anyway.
+
+The name is 10 characters because it **defaults to the in-game date**: the slot
+dialog seeds the filename box with `cDate_ToString`'s `"%04d/%02d/%02d"`, and
+the player can type over it ([calendar.md](calendar.md)). Two consequences worth
+knowing when reading a header. A save named by hand carries that name here
+instead, so the leading bytes are not reliably a date. And `local_64` is only
+filled on the interactive path — `SaveGame(path)` called with an explicit path,
+as the console's `save` command does for `init.dat`, never writes it, so **all
+72 header bytes are uninitialised stack** in that case, not just 54. Every save leaks stack. In real
 files those bytes are **live guest pointers** — measured across three saves of
 the same state, the differing header fields were heap addresses at `+0x10`,
 `+0x14`, `+0x2c`, `+0x38` and a stack fragment at `+0x08`, alongside stable

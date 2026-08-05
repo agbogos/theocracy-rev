@@ -61,10 +61,29 @@ Fatal: Unable to activate screen
 
 even though X is running and the resolution looks right.
 
-**Cause, since confirmed.** The engine's `SetVideoMode` requires the X server's
-*actual visual depth* to match the mode it asks for, and the game asks for mode
-5 (16-bit) and then mode 4 (15-bit) — never 24 or 32. On a server running at
-depth 24 both requests fail and `OpenDisplay` returns 0. The full path is in
+**Cause, since confirmed — and the message is the game's own.** `theocracy.real`
+calls `Fatal("Unable to activate screen")` (libmvos's `Fatal` supplies the
+`Fatal:` prefix) at the end of a two-step fallback that appears wherever the
+game switches screens. Read at `0x0819ea00`, the save/load slot dialog, in
+Ghidra space:
+
+```c
+screen.depthCode = 5;                                   // 16-bit
+if (!ActivateScreen(Intuition, &screen)) {
+    screen.depthCode = 4;                               // 15-bit
+    if (!ActivateScreen(Intuition, &screen))
+        Fatal("Unable to activate screen");
+}
+```
+
+That is §2's symptom in three lines: 16-bit, then 15-bit, then die. There is no
+24-bit branch to fall through to. The same block sits in the `SaveGame` error
+path at `0x081a0a10`, and the string appears many times over in the image, so it
+is the general shape rather than one site's quirk.
+
+Underneath, the engine's `SetVideoMode` requires the X server's *actual visual
+depth* to match the requested mode, so on a server running at depth 24 both
+`ActivateScreen` calls fail and `OpenDisplay` returns 0. The full path is in
 [../porting/vvc_x-backend.md](../porting/vvc_x-backend.md), "Color-depth
 gotcha". Modern distributions pick 24-bit or better automatically and give you
 no obvious way to go back, which is most of why the game appears not to run on
@@ -214,6 +233,7 @@ did not meaningfully exist yet.
   evidence cannot distinguish the two. The cheap test is the port itself:
   `THEOC_CD` points the CD check at any directory, so the check can be made to
   succeed or fail on demand without a disc, and the window geometry watched.
-- **Whether `Fatal: Unable to activate screen` is emitted by the engine or the
-  `_x` plugin**, and from which call site. Locating it would tie §2's symptom to
-  `SetVideoMode`'s failure path by address rather than by inference.
+- **Which screen switch a real 24-bit failure dies on first.** The 16→15→`Fatal`
+  block in §2 is duplicated across the image; the one a modern X server would
+  hit at startup has not been pinned to an address, only the two save-path
+  copies have.

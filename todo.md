@@ -33,25 +33,8 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Verify the calendar against the code
-
-[`docs/subsystems/calendar.md`](docs/subsystems/calendar.md) is derived from
-hex-editing saves, not from the disassembly. Its "Open threads" lists what to
-settle; needs **`theocracy.real` open in Ghidra**.
-
-- Find the `date <year> <month> <day>` console handler and read the conversion —
-  settles the epoch, the field width and whether the 5 leftover days are a 19th
-  month, all in one place.
-- Find the date field in the `.tsg`: offset and declared width.
-- Check whether the header's text date and the binary count come from the same
-  source.
-
-Black-box half, no Ghidra needed: `THEOC_CONSOLE=1`, set a date in the last five
-days of a year, see what the game reports back.
-
-### 2. Confirm the video-mode error string
-
-[`docs/reference/original-os-setup.md`](docs/reference/original-os-setup.md)
-quotes `Fatal: Unable to activate screen` as verbatim engine output. It is not
-in `libmvos.so.0.9` or `theocracy.real` — find which component emits it and from
-which call site, and tie it to `SetVideoMode`'s failure path by address.
+Nothing queued. The calendar and the video-mode error string were both verified
+against `theocracy.real` on 2026-08-05; what is left of each is a genuine open
+thread in its own doc, not a task —
+[`calendar.md`](docs/subsystems/calendar.md) and
+[`original-os-setup.md`](docs/reference/original-os-setup.md).
