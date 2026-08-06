@@ -258,6 +258,43 @@ and let the log choose what gets reverse-engineered. Reach for Ghidra when the
 log names something you cannot resolve — not before. This sits alongside §7: the
 running system is evidence, and it is usually cheaper evidence than the file.
 
+## 12. A name is not a finding — and it propagates
+
+The costliest error found so far cost nothing to make. `g_World+0x83c` was
+described as the simulation's **order/command queue**, and
+`FUN_081a2060`/`FUN_081a1fa0`/`FUN_081a2180` as its API. All three are `cDate`
+arithmetic; `+0x83c` is the game date. Nothing anywhere reads a command from it.
+
+Why it stuck, and what to take from each part:
+
+- **The guess was reasonable.** A per-tick call, on an object the sim owns, at
+  the top of a deterministic step function, is what an order queue *would* look
+  like. Plausibility is not evidence, and it is precisely when a guess fits that
+  it stops getting checked.
+- **It became load-bearing.** A whole "determinism & lockstep" argument was
+  built on top of it, complete with a conclusion — *deterministic, replayable,
+  lockstep-synchronizable* — that read as a finding. The RE fact underneath had
+  never been read.
+- **It spread.** Three docs cited it, and one of them
+  (`dev-console.md`) used it as the *contrast* for something else: "that pipe is
+  not the sim's order queue". A wrong fact acquires dependents that look like
+  corroboration.
+- **An audit missed it.** The 2026-07-26 findings audit re-checked every cited
+  address against the binaries. `g_World+0x83c` is a perfectly real address, and
+  `FUN_081a2060` is a perfectly real function — so an address-checking pass had
+  nothing to catch. **Checking that an address exists is not checking that the
+  claim about it is true.**
+
+It was found only when a *different* doc (`calendar.md`) read the same address
+properly and the two descriptions collided. That is worth generalising: when
+work lands in a doc, grep the other docs for the addresses it touches.
+
+So: when a doc names something the code does not — `FUN_…` renamed to
+`OrderQueue_Read`, or prose calling an address "the command queue" — either the
+function has been read or the name is a hypothesis. Mark it as one. This project
+has a house style for that (`inferred`, `TBD`, `strong candidate`); the failure
+here was not that the guess was made but that it was written in the indicative.
+
 ---
 
 ## Checklist
@@ -280,3 +317,9 @@ Before a finding lands in `docs/` or in host code:
    read-modify-write toggle reads as "never written" — which is exactly how the
    cheat flags were first documented wrong. Prefer `tools/elfq.py`, which was
    built after that scan produced two wrong claims in committed docs.
+9. Is the *name* in this claim something the function was read to do, or
+   something it plausibly does? If the latter, is it written as a hypothesis —
+   and does any conclusion elsewhere depend on it? (§12)
+10. Do the other docs already say something about these addresses? `grep` them
+    before committing; two docs disagreeing is the cheapest bug detector this
+    project has, and it only works if someone looks.

@@ -43,9 +43,15 @@ function table (`0x85906a0`, `0x84bccb4`), as does `NetGame_AssignTeams`
 (`0x85907d4`), so netgame entry points are dispatched, not hard-called.
 
 1. `client = *(*(netCtx+0x34)+0xc)` → `printf("Client %p")`.
-2. **`RandomServer` seeded to `0x2a` (42)** — on *both* ends. This is the concrete
-   evidence for the lockstep model in [simulation-step.md](simulation-step.md):
-   same seed + command queue + discrete ticks = reproducible on every peer.
+2. **`RandomServer` seeded to `0x2a` (42)** — on *both* ends. Seeding both peers
+   identically is only useful if they are meant to compute the same thing, so
+   this remains the concrete evidence for the lockstep model in
+   [simulation-step.md](simulation-step.md): same seed + discrete ticks =
+   reproducible on every peer. **Corrected 2026-08-06:** this bullet used to add
+   "+ command queue" as a third term. There is no command queue — that was the
+   game date misread — so the peer-to-peer *command* channel lockstep needs is
+   still unlocated, and the model is a hypothesis this seeding supports rather
+   than a conclusion. `cMsgSender` at `g_World+0x5c8` is the open candidate.
 3. `NetGame_InitBattle(netCtx)` — session with `+0x2c = 1`, `scenarioID = -1`,
    battle map (`new 0x40f80`).
 4. `NetGame_AssignTeams(netCtx, teamInfo)` — below.

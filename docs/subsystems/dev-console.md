@@ -375,9 +375,10 @@ are `0x0c`–`0x25`, and Space is `0x51`.
 The fourteen ordinary keys all build the same 5-byte event `{5, 0xe, subcode,
 shiftFlag}`, push it to the pipe at `0x8645360`, and then send message `0x2b` to
 the province view via `cProvince::SendMessage` (`0x81e0460`). **What subcodes
-0–13 mean is not decoded**: that pipe is not the sim's order queue
-(`g_World+0x83c`, see [simulation-step.md](simulation-step.md)) and it is drained
-through a virtual dispatch chain. Naming them means tracing that chain or
+0–13 mean is not decoded**: that pipe is drained through a virtual dispatch
+chain. (This previously contrasted the pipe with "the sim's order queue" at
+`g_World+0x83c` — there is no such queue; that address is the `cDate` game date.
+See [calendar.md](calendar.md).) Naming them means tracing that chain or
 matching each subcode against the ~19 UI handlers that push the same shape.
 
 **None of this works on the realm screen**, for the reason in the previous

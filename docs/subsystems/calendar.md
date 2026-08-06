@@ -160,14 +160,59 @@ the top: `date 5 25 40` is accepted and normalises through the div/mod.
   ([../porting/frame-timing.md](../porting/frame-timing.md)). 175 days is
   8 months and 15 days under this rule.
 - **`SimulationStep`** reads `g_TicksPerDay` at `0x081f96a3` and calls
-  `cDate_ToDayCount` at `0x081f9511` and `0x081f967a` — the advance path, not
-  chased here.
+  `cDate_ToDayCount` at `0x081f9511` and `0x081f967a`. Both of those are
+  *readers* of the date, not writers — see below for where it is actually
+  advanced.
+
+## One tick, one day
+
+**Read 2026-08-06 from `SimulationUpdate` (`0x081f97e0`).** The date is not
+advanced inside `SimulationStep` at all. It is advanced by the loop that calls
+it:
+
+```c
+while (ticks != 0 && *(char *)(*(int *)(g_World + 0x140c) + 0x4f4) != '\0') {
+    SimulationStep(world);
+    ticks--;
+    cDate_ctor_YMD(tmp, 0, 0, 1);      // a cDate of year 0, month 0, day 1
+    cDate_Add(world + 0x83c, tmp);     // game date += that
+}
+```
+
+`cDate_Add` (`0x081a2180`, named this pass) is `a = ToDayCount(a) +
+ToDayCount(b)` fed back through `SetFromDayCount`. With `b` built as
+`(0, 0, 1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = **1**.
+
+So **one simulation tick is exactly one in-game day.** They are not merely
+proportional and there is no accumulator, no remainder and no separate calendar
+clock — the tick *is* the day. Two consequences worth stating:
+
+- The **whole calendar rate is one number**, `tickDuration` at `g_World+0x1408`,
+  the divisor in `SimulationUpdate`'s `ticks = elapsed/tickDuration`. Its value
+  is still unread (no absolute xref — it is written through a register-held
+  `this`), so how many real seconds an in-game day takes is not yet stated here.
+- **Catch-up moves the calendar.** `SimulationUpdate` clamps to 10 ticks per
+  call, so a stalled frame does not lose days up to that bound — but a stall
+  long enough to exceed it *does* permanently lose in-game days, silently. That
+  is a real behaviour of the original, not a port artefact.
+
+The two `cDate_ToDayCount` calls inside `SimulationStep` are consumers of the
+value this loop maintains: one feeds the current day count to the units manager,
+the other measures alliance age for the `ALLIED_JOIN_YEARS` mechanic
+([simulation-step.md](simulation-step.md)).
+
+> **This corrected a wrong claim.** `simulation-step.md` and
+> `game-loop-and-simulation.md` both described `g_World+0x83c` as the sim's
+> **order/command queue** and `cDate_ctor_YMD`/`cDate_Add` as *order injection*.
+> All three functions are date arithmetic and no command queue exists at that
+> address. The error is the shape `re-methodology.md` warns about — a plausible
+> name assigned to an unread function, then cited by three docs as established
+> fact. It survived a full findings audit.
 
 ## Open threads
 
-- **How the date advances.** The three `SimulationStep` sites above are where a
-  tick becomes a day. Worth reading if the port ever needs to drive the calendar
-  itself rather than let the guest do it.
+- ~~**How the date advances.**~~ **Answered 2026-08-06 — see "One tick, one day"
+  above.**
 - **`g_TimeUnitScale`'s value** (`0x084c7c54`) was not read — the ratios above
   are independent of it, and hold as long as `31,536,000 × scale` does not
   overflow a 32-bit int (scale ≤ 68). Real saves decode to sane dates, so it
