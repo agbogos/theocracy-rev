@@ -336,6 +336,32 @@ looks exactly like a genuine negative result. The rule:
 
 ---
 
+## 14. A differing vtable slot is not behaviour
+
+Classifying the 50 magic items, the obvious test for "does this item do
+anything?" was whether its vtable differs from the shared default. Every one of
+the 50 differed in at least one slot, giving the clean and wrong answer **"no
+item is unimplemented"**. Reading the bodies showed that seven of the 90
+overrides do nothing but call the slot's own default and normalise the return
+value — `return default(this, m) != 0`, fifteen instructions of nothing. Three
+items behave exactly as the base class and the structural test called all three
+implemented.
+
+The generalisation, which applies well beyond vtables: **a difference in a table
+is evidence that a compiler emitted something, not that a programmer meant
+something.** g++ 2.95 emits a distinct thunk per class for covariant returns,
+access adjustments and inlined trivia, so "has its own entry" is nearly free.
+
+- Compare *bodies*, not addresses, whenever the conclusion is about behaviour.
+- A useful shape for the test: does the override call its own default, and does
+  it add anything around that call? Length alone is a poor proxy — the first
+  attempt here used "≤ 12 instructions" and missed a 15-instruction no-op.
+- The same caution applies to any per-item or per-class table: distinct entry ≠
+  distinct behaviour. See §12 — this is the structural cousin of naming a
+  function you have not read.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -374,3 +400,5 @@ Before a finding lands in `docs/` or in host code:
     project has, and it only works if someone looks.
 11. If a claim rests on a data file — especially a *negative* claim — was the
     file decrypted before it was read? (§13)
+12. If a claim rests on a table differing per entry (vtables, dispatch tables),
+    were the *bodies* compared, or only the addresses? (§14)

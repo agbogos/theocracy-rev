@@ -33,38 +33,37 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Magic items — and the ones with no flavour text
+### 1. Mission code — the one thread both finished tasks ran into
 
-Several items ship with no lore text. Decide, per item, which of three it is:
-cut content, a text lookup keyed differently, or a gap in one language's files.
-**Only the effect handler answers that** — a `case` for the item means it works
-and nobody wrote the lore; falling through a default means dead content.
+Heroes and magic items both ended at the same wall: content that is fully
+implemented but placed by neither `hero.cfg` nor `mitem.cfg`. Reading the
+mission code closes three questions at once.
 
-**The entry points are already found** — the hero work landed on them, so this
-starts from code, not from a search
-([`docs/subsystems/heroes.md`](docs/subsystems/heroes.md)):
+- **Eight heroes are never placed** (ids 3, 5, 8, 9, 10, 11, 17, 19).
+- **Ring Piece 1 and 2 (items 24, 25) are inert**, and the fully-implemented
+  Ring of Concordance (26) appears in no data file. If the pieces combine, that
+  step is in mission code.
+- **Is Mask of the Brave (item 1) reachable at all?** It has no effect, no
+  constants and no description. If no mission places it, it is dead in the
+  shipped game rather than merely silent — which is a different and stronger
+  finding than the one currently written down.
 
-- **`0x0820d1f0` is the item factory.** A switch over ids `1..0x32` — so there
-  are **exactly 50 magic items** — each `new`ing an object and calling its own
-  constructor. Ids 2, 8 and 50 allocate `0x1c` bytes where every other item takes
-  `0x18`: three items carry an extra field, and that is where to start.
-- `data/mitem.cfg` is loaded at `0x081fb5b0`, two lines before `data/hero.cfg`.
-- `FUN_080a8120(man, item)` is the give-item call.
-- Text keys follow the `manname_`/`mandesc_` pattern; the locale `.sdb` format is
-  cracked and written up in
-  [`docs/reference/phls-format.md`](docs/reference/phls-format.md).
+Entry point: `cMission_S4_0::Start` carries the assert `"Hero not found."`
+(Hungarian, and rude about a colleague) — grep the binary for `cMission_` to get
+the class list.
 
-Read the 50 constructors and classify each item: does it write anything, and is
-there a `mitemdesc_*` (or equivalent) entry for it? An item that constructs but
-writes nothing is the same finding as Umochi.
+Findings go into the existing
+[`docs/subsystems/heroes.md`](docs/subsystems/heroes.md) and
+[`docs/subsystems/magic-items.md`](docs/subsystems/magic-items.md) "Open
+threads", or a new mission doc if it turns out to be its own subsystem.
 
-Balance numbers reach the code the usual way — `selap.txt` key →
-`LoadConfigVar` → global → xref
-([`docs/subsystems/population-and-births.md`](docs/subsystems/population-and-births.md)).
-**Decrypt before grepping** — [`re-methodology.md`](docs/reference/re-methodology.md)
-§13, which exists because this task's sibling got that wrong.
+### 2. Smaller leftovers, worth doing only alongside something else
 
-Precedent for the expected shape of the finding: HOSPITAL1 buys nothing,
-HOSPITAL3 is identical to HOSPITAL2, CD track 4 is unreferenced, six `TEAMREG`
-keys are dead. Content that exists in a table and does nothing in the code is a
-house style here.
+- The `+0x04` equip-restriction field on items: the checker is unread, so
+  bitmask-of-carriers vs. category id is unsettled
+  ([magic-items.md](docs/subsystems/magic-items.md)).
+- Who reads a man's `+0x88..0x90` magic-school slots. The offset→school mapping
+  currently rests on hero description text
+  ([heroes.md](docs/subsystems/heroes.md)).
+- The `+0x18` field on items 2, 8 and 50 — three items allocate four extra bytes
+  and only id 2's initialisation was observed.
