@@ -159,7 +159,7 @@ accurate and still cited; the *approach* is not current.
 | Memory & containers | first pass done |
 | Application bootstrap | done — `main()`-ownership corrected **and** libmvos `main()` decompiled (the 10-step boot sequence is in [application-bootstrap.md](subsystems/application-bootstrap.md)) |
 | Audio / threads / processes | first pass done |
-| Music (CD audio / Redbook) | **game side done 2026-08-08** — the score is Redbook CD audio, so the port has never had music and never logged its absence. `cVCDThread` decompiled off `theocracy.real`: four moods, the track table (tracks 2–8 on the disc, **track 4 unreferenced**), the fixed-seed chooser, the poll thread. Engine side (`cVCD` in libmvos) still unread, and no disc has been ripped yet — [music-and-redbook.md](subsystems/music-and-redbook.md) |
+| Music (CD audio / Redbook) | **both binaries read 2026-08-08** — the score is Redbook CD audio, so the port has never had music and never logged its absence. Game side: `cVCDThread`'s four moods, the track table (tracks 2–8 on the disc, **track 4 unreferenced**), the fixed-seed chooser, the poll thread. Engine side: `cVCD` is an abstract shell over **`cCD_Linux`**, seven plain Linux CD ioctls, stateless per call — so the whole chain can run as original guest code with the device virtualised in the `ioctl` trap. Blocked only on ripping a disc — [music-and-redbook.md](subsystems/music-and-redbook.md) |
 | Video/input plugin (vvc_x) | fully decompiled — contract complete |
 | Game↔engine ABI contract | inventoried (232 imports / 348 exports / copy relocs) |
 | Game flow / main loop | first pass done |

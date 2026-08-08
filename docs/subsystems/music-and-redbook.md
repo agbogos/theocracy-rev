@@ -7,12 +7,16 @@ codec. The engine asks the CD-ROM drive to play track *n* and that is the whole
 mechanism.
 
 This is why the port has never had music, and why nothing ever reported it as
-missing: the guest asks for a track, the request reaches a stubbed driver table,
-and the stub returns 0 without logging. It is not an unimplemented trap and it
-never appeared in the `[vtable] TODO` census.
+missing. The whole chain — the game's music manager, `cVCD`, and the real
+`cCD_Linux` driver — runs correctly as guest code all the way down to the
+device, where the host's blanket `ioctl` stub tells it *success* and plays
+nothing. Nothing fails, so nothing logs.
 
 Addresses are `theocracy.real` (base `0x08048000`) unless stated. libmvos
-addresses are Ghidra-space (base `0x10000`).
+addresses are Ghidra-space (base `0x10000`), so they are the **file** addresses
+in `data/mvos_exports.tsv` **plus `0x10000`** — `cVCD::Play` is file `0x805b0`
+and Ghidra `0x905b0`. This doc uses Ghidra addresses throughout, per
+[re-methodology.md](../reference/re-methodology.md) §1.
 
 ## The two audio paths are unrelated
 
@@ -158,35 +162,161 @@ silence until the next screen transition. Any implementation that provides
 and then go quiet — a failure mode that would be easy to misdiagnose as a decode
 bug.
 
-## The driver table at `VCD+0xc`
+## The engine side: `cVCD` is abstract, `cCD_Linux` is the driver
 
-`cVCD` dispatches through a function table at `+0xc`, distinct from its C++
-vtable. Slots observed from the game side:
+`cVCD` (libmvos) is a **shell**. Every operational slot of `__vt_4cVCD`
+(`0xb7200`) points at `__pure_virtual` (`0xa6160`, which prints
+`pure virtual method called` and `_exit(-1)`). The class holds state and
+delegates through a driver table at `+0xc`.
 
-| Slot | Use |
+The concrete driver is **`cCD_Linux`**, and `OpenSubsystems` builds the object
+**inline** — no constructor is ever called, not `cVCD::cVCD` (`0x90680`) and not
+`cCD_Linux::cCD_Linux` (`0xa1f80`):
+
+```c
+if (cApplication::Redbook) {
+    obj = new(0x14);
+    dev = GetCDRomDeviceName();            // 0xa4840
+    obj[0xc]  = cCD_Linux_virtual_table;   // __vt_9cCD_Linux @ 0xbc240
+    obj[0x10] = dev;
+    VCD = obj;
+}
+```
+
+`GetCDRomDeviceName` reads `mvos.cfg` `[vmachine] cdrom_device` and **defaults to
+`/dev/cdrom`**. Our `data/game/mvos.cfg` does not set it, so `/dev/cdrom` it is.
+
+### `cVCD` object layout (`0x14` bytes)
+
+| Offset | Field |
 |---|---|
-| `0x18` | called by `cVCDThread_UnmuteAndApplyVolume` when `DAT_08648380 > 0` — volume, most likely |
-| `0x1c` | stop |
-| `0x20` | get currently playing track (`0` = nothing) |
+| `+0x00` | `u16` start track |
+| `+0x02` | `u16` end track |
+| `+0x04` | `u16` start track (copy) |
+| `+0x06` | `u16` **first** track on disc |
+| `+0x08` | `u16` **last** track on disc |
+| `+0x0c` | driver table |
+| `+0x10` | `char*` device path |
 
-`0x1c` and `0x20` are certain from context. `0x18` is inferred from its guard and
-has **not** been read in libmvos — see Open threads.
+`+0x06`/`+0x08` are **left uninitialised** by that inline construction and only
+become meaningful after the first `GetCDInfo`. Note that
+`cVCD::GetNumberOfTracks` returns `+0x08`, which is the *last track number*, not
+a count — a distinction that matters the moment a disc's numbering has a gap.
+
+### The driver table — the exact contract
+
+`__vt_9cCD_Linux` @ `0xbc240`, dumped relocation-aware from the ELF:
+
+| Slot | Function | ioctl |
+|---|---|---|
+| `+0x08` | `GetCDInfo()` | `0x5305` `CDROMREADTOCHDR` |
+| `+0x0c` | `Play_Real(start, end)` | `0x5304` `CDROMPLAYTRKIND` |
+| `+0x10` | `~cCD_Linux()` | — |
+| `+0x14` | `Pause()` | `0x5301` `CDROMPAUSE` |
+| `+0x18` | `Resume()` | `0x5302` `CDROMRESUME` |
+| `+0x1c` | `Stop()` | `0x5307` `CDROMSTOP` |
+| `+0x20` | `GetActualTrack()` | `0x530b` `CDROMSUBCHNL` |
+| `+0x24` | `GetVolume()` | `0x530a` `CDROMVOLCTRL` |
+| `+0x28` | `SetVolume(u16)` | `0x530a` `CDROMVOLCTRL` |
+
+Plain Linux CD-ROM ioctls, nothing exotic. **Every method opens the device, does
+one ioctl, and closes it** — the driver keeps no fd and no state between calls,
+which makes it trivial to virtualise.
+
+Details worth having before implementing:
+
+- `Play_Real` packs `struct cdrom_ti` as `(start & 0xff) | (end << 16)`, i.e.
+  `trk0=start, ind0=0, trk1=end, ind1=0`. It is **asynchronous** — the ioctl
+  returns when the drive starts, which is exactly why the polling thread exists.
+- `SetVolume(u16)` uses the **high byte** of its argument, replicated into all
+  four channels of `struct cdrom_volctrl`.
+- `GetCDInfo` fills `+0x06`/`+0x08` from `struct cdrom_tochdr`.
+
+### `GetActualTrack` — read the disassembly, not the decompile
+
+Ghidra renders `GetActualTrack` (`0xa1de0`) as a bare `return 0` with
+*"Switch with 1 destination removed"* and *"Exceeded maximum restarts"*. That is
+wrong, and it is the artifact class
+[re-methodology.md](../reference/re-methodology.md) exists to catch. The real
+body reads `struct cdrom_subchnl` (requested as `CDROM_MSF`, format 2) and
+switches on `cdsc_audiostatus` through a 22-entry jump table at `0xbc1e0`:
+
+| `cdsc_audiostatus` | Result |
+|---|---|
+| `0x11` `CDROM_AUDIO_PLAY` | return `cdsc_trk` |
+| `0x12` `CDROM_AUDIO_PAUSED` | return `cdsc_trk` |
+| all others (incl. `0x13` `COMPLETED`, `0x14` `ERROR`, `0x15` `NO_STATUS`) | return `0` |
+
+Dumped from the file rather than assumed: only statuses `0x11` and `0x12` reach
+the return-track path. Two consequences that any implementation must reproduce:
+**paused still reports a track**, so pausing does not make the poll thread think
+the track ended; and **completed reports 0**, which *is* the advance trigger.
 
 ## What the port does today
 
-`port/src/mvos.cpp:153-157` points `VCD+0xc` at `make_vtable(16)` so the CD
-worker's `(*(X+0x1c))(VCD)` lands in `dispatch_vtable` and returns 0. That was
-enough to stop a null-pointer fault during boot and nothing more was needed,
-because the failure is silent all the way down:
+> **Correction (2026-08-08, same day).** An earlier revision of this doc said
+> the host stubs `VCD+0xc` with a synthetic vtable from
+> `port/src/mvos.cpp:153-157`. **That code is not in the build** —
+> `port/CMakeLists.txt:138` has `src/mvos.cpp` commented out as the superseded
+> pure-HLE layer, and nothing constructs `Mvos`. `VCD+0xc` is therefore the
+> genuine `cCD_Linux_virtual_table` that `OpenSubsystems` installs, and the real
+> driver runs. The conclusion (no music, silently) was right; the mechanism was
+> not, and the mechanism is what an implementation has to hook.
 
-- slot `0x20` returns 0, so step 2's "already playing?" check never matches;
-- `VM_GetCDRomName()` **succeeds** — `resolve_path` maps `/mnt/cdrom` to
-  `data/cd`, which has the real `cd.key` reading `Theocracy`;
-- so `cVCD::Play` is reached, runs as real guest code, tries its `/dev/cdrom`
-  ioctl, and fails against a host that has no such device.
+Every layer runs as original guest code. The chain reaches the host at exactly
+two traps, and both currently *succeed*:
 
-So the game is *already asking for music* at every mood change, and has been
-since the port first booted. Everything upstream of the device works.
+1. **`open("/dev/cdrom", O_RDONLY)`** — `traps.cpp:2814` returns a synthetic fd
+   for any path under `/dev/`, without touching the host filesystem. So
+   `cCD_Linux`'s open **succeeds**.
+2. **`ioctl(fd, ...)`** — `traps.cpp:1674` is a blanket `return 0` with a comment
+   about `/dev/dsp` probes. On Linux `0` means **success**, and the stub never
+   writes the output buffer.
+
+Follow that through and the behaviour is precise:
+
+| Call | What happens now |
+|---|---|
+| `GetCDInfo` | "succeeds"; `+0x06`/`+0x08` are filled from **uninitialised stack** |
+| `Play_Real` | "succeeds" — **the game believes music is playing** |
+| `GetActualTrack` | buffer is zeroed by the guest, stub writes nothing, so `cdsc_audiostatus = 0` → table entry 0 → returns `0` |
+| `Stop` / `Pause` / `Resume` / `SetVolume` | "succeed", do nothing |
+
+So the game has been asking for music at every mood change since the port first
+booted, and being told it got it. The garbage in `+0x06`/`+0x08` is harmless
+today only because `PlayAll` and `GetNumberOfTracks` are never called.
+
+## The implementation this points at
+
+**Implement the CD as a virtual device in the `ioctl` trap, not as native
+overrides of `cVCD`.**
+
+The seven ioctls above are the entire device contract, the driver is stateless
+across calls, and `open` already hands out a taggable fd. Implementing them
+against a host-side player backed by ripped audio files leaves `cVCDThread`,
+`cVCD` and `cCD_Linux` running **completely unmodified as original guest code** —
+no vtable patching, no native method overrides, nothing bypassed. A CD-ROM drive
+is an OS device, so this lands exactly on the boundary
+[guest-libmvos.md](../porting/guest-libmvos.md) says the port HLEs and no deeper.
+It is a smaller and more faithful change than the native-override route this doc
+originally assumed.
+
+The one piece that does *not* fall out for free is the auto-advance, because
+`cVCDThread::Main` never runs (below). Two options, in preference order:
+
+1. **Call the guest directly.** When the host's virtual CD goes idle, use the
+   existing host→guest call path to invoke
+   `cVCDThread_StartTrackForMood(g_VCDThread)` at `0x81a3b80`. That does exactly
+   what the poll would have done, picks the correct mood's track list, and needs
+   no thread and no patching.
+2. **Green-run the thread**, patching its `Main` to one-shot the way
+   `patch_sound_main_oneshot` does for the mixer. More faithful, but the patch
+   target is in `theocracy.real` rather than libmvos, and the loop shape is
+   harder to cut than the mixer's.
+
+A host-side loop of the current track would also produce continuous music, but
+it is *not* faithful — the original picks a fresh random track from the mood list
+each time — so it belongs in neither option.
 
 ## Open threads
 
@@ -199,12 +329,12 @@ since the port first booted. Everything upstream of the device works.
   predicate has been identified, so "battle" vs "the other battle" is as far as
   this goes. Mood 2 is also set by the tutorial/briefing screen (`0x8226280`,
   `0x82263a1`) and by `FUN_0820e7f0`, which is an unidentified screen loop.
-- **`cVCD` itself is unread.** `Play` (`0x805b0`), `Play(start,end)`
-  (`0x80580`), `PlayAll` (`0x805f0`), `GetNumberOfTracks` (`0x80640`), ctor
-  (`0x80680`) — all in **libmvos**, none decompiled. Needed before writing a
-  native override: the exact `/dev/cdrom` ioctls, whether `Play` is asynchronous
-  (the polling thread implies it is), what track numbering base it uses, and
-  what slot `0x18` of the driver table does.
+- ~~`cVCD` itself is unread~~ — **done 2026-08-08**, and it turned out to be an
+  abstract shell over `cCD_Linux`; the driver contract is the ioctl table above.
+  What is *not* answered: `GetVolume` (`0xa1e70`) reads back through
+  `CDROMVOLCTRL` but nothing in the game calls it, and the `DAT_08648380` volume
+  setting that gates `Resume` in `cVCDThread_UnmuteAndApplyVolume` has not been
+  traced to where the options screen writes it.
 - **The host has a second soft thread it never runs.** `traps.cpp`'s
   `pthread_create` pushes every `cThread` onto `soft_threads_`, and
   `maybe_redirect_sound` green-runs the *first* entry whose running flag at
