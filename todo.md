@@ -29,52 +29,15 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
-### ~~2. Rip the CD audio tracks~~ — done 2026-08-08
+### 2. Optional: TOC of the other releases — not blocking anything
 
-UK release ripped to `data/cd-uk/` as AIFF-C, tracks 2–8, TOC verified against
-the prediction. Kept below for the *other* discs, which are still worth a TOC
-read: the Chinese `.mds` costs nothing and would say whether the track numbering
-is release-invariant (i.e. whether the port can ship one mapping for any disc a
-tester owns). Not blocking anything.
-
-<details><summary>original task</summary>
-
-### Rip the CD audio tracks (music)
-
-The score is Redbook CD audio; there is no music file in the data tree. The
-game's track table is decompiled — [`music-and-redbook.md`](docs/subsystems/music-and-redbook.md).
-
-**TOC first, on every disc you can reach** — this is the check, and it is
-seconds per disc:
-
-```
-drutil toc                     # macOS, external drive
-cdparanoia -Q                  # Linux
-```
-
-The prediction to test: **track 1 is data, audio tracks run 2–8**. The game
-names 3 (menu), 8 (realm), 6 and 7 (battle), 2 and 5 (battle) — and **never
-names track 4**. What is on track 4, and whether it exists at all, is the one
-thing the binary cannot answer.
-
-Then, from the British 2-CD release (both discs — which one carries the audio is
-itself unknown):
-
-```
-cdparanoia -B                  # lossless, one file per track
-flac *.wav                     # or keep WAV; libav reads either
-```
-
-Do **not** rip to MP3. Record the TOC alongside the audio.
-
-Also worth doing because it needs no drive: parse the `.mds` sidecar of the
-Chinese release for its TOC and compare track counts. If the two releases agree,
-the numbering is release-invariant and the port can ship one mapping; if they
-disagree, that is a finding and the port has to detect rather than assume.
-
-Tracks are copyrighted — they go in `data/cd-uk/` (gitignored), never in git.
-
-</details>
+The UK rip works and the port ships one track mapping. Unknown: whether that
+mapping holds for a *different* release, i.e. whether a tester with the Chinese
+or prototype disc gets the right music or nonsense. The Chinese `.mds` sidecar
+carries a full TOC and needs no drive at all, so this is desk work whenever you
+feel like it. Agreement means the numbering is release-invariant; disagreement
+is a finding and the port would have to detect rather than assume.
+[`music-and-redbook.md`](docs/subsystems/music-and-redbook.md)
 
 ---
 
