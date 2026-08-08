@@ -69,6 +69,14 @@ begin (`Sun1_Wound`, `Moon2_ShieldPercent`, `Star4_ModifyAtt`, …), which is a
 useful independent sighting of the same school names that
 [heroes.md](heroes.md) derived from immunity slots.
 
+**The key column in the table below is read from each item's override bodies,
+not matched by name prefix.** Six of the fifty do not follow their own naming:
+Ghost Shield (`SGH`) reads `GS_*`, Dragon Ring (`RD`) reads `DR_ATT`, Ring of
+Concordance (`RPT`) reads `RT_DEF`, Symbol of Power (`MSP`) reads `MSYP_DEF`,
+and — the one that actually misleads — **`SF_HP_PERCENT` belongs to Shield of
+Reflection (`SFI`, id 11), not to Flame Spears (`SF`, id 31)**, whose only
+constant is `SF_ATT`. A prefix match gets that pair backwards.
+
 The vocabulary is small: `_ATT`, `_DEF`, `_HP`, `_POISON`, `_RANGE`, `_VRAD`
 (view radius), `_TIME_MIN`/`_TIME_MAX`, and a few `_PERCENT` bonuses against a
 specific target. Jade Bow is representative — its slot-6 override checks the
@@ -97,7 +105,7 @@ the map — `hero` = `hero.cfg`'s two item columns, `mitem` = `data/mitem.cfg`.
 | 8 | SPT | Moon Shield | 8 | — | yes | — | works |
 | 9 | SI | Immortal Shield | 8 | `SI_HP` | yes | — | works |
 | 10 | SFW | Shield of Four Winds | 8 | — | yes | hero | works |
-| 11 | SFI | Shield of Reflection | 8 | — | yes | — | works |
+| 11 | SFI | Shield of Reflection | 8 | `SF_HP_PERCENT` | yes | — | works |
 | 12 | SLS | Shield of Lonely Star | 8 | `SLS_DEF` | **no** | — | works |
 | 13 | SGH | Ghost Shield | 8 | `GS_ATT`, `GS_DEF` | yes | — | works |
 | 14 | AF | Axe of Flame | 1 | `AF_ATT` | yes | mitem | works |
@@ -117,7 +125,7 @@ the map — `hero` = `hero.cfg`'s two item columns, `mitem` = `data/mitem.cfg`.
 | 28 | SP | Spears of Thunder | 2 | `SP_ATT` | yes | — | works |
 | 29 | SM | Moonstone Spears | 2 | `SM_TIME` | **no** | — | works |
 | 30 | SJK | Jaguar Killer | 2 | `SJK_ATT` | yes | mitem | works |
-| 31 | SF | Flame Spears | 2 | `SF_ATT`, `SF_HP_PERCENT` | yes | — | works |
+| 31 | SF | Flame Spears | 2 | `SF_ATT` | yes | — | works |
 | 32 | SG | Grappling Spears | 2 | `SG_ATT`, `SG_DEF` | yes | — | works |
 | 33 | BJ | Jade Bow | 4 | `BJ_ATT`, `BJ_JAGUAR_PERCENT`, `BJ_NATUREPRIEST_PERCENT` | yes | — | works |
 | 34 | BS | Snake Bow | 4 | `BS_POISON` | yes | — | works |
@@ -208,8 +216,13 @@ neither file, which is exactly what you would expect of quest rewards.
   dead in the shipped game rather than merely silent. That is a search of the
   mission code, not of these two files.
 - **The `+0x04` type field's exact semantics** — the equip checker is unread.
-- **The `+0x18` field on ids 2, 8 and 50.** Three items allocate four extra bytes;
-  only id 2's initialisation was observed.
+- **The `+0x18` field on ids 2, 8 and 50** — **partly answered.** The three
+  28-byte items are exactly the three that need to remember something between
+  calls. Moon Shield (8) is now read: its slot-7 override is
+  `*(byte*)(this+0x18) ^= 1`, returning zero damage when the bit is set — it
+  blocks literally **every other** sword blow, which is what its description
+  claims. Bone Horn (50) uses a counter capped by `MBH_TIME`. Id 2's use
+  (`MH_TIME_MIN`/`MAX`) is still unread.
 - **Slots 5–7 roles** are read from a sample of overriding bodies, not from all
   90. A full pass would firm up the slot table.
 
