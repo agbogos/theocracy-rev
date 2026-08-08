@@ -286,7 +286,73 @@ So the game has been asking for music at every mood change since the port first
 booted, and being told it got it. The garbage in `+0x06`/`+0x08` is harmless
 today only because `PlayAll` and `GetNumberOfTracks` are never called.
 
-## The implementation this points at
+## What is built (2026-08-08): the virtual drive
+
+`port/src/cdaudio.{hpp,cpp}` — `VirtualCD` — plus the two traps that reach it.
+**The transport is done; audio output is not.** The guest side runs entirely
+unmodified: `cVCDThread` → `cVCD` → `cCD_Linux` → seven ioctls → `VirtualCD`.
+Nothing is patched, no vtable is replaced, no guest function is bypassed.
+
+- `open` (`traps.cpp`) tags a CD fd alongside the existing `/dev/dsp` tag.
+- `ioctl` dispatches the seven CD requests to `VirtualCD` **only** for a tagged
+  fd with a rip loaded; everything else keeps the blanket `return 0` that
+  `/dev/dsp`'s `SNDCTL_DSP_*` probes depend on.
+- `VirtualCD` holds the TOC and a wall-clock model of the transport. Track
+  durations are probed from the ripped files with libav, so "the track ended"
+  happens when it really would, and `CDROMSUBCHNL` reports `AUDIO_PLAY` /
+  `AUDIO_PAUSED` / `AUDIO_COMPLETED` exactly as the jump table above demands.
+- Auto-advance: `maybe_redirect_cd_advance` reproduces `cVCDThread::Main`'s guard
+  (enabled, not muted, mood ≤ 3) and calls `cVCDThread_StartTrackForMood`
+  (`0x81a3b80`) through the same `redirect_guest` frame the timer and sound
+  paths use. That replaces the poll thread that never runs, without patching an
+  infinite loop.
+
+Knobs: `THEOC_CD_AUDIO` (rip directory), `THEOC_CD_TRACE` (log every ioctl) —
+[diagnostics.md](../porting/diagnostics.md).
+
+### Verified against the real disc
+
+The UK 2-CD release was ripped on 2026-08-08. Its macOS `.TOC.plist` reads
+**First Track 1, Last Track 8**, track 1 `Data => true`, tracks 2–8 audio —
+which is exactly what the track table predicted from the binary before any disc
+was read. A standalone harness over `VirtualCD` (no emulator, no display)
+confirms:
+
+| Track | Duration | Used by |
+|---|---|---|
+| 2 | 245.9s | mood 3 |
+| 3 | 373.9s | mood 0 (menu) |
+| **4** | **166.3s** | **nothing** |
+| 5 | 285.8s | mood 3 |
+| 6 | 124.1s | mood 2 |
+| 7 | 106.3s | mood 2 |
+| 8 | 249.0s | mood 1 (realm) |
+
+**Track 4 exists and the game never plays it** — 2m46s of music with no code
+path to it, which the "Open threads" question above can now be closed as: the
+disc has it, the binary does not reference it. Whether it is credits music
+triggered by something outside this subsystem, or simply unused, is not
+answerable from `theocracy.real`.
+
+The harness also checks the states the guest actually branches on: `0x11` while
+playing, `rel_frame` advancing at 75 frames/s, `0x12` still reporting the track
+when paused, `0x15` with track 0 after stop, and a `play()` of an absent track
+**failing** rather than reporting success and silence — which is the exact
+failure mode this whole subsystem already had once.
+
+### Still to do — the audio output half
+
+1. **The host mixer is single-stream.** `audio_push` appends to one `audio_q_`
+   deque. Music is the first genuinely concurrent second source and needs a real
+   mix (sum, clamp, independent rates), not an append. This is the substantive
+   remaining work.
+2. **Streaming decode.** The rip is 44100 Hz stereo AIFF-C (`sowt`); the host
+   mixer is 22050 Hz, so every track needs resampling — `swresample`, already
+   linked. It must stream: one five-minute track is ~26 MB decoded, and
+   `mpeg.cpp`'s decode-it-all-up-front approach does not transfer.
+3. **Volume.** `CDROMVOLCTRL` is recorded and ignored; it should scale the mix.
+
+## Why it is the `ioctl` trap and not a native `cVCD`
 
 **Implement the CD as a virtual device in the `ioctl` trap, not as native
 overrides of `cVCD`.**
@@ -320,9 +386,9 @@ each time — so it belongs in neither option.
 
 ## Open threads
 
-- **What is on track 4, and how many audio tracks the disc really has.** The
-  table names 2, 3, 5, 6, 7, 8 and skips 4. Answered by the TOC of a physical
-  disc; see `todo.md`.
+- ~~What is on track 4, and how many audio tracks the disc really has~~ —
+  **answered 2026-08-08 by the UK rip**: 7 audio tracks, 2–8, and track 4 is a
+  real 166s track with no code path to it. What it *is* remains unknown.
 - **Moods 2 vs 3.** Both are set from the battle screen (`FUN_080bb590` @
   `0x80bbe79`), chosen by `vcall[+0xb4] || flag at world+0x40a4c` — mood 2 if
   either is true, mood 3 otherwise. The flag getter is `0x081ecaa0`. Neither

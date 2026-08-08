@@ -29,7 +29,17 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
-### 2. Rip the CD audio tracks (music)
+### ~~2. Rip the CD audio tracks~~ — done 2026-08-08
+
+UK release ripped to `data/cd-uk/` as AIFF-C, tracks 2–8, TOC verified against
+the prediction. Kept below for the *other* discs, which are still worth a TOC
+read: the Chinese `.mds` costs nothing and would say whether the track numbering
+is release-invariant (i.e. whether the port can ship one mapping for any disc a
+tester owns). Not blocking anything.
+
+<details><summary>original task</summary>
+
+### Rip the CD audio tracks (music)
 
 The score is Redbook CD audio; there is no music file in the data tree. The
 game's track table is decompiled — [`music-and-redbook.md`](docs/subsystems/music-and-redbook.md).
@@ -62,38 +72,32 @@ Chinese release for its TOC and compare track counts. If the two releases agree,
 the numbering is release-invariant and the port can ship one mapping; if they
 disagree, that is a finding and the port has to detect rather than assume.
 
-Tracks are copyrighted — they go in `data/cd/` (already gitignored), never in
-git.
+Tracks are copyrighted — they go in `data/cd-uk/` (gitignored), never in git.
+
+</details>
 
 ---
 
 ## CLAUDE
 
-### 1. Virtual CD device in the `ioctl` trap
+### 1. Music: the audio-output half
 
-The RE is done — the device contract is seven Linux CD ioctls and the driver is
-stateless per call
-([`music-and-redbook.md`](docs/subsystems/music-and-redbook.md)). Implement them
-in `traps.cpp` so `cVCDThread`/`cVCD`/`cCD_Linux` all keep running as original
-guest code:
+The virtual drive is built and verified (`port/src/cdaudio.{hpp,cpp}`,
+[`music-and-redbook.md`](docs/subsystems/music-and-redbook.md)) — the guest asks
+for the right track at the right moment and the host models the transport. What
+is missing is sound coming out:
 
-- tag CD fds in the `open` handler (`traps.cpp:2814`) next to the existing
-  `is_dsp` flag;
-- replace the blanket `ioctl` stub (`traps.cpp:1674`) with a dispatch on the fd
-  tag: `0x5305` READTOCHDR, `0x5304` PLAYTRKIND, `0x5307` STOP, `0x5301` PAUSE,
-  `0x5302` RESUME, `0x530b` SUBCHNL, `0x530a` VOLCTRL — keeping the blanket
-  success for every other fd, which is what `/dev/dsp` relies on;
-- auto-advance: call `cVCDThread_StartTrackForMood` (`0x81a3b80`) from the host
-  when the virtual CD goes idle.
+- **make the host mixer multi-stream.** `audio_push` (`traps.cpp`) appends to one
+  `audio_q_` deque with a single producer. Music is a genuine second concurrent
+  source: sum and clamp, each source at its own rate. This is the real work.
+- **stream-decode the track** with libav + `swresample` (44100 → 22050), driven
+  off the same queue-depth gate the mixer uses. Do not preload: one track is
+  ~26 MB decoded.
+- **apply `CDROMVOLCTRL`**, which `VirtualCD` records and currently ignores.
 
-**Depends on the rip** for real audio — but the TOC half (`READTOCHDR`,
-`SUBCHNL`, and the mood→track plumbing) can be built and verified against
-silence first, since the track table is already known. Worth doing that way:
-it separates "is the guest asking for the right track" from "does the audio
-decode", and only the first is subtle.
-
-Also needs the host mixer to stop being single-stream — see the doc's Open
-threads.
+Verification when it plays: menu should be track 3, realm track 8; `THEOC_CD_TRACE=1`
+prints what the guest asked for, so wrong-music-on-a-screen separates cleanly
+into a guest choice vs a host playback bug.
 
 ### 2. Confirm the second soft thread
 

@@ -3,11 +3,17 @@
 # redistributable. They must be provided out-of-band, not committed.
 #   /linux/    -> theocracy.real, libmvos*.so, server, ... (game dist)
 #   /data/cd   -> ~448M ripped CD assets
+#   /data/cd-* -> per-release rips: disc images and Redbook audio tracks
+#                 (e.g. /data/cd-uk, the UK 2-CD release ripped 2026-08-08).
+#                 The glob is deliberate — `/data/cd/` alone does NOT match
+#                 `/data/cd-uk/`, and the music rip is as copyrighted as the
+#                 disc it came off.
 #   /data/game -> ~184M extracted/decrypted game data
 # Kept on purpose: /data/*.tsv and /data/mvos_api.json (small derived symbol/
 # reloc reference tables the docs depend on; no copyrighted content).
 /linux/
 /data/cd/
+/data/cd-*/
 # Ignore the extracted game data, but keep our hand-authored mvos.cfg (normally
 # installed by inst.linux; the libmvos cfg loader reads it as data/game/mvos.cfg).
 /data/game/*

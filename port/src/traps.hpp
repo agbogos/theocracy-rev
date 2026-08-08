@@ -13,6 +13,7 @@
 #include "machine.hpp"
 #include "video.hpp"
 #include "mpeg.hpp"
+#include "cdaudio.hpp"
 #include <SDL2/SDL.h>
 #include <atomic>
 #include <chrono>
@@ -255,6 +256,10 @@ private:
         // write-only — there is no F_GETFL — so fcntl(F_GETFL) is answered from
         // here. Exact, because the fcntl handler is its only writer.
         bool  nonblock = false;
+        // /dev/cdrom → VirtualCD (docs/subsystems/music-and-redbook.md). Last on
+        // purpose: several call sites brace-initialise this struct positionally,
+        // so a field inserted mid-struct silently reassigns them.
+        bool  cdrom = false;
     };
     std::unordered_map<uint32_t, HostFile> files_;   // guest FILE*
     std::unordered_map<int, HostFile> fds_;          // guest fd → host
@@ -281,6 +286,15 @@ private:
     void ensure_audio();
     void audio_push(const void* data, size_t nbytes);
     static void audio_callback(void* userdata, Uint8* stream, int len);
+    // Redbook CD audio (music). The guest's cCD_Linux runs unmodified and talks
+    // to this through the seven CDROM ioctls — see docs/subsystems/
+    // music-and-redbook.md. Empty unless a rip was found, in which case every CD
+    // ioctl keeps the old blanket-success behaviour.
+    VirtualCD cd_;
+    bool cd_trace_ = false;
+    uint32_t cd_ioctl(Machine& m, int gfd, uint32_t req, uint32_t argp);
+    bool maybe_redirect_cd_advance(Machine& m, uint32_t esp);
+    std::chrono::steady_clock::time_point cd_next_advance_{};
     // Green-thread stand-ins for pthread_create (sound mixer Main loop).
     // Each present redirects guest into Entry once (Main patched to one-shot).
     struct SoftThread {

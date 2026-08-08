@@ -190,6 +190,25 @@ TrapLayer::TrapLayer(std::vector<std::string> names)
     else data_root_ = "data/game";
     net_init();
     register_builtins();
+
+    // Redbook music. The tracks are copyrighted and out of git, so an absent rip
+    // is the normal case and must stay silent-but-working: with no tracks, every
+    // CD ioctl falls through to the historical blanket success and the game
+    // behaves exactly as it did before this existed.
+    cd_trace_ = std::getenv("THEOC_CD_TRACE") != nullptr;
+    std::string cd_dir;
+    if (const char* e = std::getenv("THEOC_CD_AUDIO")) cd_dir = e;
+    if (!cd_dir.empty()) {
+        if (cd_.scan(cd_dir) == 0)
+            std::fprintf(stderr, "  [cd] THEOC_CD_AUDIO='%s' has no audio tracks\n",
+                        cd_dir.c_str());
+    } else {
+        for (const char* d : {"data/cd-uk", "data/cd-audio", "data/cd/audio"})
+            if (cd_.scan(d) > 0) break;
+    }
+    if (cd_.present())
+        std::fprintf(stderr, "  [cd] %d audio tracks in '%s', TOC %u..%u\n",
+                    cd_.count(), cd_.dir().c_str(), cd_.first_track(), cd_.last_track());
 }
 
 TrapLayer::~TrapLayer() {
@@ -1639,6 +1658,12 @@ void TrapLayer::register_builtins() {
         // underruns/s in steady state, province and realm alike).
         if (!resumed && maybe_redirect_sound(m, esp)) return 0;
 
+        // Music auto-advance, same fresh-entry-only rule and for the same
+        // reason: it rewrites this frame's return, so it cannot share it with a
+        // resume. Cheap — it early-outs on a wall-clock gate before touching
+        // guest memory.
+        if (!resumed && maybe_redirect_cd_advance(m, esp)) return 0;
+
         // Sleep the FULL requested duration, delivering heartbeats *during* it
         // the way the kernel does — rather than returning at the first due tick.
         // Truncating is what cut the game's own 83ms province limiter to ~33ms
@@ -1671,9 +1696,17 @@ void TrapLayer::register_builtins() {
             remaining -= slice;
         }
     };
-    t["ioctl"] = [](Machine& m, uint32_t esp) -> uint32_t {
-        // /dev/dsp probes etc. — succeed with zeros.
-        (void)m; (void)esp;
+    t["ioctl"] = [this](Machine& m, uint32_t esp) -> uint32_t {
+        int gfd = (int)arg(m, esp, 0);
+        uint32_t req = arg(m, esp, 1);
+        uint32_t argp = arg(m, esp, 2);
+        // CD-ROM: the guest's own cCD_Linux driver is talking to the drive we
+        // are pretending to be (music-and-redbook.md). Everything else keeps
+        // the historical blanket success — /dev/dsp's SNDCTL_DSP_* probes rely
+        // on it, and on Linux 0 means the ioctl worked.
+        auto it = fds_.find(gfd);
+        if (it != fds_.end() && it->second.cdrom && cd_.present())
+            return cd_ioctl(m, gfd, req, argp);
         return 0;
     };
     t["strcat"] = [](Machine& m, uint32_t esp) -> uint32_t {
@@ -2815,8 +2848,20 @@ void TrapLayer::register_builtins() {
             int gfd = next_fd_++;
             bool is_dsp = (path.find("dsp") != std::string::npos ||
                            path.find("audio") != std::string::npos);
+            // cCD_Linux opens and closes the device around *every* ioctl (it
+            // keeps no fd), so this runs constantly once music is on — don't
+            // log it per open. Default device is /dev/cdrom; mvos.cfg
+            // [vmachine] cdrom_device can name another, so match loosely.
+            bool is_cd = !is_dsp && (path.find("cdrom") != std::string::npos ||
+                                     path.find("cdaudio") != std::string::npos ||
+                                     path.find("/sr") != std::string::npos ||
+                                     path.find("acd") != std::string::npos);
             if (is_dsp) ensure_audio();
-            fds_[gfd] = HostFile{nullptr, -1, true, is_dsp, false};
+            HostFile hf;
+            hf.stub  = true;
+            hf.audio = is_dsp;
+            hf.cdrom = is_cd;
+            fds_[gfd] = hf;
             if (is_dsp)
                 std::fprintf(stderr, "  [audio] open '%s' -> guest fd %d\n", path.c_str(), gfd);
             return (uint32_t)gfd;
@@ -3468,6 +3513,146 @@ bool TrapLayer::maybe_redirect_timer(Machine& m, uint32_t esp) {
     static int nlog;
     if (nlog++ < 8)
         std::fprintf(stderr, "  [timer] redirect _TimerFunction (skipped schedule %d)\n", skipped);
+    return true;
+}
+
+// ---- Redbook CD audio (music) -----------------------------------------------
+// The guest side runs entirely unmodified: cVCDThread (game 0x81a35a0) drives
+// cVCD (libmvos 0x905b0) which drives cCD_Linux, and cCD_Linux issues these
+// seven ioctls against /dev/cdrom. We answer them as the drive would. Nothing is
+// bypassed and no vtable is patched — a CD-ROM is an OS device, so this lands on
+// the same boundary the rest of the port HLEs. docs/subsystems/music-and-redbook.md
+namespace {
+// Linux cdrom.h request numbers, as issued by cCD_Linux.
+constexpr uint32_t CDROMPAUSE       = 0x5301;
+constexpr uint32_t CDROMRESUME      = 0x5302;
+constexpr uint32_t CDROMPLAYTRKIND  = 0x5304;
+constexpr uint32_t CDROMREADTOCHDR  = 0x5305;
+constexpr uint32_t CDROMSTOP        = 0x5307;
+constexpr uint32_t CDROMVOLCTRL     = 0x530a;
+constexpr uint32_t CDROMSUBCHNL     = 0x530b;
+
+// theocracy.real, loaded at its link base — see music-and-redbook.md.
+constexpr uint32_t G_VCDTHREAD  = 0x084c9764;  // cVCDThread*
+constexpr uint32_t G_MUSIC_MUTE = 0x084c9762;  // global mute byte
+constexpr uint32_t G_START_TRACK_FOR_MOOD = 0x081a3b80;
+
+void put_msf(uint8_t* p, uint32_t frames) {
+    p[0] = (uint8_t)(frames / (75 * 60));
+    p[1] = (uint8_t)((frames / 75) % 60);
+    p[2] = (uint8_t)(frames % 75);
+    p[3] = 0;
+}
+}  // namespace
+
+uint32_t TrapLayer::cd_ioctl(Machine& m, int gfd, uint32_t req, uint32_t argp) {
+    (void)gfd;
+    auto fail = [&](const char* why) -> uint32_t {
+        if (cd_trace_) std::fprintf(stderr, "  [cd] ioctl %#x -> EIO (%s)\n", req, why);
+        return (uint32_t)-1;
+    };
+    try {
+        switch (req) {
+            case CDROMREADTOCHDR: {
+                // struct cdrom_tochdr { u8 cdth_trk0, cdth_trk1; }
+                uint8_t hdr[2] = {cd_.first_track(), cd_.last_track()};
+                m.write(argp, hdr, 2);
+                if (cd_trace_)
+                    std::fprintf(stderr, "  [cd] READTOCHDR -> %u..%u\n", hdr[0], hdr[1]);
+                return 0;
+            }
+            case CDROMPLAYTRKIND: {
+                // struct cdrom_ti { u8 trk0, ind0, trk1, ind1; }
+                uint8_t ti[4] = {0, 0, 0, 0};
+                m.read(argp, ti, 4);
+                bool ok = cd_.play(ti[0], ti[2]);
+                std::fprintf(stderr, "  [cd] play track %u..%u%s\n",
+                            ti[0], ti[2], ok ? "" : " FAILED");
+                return ok ? 0 : (uint32_t)-1;
+            }
+            case CDROMSTOP:   cd_.stop();   if (cd_trace_) std::fprintf(stderr, "  [cd] stop\n");   return 0;
+            case CDROMPAUSE:  cd_.pause();  if (cd_trace_) std::fprintf(stderr, "  [cd] pause\n");  return 0;
+            case CDROMRESUME: cd_.resume(); if (cd_trace_) std::fprintf(stderr, "  [cd] resume\n"); return 0;
+            case CDROMVOLCTRL: {
+                // struct cdrom_volctrl { u8 channel0..3; } — cCD_Linux writes the
+                // high byte of its u16 argument into all four.
+                uint8_t v[4] = {0, 0, 0, 0};
+                m.read(argp, v, 4);
+                cd_.set_volume(v[0]);
+                if (cd_trace_) std::fprintf(stderr, "  [cd] volume %u\n", v[0]);
+                return 0;
+            }
+            case CDROMSUBCHNL: {
+                // struct cdrom_subchnl, 16 bytes on i386 (the guest's buffer is
+                // exactly 16 — cCD_Linux::GetActualTrack's `uint local_14[4]`).
+                // It reads only +1 (audiostatus) and +3 (trk); the rest is filled
+                // because a half-written struct is how a future reader gets a
+                // plausible wrong answer.
+                uint8_t sc[16] = {0};
+                auto st = cd_.status();
+                m.read(argp, sc, 1);          // keep the requested format byte
+                sc[1] = st.audio_status;
+                sc[2] = 0x01;                 // adr=1 (position), ctrl=0 (audio)
+                sc[3] = st.track;
+                sc[4] = 1;                    // index
+                put_msf(sc + 8, st.abs_frame);
+                put_msf(sc + 12, st.rel_frame);
+                m.write(argp, sc, 16);
+                if (cd_trace_)
+                    std::fprintf(stderr, "  [cd] subchnl -> status %#04x track %u\n",
+                                st.audio_status, st.track);
+                return 0;
+            }
+            default:
+                // Unknown CD ioctl: succeed, as the blanket stub always did.
+                if (cd_trace_)
+                    std::fprintf(stderr, "  [cd] unhandled ioctl %#x (ok)\n", req);
+                return 0;
+        }
+    } catch (const std::exception& e) {
+        return fail(e.what());
+    }
+}
+
+// The guest's own "the track ended, start another" poll is cVCDThread::Main
+// (game 0x81a39e0), which never runs: pthread_create only queues soft threads
+// and maybe_redirect_sound green-runs the sound mixer. Rather than patch that
+// infinite loop, call the thing it would have called. The guard below is
+// Main's guard, reproduced exactly.
+bool TrapLayer::maybe_redirect_cd_advance(Machine& m, uint32_t esp) {
+    if (!cd_.present()) return false;
+    auto now = std::chrono::steady_clock::now();
+    if (cd_next_advance_.time_since_epoch().count() != 0 && now < cd_next_advance_)
+        return false;
+    if (!cd_.idle()) return false;
+    // The original polls every ~5s; 1s costs nothing and makes the gap between
+    // tracks inaudible. It also bounds the retry rate when the guest picks a
+    // track the rip does not have.
+    cd_next_advance_ = now + std::chrono::milliseconds(1000);
+
+    uint32_t obj = 0;
+    uint8_t enabled = 0, mute = 0;
+    uint32_t mood = 0;
+    try {
+        obj = m.r32(G_VCDTHREAD);
+        if (!obj) return false;
+        m.read(obj + 0x90, &enabled, 1);   // cVCDThread enabled flag
+        m.read(G_MUSIC_MUTE, &mute, 1);
+        mood = m.r32(obj + 0x18);
+    } catch (...) { return false; }
+    if (!enabled || mute) return false;
+    // Mood 4 is "stopped" and is NOT a list index — cList[4] would land on the
+    // cRandom at +0x7c and walk garbage as a node list. The guest's own poll
+    // tests this before calling, and so must we.
+    if (mood > 3) return false;
+
+    uint32_t ret = m.r32(esp);
+    uint32_t sp = esp;
+    sp -= 4; m.w32(sp, obj);     // cdecl arg: cVCDThread* this
+    sp -= 4; m.w32(sp, ret);     // returns straight back into the trap's caller
+    m.redirect_guest(G_START_TRACK_FOR_MOOD, sp);
+    if (cd_trace_)
+        std::fprintf(stderr, "  [cd] idle -> StartTrackForMood(mood %u)\n", mood);
     return true;
 }
 
