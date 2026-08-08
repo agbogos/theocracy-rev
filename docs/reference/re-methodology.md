@@ -311,6 +311,31 @@ here was not that the guess was made but that it was written in the indicative.
 
 ---
 
+## 13. Absence in a shipped data file is not absence — most of them are encrypted
+
+Chasing where hero stats come from, a `grep -i hero data/game/data/selap.txt`
+returned nothing, and the conclusion drawn from it — "the hero constants are not
+in `selap.txt`, so they must come from somewhere else" — was wrong and sent the
+search off after another config file that does not exist. `selap.txt` ships
+`RSA4096`-encrypted and contains **103** hero keys. A `wc -l` on the same file
+was equally meaningless: 126 lines of ciphertext against 986 real ones.
+
+This is the cheapest possible mistake to make, because the failure is silent and
+looks exactly like a genuine negative result. The rule:
+
+- **Never grep a file under `data/game/` directly.** Decrypt into memory first —
+  `tools/theocracy_crypt.py` as a module, or the four-line XOR — and grep that.
+  The tree must stay as-shipped on disk ([phls-format.md](phls-format.md)), so
+  there is no decrypted copy to search by accident.
+- **A negative result from a data file needs the same evidence as a positive
+  one.** State how the file was read, not just what was not in it.
+- The inverse is also worth knowing: not everything is encrypted. `hero.cfg` is
+  plaintext, `.raw` assets are plaintext, and the `.sdb` locale files use a
+  *different* cipher again. "Is this file encrypted, and with which of the
+  three?" is a question to answer before reading, not after being confused.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -347,3 +372,5 @@ Before a finding lands in `docs/` or in host code:
 10. Do the other docs already say something about these addresses? `grep` them
     before committing; two docs disagreeing is the cheapest bug detector this
     project has, and it only works if someone looks.
+11. If a claim rests on a data file — especially a *negative* claim — was the
+    file decrypted before it was read? (§13)
