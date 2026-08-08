@@ -316,7 +316,17 @@ Before a finding lands in `docs/` or in host code:
    `80 /n` scan that only knows `/7` (cmp) misses `/6` (xor), so a
    read-modify-write toggle reads as "never written" — which is exactly how the
    cheat flags were first documented wrong. Prefer `tools/elfq.py`, which was
-   built after that scan produced two wrong claims in committed docs.
+   built after that scan produced two wrong claims in committed docs. **And the
+   same defect recurred in `elfq.py` itself** (2026-08-08): `xref-global` decoded
+   only `A1`/`8B` pointer loads plus a byte-op table, so every dword `cmp`, every
+   dword *write* and every `push`-the-address was invisible. It reported **zero
+   references** to `MAX_FUCKER` (`0x84c8599`), a global read twice by `3B /r`
+   ([../subsystems/population-and-births.md](../subsystems/population-and-births.md)).
+   The fix inverts the search: find the 4-byte operand anywhere in `.text` and
+   classify each occurrence *backwards* from it, reporting anything it cannot
+   decode as `operand?` rather than dropping it. **Search for the operand, not
+   for a list of opcodes** — an opcode table you enumerate is a table you can be
+   wrong about silently; an operand match you classify afterwards is not.
 9. Is the *name* in this claim something the function was read to do, or
    something it plausibly does? If the latter, is it written as a hypothesis —
    and does any conclusion elsewhere depend on it? (§12)

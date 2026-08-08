@@ -38,7 +38,9 @@ Verbs
     sym @<addr>                   ... or by address (nearest preceding)
     plt [filter]                  PLT stub -> imported symbol
     xref-call <addr|name>         direct CALL/JMP rel32 sites targeting it
-    xref-global <addr> [-f N]     code touching a global; -f N = byte field +N
+    xref-global <addr> [-f N]     every reference to a global (reads, writes,
+                                  compares, address-taken); -f N = byte field +N
+                                  reached through it as a pointer
     vtable <addr> [-n N]          dump N words with relocations applied
     strrefs <lo> <hi>             string literals referenced in a code range
 
@@ -345,12 +347,116 @@ def v_xref_call(elf, args):
         print(f"  {va:#010x}{elf.gtag(va)}  {kind}   in {elf.label(va) or '?'}")
 
 
-def v_xref_global(elf, args):
-    """Find code that loads a global pointer and then touches a byte field.
+# Every one-byte opcode that takes a modrm, as {opcode: (kind, operand size)}.
+# kind None = an opcode-extension group; look the /n up in GRP_EXT below.
+#
+# This table exists because a partial one gives a confidently wrong answer. The
+# scan here used to know only `A1`/`8B` (pointer loads) plus a byte-op table, so
+# a dword global that is only compared or only written reported *zero*
+# references. That is how `MAX_FUCKER` (0x84c8599) read as unused on 2026-08-08
+# when it is read twice, by `3B /r` (cmp r32, [disp32]) — the same failure mode
+# as the cheat-flag scan in docs/reference/re-methodology.md §8, in the tool
+# written to prevent it. Anything not decoded here is reported as `operand?`
+# rather than dropped.
+_MODRM = {
+    0x00: ("rmw:add", "b"), 0x01: ("rmw:add", "d"),
+    0x02: ("read:add", "b"), 0x03: ("read:add", "d"),
+    0x08: ("rmw:or", "b"),  0x09: ("rmw:or", "d"),
+    0x0a: ("read:or", "b"), 0x0b: ("read:or", "d"),
+    0x10: ("rmw:adc", "b"), 0x11: ("rmw:adc", "d"),
+    0x12: ("read:adc", "b"), 0x13: ("read:adc", "d"),
+    0x18: ("rmw:sbb", "b"), 0x19: ("rmw:sbb", "d"),
+    0x1a: ("read:sbb", "b"), 0x1b: ("read:sbb", "d"),
+    0x20: ("rmw:and", "b"), 0x21: ("rmw:and", "d"),
+    0x22: ("read:and", "b"), 0x23: ("read:and", "d"),
+    0x28: ("rmw:sub", "b"), 0x29: ("rmw:sub", "d"),
+    0x2a: ("read:sub", "b"), 0x2b: ("read:sub", "d"),
+    0x30: ("rmw:xor", "b"), 0x31: ("rmw:xor", "d"),
+    0x32: ("read:xor", "b"), 0x33: ("read:xor", "d"),
+    0x38: ("cmp", "b"), 0x39: ("cmp", "d"),
+    0x3a: ("cmp", "b"), 0x3b: ("cmp", "d"),
+    0x84: ("test", "b"), 0x85: ("test", "d"),
+    0x86: ("rmw:xchg", "b"), 0x87: ("rmw:xchg", "d"),
+    0x88: ("WRITE", "b"), 0x89: ("WRITE", "d"),
+    0x8a: ("read", "b"),  0x8b: ("read", "d"),
+    0x8d: ("addr:lea", "d"),
+    0x80: (None, "b"), 0x81: (None, "d"), 0x83: (None, "d"),
+    0xc6: (None, "b"), 0xc7: (None, "d"),
+    0xf6: (None, "b"), 0xf7: (None, "d"),
+    0xfe: (None, "b"), 0xff: (None, "d"),
+}
+# Opcode-extension groups. group1 (80/81/83) is the one that matters most: only
+# /7 is a pure read, /0../6 are read-modify-write, and reading /6 (xor) as
+# "never written" is the documented cheat-flag error.
+_GRP1 = {0: "rmw:add", 1: "rmw:or", 2: "rmw:adc", 3: "rmw:sbb",
+         4: "rmw:and", 5: "rmw:sub", 6: "rmw:xor", 7: "cmp"}
+_GRP_EXT = {
+    0x80: _GRP1, 0x81: _GRP1, 0x83: _GRP1,
+    0xc6: {0: "WRITE"}, 0xc7: {0: "WRITE"},
+    0xf6: {0: "test", 2: "rmw:not", 3: "rmw:neg", 4: "read:mul",
+           5: "read:imul", 6: "read:div", 7: "read:idiv"},
+    0xf7: {0: "test", 2: "rmw:not", 3: "rmw:neg", 4: "read:mul",
+           5: "read:imul", 6: "read:div", 7: "read:idiv"},
+    0xfe: {0: "rmw:inc", 1: "rmw:dec"},
+    0xff: {0: "rmw:inc", 1: "rmw:dec", 6: "read:push"},
+}
+_IMM8 = (0x80, 0x83, 0xc6, 0xfe)
+_IMM32 = (0x81, 0xc7)
 
-    Without -f: reports every direct load of the global.
-    With -f N:  also reports the byte access at +N through the loaded register,
-                classified read/write, within a short instruction window.
+
+def _classify_operand(b, o):
+    """Classify the instruction whose 4-byte operand starts at file offset o.
+
+    Returns (insn_start, kind, size, imm). Never returns None — an encoding this
+    does not know is reported as `operand?` so it shows up as something to look
+    at rather than vanishing from the count.
+    """
+    # moffs and push-immediate: a single opcode byte ahead of the operand.
+    one = {0x68: ("addr:push", "d"), 0xa0: ("read", "b"), 0xa1: ("read", "d"),
+           0xa2: ("WRITE", "b"), 0xa3: ("WRITE", "d")}
+    if o >= 1 and b[o - 1] in one:
+        kind, size = one[b[o - 1]]
+        return o - 1, kind, size, None
+
+    # modrm forms. Absolute addressing is mod=00 rm=101, i.e. modrm & 0xC7 == 5.
+    if o >= 2 and (b[o - 1] & 0xc7) == 0x05:
+        op, regf = b[o - 2], (b[o - 1] >> 3) & 7
+        # Two-byte 0F opcodes: movzx/movsx read a narrower field into a dword.
+        if o >= 3 and b[o - 3] == 0x0f and op in (0xb6, 0xb7, 0xbe, 0xbf):
+            return o - 3, "read", "b" if op in (0xb6, 0xbe) else "w", None
+        ent = _MODRM.get(op)
+        if ent is not None:
+            kind, size = ent
+            if kind is None:
+                kind = _GRP_EXT[op].get(regf)
+            if kind is not None:
+                start = o - 2
+                # 0x66 selects 16-bit operands for the dword forms.
+                if size == "d" and o >= 3 and b[o - 3] == 0x66:
+                    start, size = o - 3, "w"
+                imm = None
+                if op in _IMM8 and o + 4 < len(b):
+                    imm = b[o + 4]
+                elif op in _IMM32 and o + 8 <= len(b):
+                    imm = struct.unpack_from("<i", b, o + 4)[0]
+                elif op in (0xf6, 0xf7) and regf == 0:
+                    imm = (b[o + 4] if op == 0xf6 and o + 4 < len(b)
+                           else struct.unpack_from("<i", b, o + 4)[0]
+                           if o + 8 <= len(b) else None)
+                return start, kind, size, imm
+    return o, "operand?", "?", None
+
+
+def v_xref_global(elf, args):
+    """Find every reference to a global, and optionally follow it as a pointer.
+
+    Without -f: reports *all* references to the address in .text — reads,
+                writes, compares, and the push/lea forms that take its address
+                without dereferencing it — plus a count of any occurrences
+                outside .text, which usually mean a table entry.
+    With -f N:  additionally reports the byte access at +N through a register
+                the global was loaded into, classified read/write, within a
+                short instruction window.
 
     Deliberately conservative: it only matches an access whose base register was
     loaded from *this* global a few instructions earlier. A blind scan for
@@ -415,66 +521,67 @@ def v_xref_global(elf, args):
             imm = seg[j + 2 + dlen]
         return kind, imm
 
-    loads = []
-    o = t["off"]
-    end = t["off"] + t["size"]
-    while o < end - 6:
-        reg = None
-        ln = 0
-        if b[o] == 0xA1 and b[o + 1:o + 5] == p:
-            reg, ln = "eax", 5                                   # mov eax,[imm32]
-        elif b[o] == 0x8B and (b[o + 1] & 0xC7) == 0x05 and b[o + 2:o + 6] == p:
-            reg, ln = X86_REGS[(b[o + 1] >> 3) & 7], 6           # mov r32,[imm32]
-        if reg:
-            loads.append((o + base, o, ln, reg))
-            o += ln
-            continue
-        o += 1
+    # Scan for the address as a 4-byte operand anywhere in .text, then classify
+    # each occurrence by decoding backwards from it. Searching for the operand
+    # rather than for a list of opcodes is what makes this complete: an encoding
+    # the classifier does not know still gets counted and flagged, instead of
+    # being invisible because its opcode was not in a table.
+    refs = []
+    o = b.find(p, t["off"], t["off"] + t["size"])
+    while o != -1:
+        start, kind, size, imm = _classify_operand(b, o)
+        refs.append((start + base, kind, size, imm))
+        o = b.find(p, o + 1, t["off"] + t["size"])
 
-    print(f"{len(loads)} direct loads of {ptr:#x}{elf.gtag(ptr)}"
-          + (f"; byte field +{field:#x}:" if field is not None else ""))
-    if field is None:
-        for va, _, _, reg in loads:
-            print(f"  {va:#010x}{elf.gtag(va)}  -> {reg}   in {elf.label(va) or '?'}")
-        # A global is not always a pointer that gets loaded. Flags like the
-        # cheat bytes are touched by absolute addressing and produce zero
-        # "loads" — reporting only the pointer form would read as "unused".
-        abs_hits = set()
-        o, endo = t["off"], t["off"] + t["size"]
-        while o < endo - 6:
-            op = b[o]
-            kind = ilen = None
-            # Absolute addressing is mod=00 rm=101; the reg field carries the
-            # opcode extension, so the modrm byte is 0x05|(ext<<3) — 0x35 for
-            # /6 (xor), not just 0x05 and 0x3D.
-            if op in (0x80, 0xC6, 0xF6) and (b[o + 1] & 0xC7) == 0x05 and b[o + 2:o + 6] == p:
-                regf = (b[o + 1] >> 3) & 7
-                kind = {0x80: GRP80.get(regf),
-                        0xC6: "WRITE" if regf == 0 else None,
-                        0xF6: "test" if regf == 0 else None}[op]
-                ilen = 7
-                imm = b[o + 6] if kind else None
-            elif op == 0xA0 and b[o + 1:o + 5] == p:
-                kind, ilen, imm = "read", 5, None          # mov al, [addr]
-            elif op == 0xA2 and b[o + 1:o + 5] == p:
-                kind, ilen, imm = "WRITE", 5, None         # mov [addr], al
-            elif op in (0x8A, 0x88) and (b[o + 1] & 0xC7) == 0x05 and b[o + 2:o + 6] == p:
-                kind, ilen, imm = ("read" if op == 0x8A else "WRITE"), 6, None
-            if kind:
-                abs_hits.add((o + base, kind, imm))
-                o += ilen
-                continue
-            o += 1
-        if abs_hits:
-            k = {}
-            for _, kind, _ in abs_hits:
-                k[kind] = k.get(kind, 0) + 1
-            print(f"\n  {len(abs_hits)} absolute byte accesses to {ptr:#x} itself"
-                  f"  ({', '.join(f'{v} {n}' for n, v in sorted(k.items()))})")
-            for va, kind, imm in sorted(abs_hits):
-                extra = f" = {imm}" if imm is not None else ""
-                print(f"  {va:#010x}{elf.gtag(va)}  {kind:5} byte [{ptr:#x}]{extra}"
-                      f"   in {elf.label(va) or '?'}")
+    # The -f mode follows the global as a *pointer*, so it needs the subset that
+    # lands in a register: mov eax,[addr] (A1) and mov r32,[addr] (8B /r).
+    loads = []
+    for va, kind, size, _ in refs:
+        o = va - base
+        if b[o] == 0xA1:
+            loads.append((va, o, 5, "eax"))
+        elif b[o] == 0x8B and (b[o + 1] & 0xC7) == 0x05:
+            loads.append((va, o, 6, X86_REGS[(b[o + 1] >> 3) & 7]))
+
+    if field is not None:
+        print(f"{len(loads)} direct loads of {ptr:#x}{elf.gtag(ptr)}"
+              f"; byte field +{field:#x}:")
+    else:
+        kinds = {}
+        for _, kind, _, _ in refs:
+            kinds[kind] = kinds.get(kind, 0) + 1
+        summary = ", ".join(f"{v} {k}" for k, v in sorted(kinds.items()))
+        print(f"{len(refs)} references to {ptr:#x}{elf.gtag(ptr)} in .text"
+              + (f"  ({summary})" if refs else ""))
+        SZ = {"b": "byte", "w": "word", "d": "dword", "?": ""}
+        for va, kind, size, imm in refs:
+            if kind.startswith("addr:"):
+                operand = f"{ptr:#x}"
+            elif kind == "operand?":
+                operand = f"{ptr:#x}  <- encoding not decoded; read it in Ghidra"
+            else:
+                operand = f"{SZ[size]} [{ptr:#x}]"
+            extra = f" = {imm}" if imm is not None else ""
+            print(f"  {va:#010x}{elf.gtag(va)}  {kind:9} {operand}{extra}"
+                  f"   in {elf.label(va) or '?'}")
+        # A reference from outside .text is usually a table entry — a vtable
+        # slot, a dispatch table, a relocated pointer — and reporting only code
+        # would make such a global read as "referenced nowhere".
+        other = []
+        o = b.find(p)
+        while o != -1:
+            if not (t["off"] <= o < t["off"] + t["size"]):
+                other.append(o)
+            o = b.find(p, o + 1)
+        if other:
+            def sec_of(off):
+                for s in elf.secs:
+                    if s["name"] != ".bss" and s["off"] <= off < s["off"] + s["size"]:
+                        return s["name"]
+                return "?"
+            where = ", ".join(sorted({sec_of(o) for o in other}))
+            print(f"\n  {len(other)} further occurrences outside .text ({where})"
+                  f" — table entries or relocations, not code")
         return
 
     rnum_of = {v: k for k, v in X86_REGS.items()}
