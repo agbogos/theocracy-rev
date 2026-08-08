@@ -288,8 +288,8 @@ today only because `PlayAll` and `GetNumberOfTracks` are never called.
 
 ## What is built (2026-08-08): the virtual drive
 
-`port/src/cdaudio.{hpp,cpp}` — `VirtualCD` — plus the two traps that reach it.
-**The transport is done; audio output is not.** The guest side runs entirely
+`port/src/cdaudio.{hpp,cpp}` — `VirtualCD` (the transport) and `CDPlayer` (the
+drive's DAC) — plus the two traps that reach them. The guest side runs entirely
 unmodified: `cVCDThread` → `cVCD` → `cCD_Linux` → seven ioctls → `VirtualCD`.
 Nothing is patched, no vtable is replaced, no guest function is bypassed.
 
@@ -307,7 +307,8 @@ Nothing is patched, no vtable is replaced, no guest function is bypassed.
   paths use. That replaces the poll thread that never runs, without patching an
   infinite loop.
 
-Knobs: `THEOC_CD_AUDIO` (rip directory), `THEOC_CD_TRACE` (log every ioctl) —
+Knobs: `THEOC_CD_AUDIO` (rip directory), `THEOC_CD_TRACE` (log every ioctl),
+`THEOC_MUSIC_VOL` (music level, 0–100) —
 [diagnostics.md](../porting/diagnostics.md).
 
 ### Verified against the real disc
@@ -340,17 +341,57 @@ when paused, `0x15` with track 0 after stop, and a `play()` of an absent track
 **failing** rather than reporting success and silence — which is the exact
 failure mode this whole subsystem already had once.
 
-### Still to do — the audio output half
+### The audio output half
 
-1. **The host mixer is single-stream.** `audio_push` appends to one `audio_q_`
-   deque. Music is the first genuinely concurrent second source and needs a real
-   mix (sum, clamp, independent rates), not an append. This is the substantive
-   remaining work.
-2. **Streaming decode.** The rip is 44100 Hz stereo AIFF-C (`sowt`); the host
-   mixer is 22050 Hz, so every track needs resampling — `swresample`, already
-   linked. It must stream: one five-minute track is ~26 MB decoded, and
-   `mpeg.cpp`'s decode-it-all-up-front approach does not transfer.
-3. **Volume.** `CDROMVOLCTRL` is recorded and ignored; it should scale the mix.
+`CDPlayer`, in the same unit. A **host thread** streams the current track
+through libav + `swresample` (44100 → 22050 stereo S16) into a bounded ~1s ring,
+and the SDL callback sums it into the buffer the guest's mixer has already
+filled. A host thread is allowed here where a guest one is not: it touches no
+guest memory and never enters Unicorn, so the single-threaded-emulator rule does
+not apply — the watchdog thread is the same shape. The alternatives were both
+worse: decoding on the emulation thread stalls the guest, and decoding in the
+SDL callback puts file I/O in a realtime callback.
+
+Three decisions worth keeping:
+
+- **Music is summed outside `audio_mu_`.** Everything the guest produces —
+  SFX, speech, cutscene audio — arrives through `/dev/dsp` as one already-mixed
+  stream; the player has its own lock. Holding both would couple the decoder
+  thread to every `/dev/dsp` write for no benefit. This also matches the
+  hardware: Redbook audio never went through the game's mixer either, it went
+  through the sound card's CD line.
+- **An empty music ring is not an underrun.** Most of the time no track is
+  playing at all. Counting that in `THEOC_FPS`'s underrun figure would report
+  constant audio failure during normal play.
+- **The transport clock is consumed samples, not wall clock.** `advance()` ends a
+  track when the decoder hit EOF *and* the ring drained. A wall clock would drift
+  against the device and, worse, declare the track over while a second of it was
+  still buffered — an audible cut at the end of every track.
+
+`CDROMVOLCTRL` scales the mix, and `THEOC_MUSIC_VOL` (0–100) trims it
+host-side. That knob exists because there is **no reference for the balance**:
+the original mixed CD audio through the sound card's CD line at a level set
+outside the game, so music-vs-SFX has to be set by ear.
+
+### Verified
+
+The decode path was measured standalone (no emulator, no display), pulling track
+7 at the device's own pace:
+
+| Check | Result |
+|---|---|
+| Non-silent samples | 97.2% |
+| Ring dry mid-stream | never — the one empty buffer is index 0, before the decoder's first output |
+| Peak / RMS | 14192 / 3055 (no hard clipping) |
+| Transport position after ~2s | 1.95s, tracking consumed samples |
+| Mixing additive over an SFX bed | 2048/2048 samples moved |
+| `THEOC_MUSIC_VOL=0` | 0/2048 moved |
+
+Run under **ThreadSanitizer**: clean across the decoder-thread / audio-callback
+boundary. The one race it would have caught is the volume fields, which are read
+on the SDL thread and written on the emulation thread and are therefore atomic.
+
+**Not yet verified in a real session** — see "Open threads".
 
 ## Why it is the `ioctl` trap and not a native `cVCD`
 
@@ -411,22 +452,27 @@ each time — so it belongs in neither option.
   so it cannot be green-run the way the mixer's one-shot-patched `Main` is.
   *(Predicted from the source, not yet observed in a run — a `THEOC_*` log line
   counting soft threads would confirm it.)*
-- **The host mixer is single-stream.** `TrapLayer::audio_push`
-  (`port/src/traps.cpp:646`) appends to one `audio_q_` deque that the SDL
-  callback drains. It has only ever had one producer — the guest mixer's
-  `/dev/dsp` writes, with cutscene audio playing when nothing else is. Music is
-  the first case of two genuinely concurrent sources and needs a real mix (sum,
-  clamp, independent rates), not an append. This is the substantive engineering
-  in reviving music; getting the audio files is the easy half.
-- **Decode strategy.** `mpeg.cpp` decodes whole movies into RAM up front, which
-  is fine for a 1192-frame intro and wrong for a soundtrack: one five-minute
-  track is ~26 MB at 22050 Hz stereo S16. Music wants streaming decode. libav is
-  already a dependency, so FLAC rips cost nothing to read.
+- ~~The host mixer is single-stream~~ / ~~decode strategy~~ — **both done
+  2026-08-08**; see "The audio output half" above.
+- **Nobody has heard it yet.** Everything above is verified standalone and under
+  ThreadSanitizer, but no full session has been played with music on. The things
+  a real run answers and a harness cannot: whether the **balance** is right
+  (`THEOC_MUSIC_VOL` exists precisely because there is no reference for it),
+  whether a mood change cuts cleanly, and whether the ~1s ring survives a save or
+  a province load without a gap. `THEOC_CD_TRACE=1` prints what the guest asked
+  for, so wrong-music-on-a-screen splits cleanly into a guest choice versus a
+  host playback bug.
+- **`SetVolume` has never been observed firing.** `cVCDThread_UnmuteAndResume`
+  gates `Resume` on `DAT_08648380 > 0`, which looks like an options-screen music
+  level, but nothing has been traced writing it. If the game ever calls
+  `CDROMVOLCTRL` with 0 the music goes silent and it will look like a port bug —
+  `THEOC_CD_TRACE` logs the value.
 - **There is no reference recording.** The Woody VM in
   [original-os-setup.md](../reference/original-os-setup.md) was always run with a
   minimal boot ISO rather than the real disc, so the original's music has never
-  been heard on original code. Until a disc is in a drive, nothing in this
-  project has ever verified that any of the above produces sound.
+  been heard on original code. The port is now the only place this soundtrack
+  has played since the disc was last in a period machine, which means "does it
+  sound right" has no authority to appeal to beyond the tracks themselves.
 
 ## Related
 

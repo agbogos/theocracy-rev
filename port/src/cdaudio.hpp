@@ -6,18 +6,72 @@
 // redirect the way `/mnt/cdrom` paths are — the host has to *be* the drive.
 // See docs/subsystems/music-and-redbook.md.
 //
-// This class is the transport half: the TOC, and a wall-clock model of where
-// the laser is. It deliberately does NOT decode or output audio yet — its whole
-// job is to answer CDROMREADTOCHDR and CDROMSUBCHNL correctly so the guest's own
+// Two halves. VirtualCD is the transport: the TOC and a model of where the
+// laser is, answering CDROMREADTOCHDR and CDROMSUBCHNL so the guest's own
 // cVCDThread / cVCD / cCD_Linux run unmodified and ask for the right track at
-// the right moment. Track durations are real (probed from the ripped files), so
-// "the track ended" happens when it actually would.
+// the right moment. CDPlayer is the drive's DAC: it streams the ripped file into
+// the host mixer.
+//
+// With no audio device the transport still runs on a wall clock and real track
+// durations — that is the TOC-only path, and it is how the guest's track choices
+// were verified before a note of audio was wired up.
 #pragma once
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
+#include <thread>
+
+// Streaming decode of one CD track into the host mixer format.
+//
+// A host thread, not a green one: it touches no guest memory and never enters
+// Unicorn, so the single-threaded-emulator rule does not apply (the watchdog
+// thread is the same shape). Decoding on the emulation thread would stall the
+// guest for milliseconds at a time, and decoding in the SDL callback would put
+// file I/O in a realtime callback.
+//
+// The tracks are 44100 Hz stereo; the host device is 22050. swresample does the
+// rate conversion, which is why nothing here has to care that the rip is AIFF-C
+// `sowt`, FLAC, or anything else libav reads.
+class CDPlayer {
+public:
+    ~CDPlayer();
+    static constexpr int kRate = 22050;      // host mixer rate
+    static constexpr int kChannels = 2;
+
+    bool open(const std::string& path);      // start decoding from the top
+    void close();
+    void set_paused(bool p) { paused_.store(p, std::memory_order_relaxed); }
+    bool active() const { return active_.load(std::memory_order_relaxed); }
+
+    // Called from the SDL audio callback: sum this track into `out` (nsamp
+    // interleaved int16 samples), scaled by volume 0..255, with clipping.
+    // Returns samples actually mixed — short means the ring ran dry.
+    size_t mix(int16_t* out, size_t nsamp, int volume);
+
+    // Seconds of audio actually handed to the device. This is the transport
+    // clock whenever a track is playing: using wall clock instead would let the
+    // model and the audio drift apart, and the tail of a track would be cut.
+    double played_seconds() const;
+    // EOF reached AND the ring is drained — the track has finished being heard.
+    bool finished() const;
+
+private:
+    void decode_loop(std::string path);
+
+    std::thread th_;
+    mutable std::mutex mu_;
+    std::condition_variable cv_;
+    std::deque<int16_t> ring_;
+    std::atomic<bool> quit_{false}, eof_{false}, active_{false}, paused_{false};
+    std::atomic<uint64_t> consumed_{0};      // samples mixed out (all channels)
+};
 
 class VirtualCD {
 public:
@@ -62,8 +116,25 @@ public:
     void stop();
     void pause();
     void resume();
-    void set_volume(uint8_t v) { volume_ = v; }
-    uint8_t volume() const { return volume_; }
+    void set_volume(uint8_t v) { volume_.store(v, std::memory_order_relaxed); }
+    uint8_t volume() const { return volume_.load(std::memory_order_relaxed); }
+
+    // Called from the SDL audio callback only. Mixes the playing track into the
+    // buffer the guest's own sample mixer has already filled.
+    void mix(int16_t* out, size_t nsamp);
+    // Host-side music trim, THEOC_MUSIC_VOL (0..100). The original mixed CD
+    // audio through the sound card's CD line with its own level, which we have
+    // no reference for — so this exists to balance music against SFX by ear.
+    void set_host_volume(int pct) {
+        host_vol_.store(pct < 0 ? 0 : (pct > 100 ? 100 : pct), std::memory_order_relaxed);
+    }
+    // Whether there is a host audio device to play into. With no device nothing
+    // would ever drain the decoder's ring, so the track would never "finish" and
+    // the guest would sit on it forever — so when this is false the transport
+    // falls back to the wall-clock model and no decoder is started at all. That
+    // is also the TOC-only path used to verify the guest's track choices with no
+    // sound at all.
+    void set_audio_enabled(bool on) { audio_out_ = on; }
 
     // CDROMSUBCHNL. Advances the transport model to now, so call it before
     // reading. `track` is 0 when the status is not PLAY/PAUSED.
@@ -82,7 +153,8 @@ public:
 
 private:
     using clock = std::chrono::steady_clock;
-    void advance();   // roll the model forward to now
+    void advance();             // roll the model forward to now
+    double track_position() const;   // seconds into cur_ (audio- or clock-based)
 
     std::string dir_;
     std::map<uint8_t, std::string> tracks_;     // absolute track number -> path
@@ -93,6 +165,13 @@ private:
     uint8_t cur_ = 0, end_ = 0;
     clock::time_point t0_{};        // when cur_ started playing
     double paused_at_ = 0.0;        // offset into cur_ when paused
-    uint8_t volume_ = 0xff;
+    // Both are read on the SDL audio thread by mix() and written on the
+    // emulation thread (CDROMVOLCTRL / startup), so they are atomic rather than
+    // plain — a torn read would only be a wrong volume for one buffer, but it is
+    // still a data race and this is the only place the two threads share state.
+    std::atomic<uint8_t> volume_{0xff};  // as set by CDROMVOLCTRL
+    std::atomic<int> host_vol_{100};     // THEOC_MUSIC_VOL, percent
+    bool audio_out_ = false;             // is there a device to decode into?
     std::set<uint8_t> missing_warned_;   // play() of an absent track: warn once
+    CDPlayer player_;
 };

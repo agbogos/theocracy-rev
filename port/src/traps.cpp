@@ -206,6 +206,7 @@ TrapLayer::TrapLayer(std::vector<std::string> names)
         for (const char* d : {"data/cd-uk", "data/cd-audio", "data/cd/audio"})
             if (cd_.scan(d) > 0) break;
     }
+    if (const char* v = std::getenv("THEOC_MUSIC_VOL")) cd_.set_host_volume(std::atoi(v));
     if (cd_.present())
         std::fprintf(stderr, "  [cd] %d audio tracks in '%s', TOC %u..%u\n",
                     cd_.count(), cd_.dir().c_str(), cd_.first_track(), cd_.last_track());
@@ -650,16 +651,29 @@ void TrapLayer::audio_callback(void* userdata, Uint8* stream, int len) {
     auto* self = static_cast<TrapLayer*>(userdata);
     auto* out = reinterpret_cast<int16_t*>(stream);
     int nsamp = len / 2;
-    std::lock_guard<std::mutex> lock(self->audio_mu_);
-    for (int i = 0; i < nsamp; ++i) {
-        if (!self->audio_q_.empty()) {
-            out[i] = self->audio_q_.front();
-            self->audio_q_.pop_front();
-        } else {
-            out[i] = 0;
-            self->audio_underrun_++;   // silence gap = audible stutter (THEOC_FPS)
+    {
+        std::lock_guard<std::mutex> lock(self->audio_mu_);
+        for (int i = 0; i < nsamp; ++i) {
+            if (!self->audio_q_.empty()) {
+                out[i] = self->audio_q_.front();
+                self->audio_q_.pop_front();
+            } else {
+                out[i] = 0;
+                self->audio_underrun_++;   // silence gap = audible stutter (THEOC_FPS)
+            }
         }
     }
+    // Music is the second source. Everything above is the guest's own software
+    // mixer (SFX, speech, cutscene audio) arriving through /dev/dsp as ONE
+    // pre-mixed stream; Redbook audio never went through it on real hardware
+    // either — the drive fed the sound card's CD line. So it is summed here,
+    // outside audio_mu_ (the player has its own lock, and holding both would
+    // couple the decoder thread to every /dev/dsp write).
+    //
+    // An empty music ring is NOT an underrun: most of the time no track is
+    // playing at all, and counting that would make THEOC_FPS report constant
+    // audio failure.
+    self->cd_.mix(out, (size_t)nsamp);
 }
 
 void TrapLayer::audio_push(const void* data, size_t nbytes) {
@@ -3565,6 +3579,13 @@ uint32_t TrapLayer::cd_ioctl(Machine& m, int gfd, uint32_t req, uint32_t argp) {
                 // struct cdrom_ti { u8 trk0, ind0, trk1, ind1; }
                 uint8_t ti[4] = {0, 0, 0, 0};
                 m.read(argp, ti, 4);
+                // The device is normally already open (the guest's own mixer
+                // opens /dev/dsp long before any music plays), but music must
+                // not depend on that: with sound configured off, or headless,
+                // there is nothing to drain the decoder and the transport has
+                // to fall back to its clock instead of stalling on one track.
+                ensure_audio();
+                cd_.set_audio_enabled(audio_dev_ != 0);
                 bool ok = cd_.play(ti[0], ti[2]);
                 std::fprintf(stderr, "  [cd] play track %u..%u%s\n",
                             ti[0], ti[2], ok ? "" : " FAILED");
