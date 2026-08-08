@@ -1,5 +1,11 @@
 # Platform backends: audio, threads, processes (libmvos)
 
+> **This doc covers sound effects only.** Theocracy's *music* is Redbook CD
+> audio on a separate path (`cVCD`, `/dev/cdrom`) that shares nothing with the
+> sample mixer below — see [music-and-redbook.md](music-and-redbook.md). Note in
+> particular that `cVCDThread` puts `cThread` at offset **0**, not at `+4` as
+> `cSoundCard_Linux` does.
+
 Decompile findings on the Linux platform layer. Addresses in `libmvos.so` (Ghidra base `0x10000`). All of this sits *behind* the HLE boundary for the macOS port — documented here as the behavioral contract to replicate.
 
 ## Audio — `cSoundCard_Linux` (ctor @ `0xa2ba0`)

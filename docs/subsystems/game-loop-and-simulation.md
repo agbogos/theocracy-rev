@@ -45,6 +45,10 @@ Then, each frame while running:
    after the first frame sets the state to 1 it is a no-op every frame
    thereafter. *Corrected 2026-08-03; it previously read "advance animations /
    frame sync", which made the realm loop look frame-tied when it is not.*
+   **Fully identified 2026-08-08**: it is `cVCDThread::SetMood(g_VCDThread, 1)`
+   — set the CD music mood to *realm*. `DAT_084c9764` is the music manager and
+   `VCD->vt[0x1c]` is *stop*. See
+   [music-and-redbook.md](music-and-redbook.md).
 
 So: **render every frame; simulate on a fixed timestep gated by pause.** Rendering and simulation are decoupled.
 
