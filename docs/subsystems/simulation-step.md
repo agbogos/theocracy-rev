@@ -73,7 +73,7 @@ statement is: the sim *could* be lockstep and nothing contradicts it.
 ## What this event actually is (step 6)
 
 `DAT_084c8160` is not an anonymous rate constant. It is bound by name at
-`0x080b3f32` — `RegisterConfigVar(&DAT_084c8160, "ALLIED_JOIN_YEARS")` — to a
+`0x080b3f32` — `LoadConfigVar(&DAT_084c8160, "ALLIED_JOIN_YEARS")` — to a
 tunable in the balance file, and the shipped `data/selap.txt` sets
 **`ALLIED_JOIN_YEARS=10`**.
 

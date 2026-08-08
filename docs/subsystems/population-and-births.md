@@ -174,7 +174,7 @@ below — which means the cliff as *played* is a data decision, not a code one.
 
 ## The constants
 
-All are `RegisterConfigVar`-bound to `[Emulation]` and `[Food]` keys in
+All are `LoadConfigVar`-bound to `[Emulation]` and `[Food]` keys in
 `data/selap.txt`. The `.data` values are compile-time fallbacks that the config
 file overrides at boot.
 
@@ -212,7 +212,7 @@ constants above decode it. Each eligible man either eats or starves:
   *hungry*, which drives the `HungryMan : %d` notification.
 
 `0x084c862d` is the food-level ceiling and is **not** a registered config var —
-17 read sites, no `RegisterConfigVar` binding.
+17 read sites, no `LoadConfigVar` binding.
 
 ## How this was found
 
@@ -221,7 +221,8 @@ and it needed Ghidra only at the last step.
 
 1. `selap.txt` is XOR-encrypted; `tools/theocracy_crypt.py` decrypts it. Grep the
    plaintext for the mechanic's vocabulary — here `birth`, `hospital`, `popul`.
-2. Every key is bound to a global by `RegisterConfigVar(&global, "NAME")`, which
+2. Every key is bound to a global by `LoadConfigVar(&global, "NAME")` (`0x080b3de0`),
+   which
    compiles to `push <name string>; push <global>; call`. Find the name string in
    `.rodata`, find the `push` of it in `.text`, and the next `push` is the
    global's address.

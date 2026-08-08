@@ -107,11 +107,59 @@ value that behaves like experience. So a man is worth a flat per-type amount plu
 a share of what he has earned, and **a veteran is worth more than a slave**.
 
 The divisor is `0x084c8639` (= 1000). It is *not* a registered config var — nine
-read sites, no `RegisterConfigVar` binding — so unlike everything else here it
+read sites, no `LoadConfigVar` binding — so unlike everything else here it
 cannot be retuned from `selap.txt`.
 
 **No mana is granted at this point.** The men die immediately; the pyramid keeps
 a bill.
+
+### `typeBase` does not come from `selap.txt` — and 16 constants are dead
+
+`SUNPRIEST_VALUE` and friends look exactly like the source for `typeBase`, and
+they are not. Settled 2026-08-08.
+
+The function this project has been calling `RegisterConfigVar` keeps **no
+registry**, so it is renamed **`LoadConfigVar`** (`0x080b3de0`) as of this work.
+It looks the name up in the parsed environment and does one `strtol` into the
+destination int:
+
+```c
+var = FindVariable__9cEnvClassPCc(g_Env, name);
+if (var) *dest = strtol(GetValue__7cEnvVari(var, -1));
+```
+
+So a config global that nothing reads is simply dead. The `.data` region holds
+two parallel, adjacent, packed arrays covering the same unit roster:
+
+| Array | Range | Read? |
+|---|---|---|
+| `*_PRICE` — 17 entries | `0x084c8e71`–`0x084c8ebd` | **yes**, one site each |
+| `*_VALUE` — 16 entries | `0x084c8ec1`–`0x084c8efd` | **no — not one, anywhere** |
+
+The `_PRICE` set feeds `FUN_082b5790`, the **training-menu builder**: each price
+becomes field `+0x10` of a `0x40`-byte recruitment entry, next to a type id, an
+icon index and a localised name, with the priest entries gated behind
+`param_1+0x471`. The `_VALUE` set — `SWORDMASTER`, `SPEARMASTER`, `BOWMASTER`,
+`DRAGONKILLER`, the five priests, `MASTEROFJAGUAR`, `JAGUAR`, `CAPTAIN`,
+`SWORDSMAN`, `SPEARMAN`, `BOWMAN`, `SCOUT` — is parsed out of `selap.txt` into
+globals and then never touched. Each of the 16 addresses occurs **exactly once
+in the entire file**: its own registration `push`.
+
+Checked by scanning `.text` for *any* 4-byte operand landing anywhere in
+`0x084c8e70..0x084c8f10`, rather than for the 16 addresses individually — an
+array base at a neighbouring global would otherwise have been missed. All 68 hits
+are accounted for: the registration pushes, the 17 `_PRICE` reads, and a handful
+of variables past the end of the block.
+
+So editing `SUNPRIEST_VALUE=100` in `selap.txt` changes nothing, and `typeBase`
+at type-descriptor `+0x28` is loaded from somewhere else — the unit type table,
+not the balance file.
+
+The general lesson is worth more than the instance: in this binary a config key
+existing, and even being parsed, is **not** evidence that the game reads it.
+`LoadConfigVar` writes to a plain int and walks away, so "is this balance number
+live?" is answerable in one `elfq xref-global` and should be asked before any
+finding rests on a `selap.txt` value.
 
 ## Payout
 
@@ -216,17 +264,21 @@ Method for resolving any of these: see
 
 ## Open threads
 
-- **Both mana paths credit `g_GameSession+0x2d`, the *local* player's tribe** —
-  not the pyramid's owner. In single-player the human is always faction 0
-  ([multiplayer-and-factions.md](multiplayer-and-factions.md)) and this is
-  province-screen code, so it is very likely benign, but who drives the tick for
-  provinces you do not own is untraced. Worth settling before any native rewrite
-  reuses it.
-- **`SUNPRIEST_VALUE` and its four siblings** (`0x084c8ed1`–`0x084c8ee1`) appear
-  **exactly once each in the whole binary** — the registration `push`, and
-  nothing else, in `.text` or out of it. They are the obvious source for the type
-  descriptor's `+0x28`, but no code reads them, so either the config registry is
-  consulted by name somewhere unfound or this is dead balance data.
+- ~~**Both mana paths credit the *local* player's tribe**~~ — **closed
+  2026-08-08, from play rather than from the binary.** Both paths write to
+  `g_GameSession+0x2d`, which looked like it might mis-credit AI-owned pyramids.
+  It does not matter, because **the game does not simulate the AI's economy at
+  all**: inspected in edit mode, enemy provinces have no proper slave setup and
+  support far more units than the player's economy could sustain, so AI forces
+  are provisioned rather than produced. This code only ever runs for the player,
+  and the local-tribe write is correct by construction rather than by accident.
+  A native rewrite should preserve that assumption knowingly — it is not a bug to
+  "fix". (`docs/` has no page on the AI's economy; if one is ever written this
+  observation belongs there.)
+- ~~**`SUNPRIEST_VALUE` and its four siblings**~~ — **closed 2026-08-08: dead
+  data.** See "`typeBase` does not come from `selap.txt`" above. The whole
+  16-entry `*_VALUE` array is loaded and never read; `LoadConfigVar` keeps no
+  registry, so there is no by-name path either.
 - **`man+0x80`** — read as experience from how it is used, not confirmed. It is
   the same struct the births work left three unnamed enums in.
 - **The second `MANA_GRADIENT` reader** at `0x082b8e31` is unexamined; if it is
