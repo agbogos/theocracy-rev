@@ -57,6 +57,25 @@ Roughly in the order these matter:
 4. **Worth it.** Either hot, or standing between us and something we want to
    change.
 
+### A named candidate: a music volume control
+
+The one concrete "fix something the original got wrong" item on the list, added
+2026-08-08 after music was revived. The game ships **SFX and ambience sliders
+that both work, an on/off toggle for CD music, and no music volume control at
+all** ([music-and-redbook.md](../subsystems/music-and-redbook.md)). CD audio is
+on or off, nothing in between — a gap in the original, not something the port
+lost.
+
+It scores unusually well against the four tests above: the whole music subsystem
+is decompiled and documented, `cCD_Linux::SetVolume` already exists and is
+already implemented host-side (`CDROMVOLCTRL` scales the mix), and
+`THEOC_MUSIC_VOL` proves the plumbing end to end today. What is missing is
+**only the widget** — which is also the honest warning, because the GUI toolkit
+is named below as one of the hard parts, and "add one slider to an existing
+options screen" is precisely the kind of task that turns out to require
+understanding `cVObject` layout properly. Good first *real* test of whether the
+GUI is approachable, on a change small enough that failing costs little.
+
 ## The hard parts, stated up front
 
 - **Shared state.** Native code and emulated code operate on the *same* guest

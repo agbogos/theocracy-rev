@@ -391,7 +391,27 @@ Run under **ThreadSanitizer**: clean across the decoder-thread / audio-callback
 boundary. The one race it would have caught is the volume fields, which are read
 on the SDL thread and written on the emulation thread and are therefore atomic.
 
-**Not yet verified in a real session** — see "Open threads".
+### Verified in a real session — 2026-08-08
+
+Played on macOS with the UK rip. **Music plays and switches on mood changes.**
+Level was judged "high but believable for the era", so `THEOC_MUSIC_VOL` stays
+at 100 by default; it exists for anyone who disagrees.
+
+The session also settled what the options screen does and does not offer, which
+is a fact about the *game*, not the port:
+
+- There is an in-game **music on/off toggle**, and it works. So the engine's
+  global mute (`DAT_084c9762`, which `cVCDThread::Main` checks every poll) is
+  reachable from the UI. The strings `gamesettings_cdmusic` and
+  `HTLE_OptionsCDMusic` in `theocracy.real` are consistent with this being a
+  persisted setting, though neither has been traced to the widget.
+- There are **two volume sliders — SFX and ambience — and both work correctly.**
+- There is **no music volume slider at all.** CD music is on or off, nothing in
+  between.
+
+That asymmetry is a gap in the original, not something the port lost. It is also
+why `cCD_Linux::SetVolume` may simply never be called in a normal session: with
+no UI to move, there may be nothing to write. See "Open threads".
 
 ## Why it is the `ioctl` trap and not a native `cVCD`
 
@@ -454,19 +474,19 @@ each time — so it belongs in neither option.
   counting soft threads would confirm it.)*
 - ~~The host mixer is single-stream~~ / ~~decode strategy~~ — **both done
   2026-08-08**; see "The audio output half" above.
-- **Nobody has heard it yet.** Everything above is verified standalone and under
-  ThreadSanitizer, but no full session has been played with music on. The things
-  a real run answers and a harness cannot: whether the **balance** is right
-  (`THEOC_MUSIC_VOL` exists precisely because there is no reference for it),
-  whether a mood change cuts cleanly, and whether the ~1s ring survives a save or
-  a province load without a gap. `THEOC_CD_TRACE=1` prints what the guest asked
-  for, so wrong-music-on-a-screen splits cleanly into a guest choice versus a
-  host playback bug.
-- **`SetVolume` has never been observed firing.** `cVCDThread_UnmuteAndResume`
-  gates `Resume` on `DAT_08648380 > 0`, which looks like an options-screen music
-  level, but nothing has been traced writing it. If the game ever calls
-  `CDROMVOLCTRL` with 0 the music goes silent and it will look like a port bug —
-  `THEOC_CD_TRACE` logs the value.
+- ~~Nobody has heard it yet~~ — **played 2026-08-08**, see above.
+- **What `DAT_08648380` actually is.** `cVCDThread_UnmuteAndResume` gates
+  `Resume` on `DAT_08648380 > 0`. This doc previously guessed "an options-screen
+  music level" — the session above makes that **unlikely**, because there is no
+  music volume control in the game to write one. More plausible now: a saved
+  on/off state, or one of the two sliders that do exist being read for an
+  unrelated reason. Not traced either way, and worth resisting a second guess:
+  §12 of [re-methodology.md](../reference/re-methodology.md) is about exactly
+  this, a plausible name for an unread value becoming a fact.
+- **Where the music toggle is wired.** `gamesettings_cdmusic` /
+  `HTLE_OptionsCDMusic` are the obvious candidates for the working on/off
+  control, but the path from the widget to `DAT_084c9762` has not been read.
+  Cheap to close, and it would probably answer the item above at the same time.
 - **There is no reference recording.** The Woody VM in
   [original-os-setup.md](../reference/original-os-setup.md) was always run with a
   minimal boot ISO rather than the real disc, so the original's music has never

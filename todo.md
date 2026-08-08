@@ -29,31 +29,7 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
-### 2. Play a session with music on — nobody has heard it yet
-
-The virtual CD drive is built and verified standalone and under ThreadSanitizer,
-but no real session has been played with it
-([`music-and-redbook.md`](docs/subsystems/music-and-redbook.md)). Ordinary
-session, nothing special:
-
-```
-THEOC_CD_TRACE=1 DYLD_LIBRARY_PATH=/opt/homebrew/lib ./port/build/theoc
-```
-
-What only a real run answers:
-
-- **Balance.** `THEOC_MUSIC_VOL` (0–100, default 100) exists because there is no
-  reference for music-vs-SFX — on hardware the drive fed the sound card's CD
-  line at a level set outside the game. Set it by ear and tell me the number.
-- **Menu should be track 3, realm track 8.** Those are fixed, not random. Moods
-  2 and 3 (battle) pick from `{6,7}` and `{2,5}` — with a fixed RNG seed, so the
-  same sequence every run.
-- **Does a mood change cut cleanly**, and does the ~1s decode ring survive a save
-  or a province load without a gap.
-- **Does `SetVolume` ever fire.** If the game calls `CDROMVOLCTRL` with 0 the
-  music goes silent and it will look like a port bug; the trace logs the value.
-
-### ~~3. Rip the CD audio tracks~~ — done 2026-08-08
+### ~~2. Rip the CD audio tracks~~ — done 2026-08-08
 
 UK release ripped to `data/cd-uk/` as AIFF-C, tracks 2–8, TOC verified against
 the prediction. Kept below for the *other* discs, which are still worth a TOC
