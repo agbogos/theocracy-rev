@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "blit.hpp"
+#include "config.hpp"
 #include "elf32.hpp"
 #include "guestlink.hpp"
 #include "machine.hpp"
@@ -139,6 +140,15 @@ int main(int argc, char** argv) {
     // without knowing they did — which is the only version-reporting scheme
     // that survives contact with people who are not developers.
     std::fprintf(stderr, "=== Theocracy guest-libmvos host %s ===\n", THEOC_VERSION);
+
+    // theoc.cfg, immediately after the banner and before anything else reads a
+    // THEOC_* variable. After, so the build identity stays the first line of
+    // every log; before, so a setting from the file is in the environment by the
+    // time any subsystem looks for it. The two knobs read above this point
+    // (THEOC_FIX_SAVE, THEOC_SERVER) are both refused from the file precisely
+    // because they decide what to run rather than how to run it.
+    config::load(argv[0]);
+
     std::fprintf(stderr, "exe:  %s\nmvos: %s\n", game_path.c_str(), mvos_path.c_str());
 
     elf32::Image game(game_path);

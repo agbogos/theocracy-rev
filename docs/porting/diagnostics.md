@@ -50,9 +50,53 @@ one run. When a claim is about guest state, read guest state.
 
 ---
 
+## Setting them permanently: `theoc.cfg`
+
+Since 2026-08-08 the same names can live in a file instead of the environment,
+so a release bundle can carry settings. `port/theoc.cfg` is the shipped
+template; both packaging scripts copy it to the top of the bundle and point
+`THEOC_CONFIG` at it from the launcher, because the binary sits in `bin/` and
+would otherwise look in the wrong place.
+
+Format is `NAME = value` with `#` comments — deliberately the shape the game's
+own `mvos.cfg` already uses, and deliberately **not** TOML or YAML: the knobs
+are a flat list of scalars, so a structured format would buy nothing and cost
+either a vendored dependency or a parser that implements a fraction of a spec
+while claiming the whole thing. `[section]` headers are accepted and ignored,
+keys are case-insensitive, and a UTF-8 BOM is stripped (Notepad writes one).
+
+The rules that matter:
+
+- **The environment always wins.** `THEOC_MUSIC_VOL=50 ./theoc` beats the file,
+  so the file can never make a command line lie.
+- **No file, or an unreadable one, is exactly the old behaviour.** This must
+  never become a new way for the game to fail to start.
+- **An empty value is "leave it unset", not "set it to empty".** Most knobs are
+  presence-tested, so `THEOC_FPS =` turning the instrument *on* would be the
+  opposite of what anyone writing that line means.
+- **A misspelt `THEOC_*` name is applied anyway, with a warning.** Failing shut
+  would mean a knob added to the code but not to the checker silently stops
+  working; this way that mistake is cosmetic.
+- **Four are refused from the file** — `THEOC_FIX_SAVE`, `THEOC_HEAP_TEST`,
+  `THEOC_SERVER` and `THEOC_TREE`. The first three replace running the game, so
+  a stale line means it never starts and the person hitting that is the least
+  equipped to work out why; `THEOC_TREE` is dead code. Environment only, and
+  each one is logged as refused rather than ignored quietly.
+
+Search order: `$THEOC_CONFIG`, then `theoc.cfg` beside the executable, then
+`./theoc.cfg`. The chosen file and its setting count are logged, right after the
+build-identity banner.
+
+The template ships **15 settings, all commented out** — display, speed, sound,
+startup, paths, and the three enthusiast knobs (`THEOC_CONSOLE`, `THEOC_EDIT`,
+`THEOC_REAL_LOCK`). The other 31 are accepted from the file but not listed in
+it: a config a player scrolls past is one they do not read.
+
+---
+
 ## The complete `THEOC_*` catalogue
 
-38 variables. **A note on parsing that bites:** most are gated on *presence*
+49 variables. **A note on parsing that bites:** most are gated on *presence*
 only, so `THEOC_WATCHDOG=0` still turns the watchdog on. The only three that
 inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
 leading `0`), `THEOC_FULLSCREEN` and `THEOC_NO_HIDPI` (off when unset, empty, or

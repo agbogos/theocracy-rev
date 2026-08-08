@@ -149,8 +149,17 @@ if [ ! -f "$here/data/cd/linux/theocracy.real" ]; then
   exit 1
 fi
 
+# theoc.cfg sits beside this launcher, not beside the binary in bin/ — the
+# binary looks next to itself and in the working directory, and neither is where
+# a player will see the file. Point at it explicitly, without overriding a
+# THEOC_CONFIG the user set themselves.
+if [ -z "${THEOC_CONFIG:-}" ] && [ -f "$here/theoc.cfg" ]; then
+  export THEOC_CONFIG="$here/theoc.cfg"
+fi
+
 exec "$here/bin/theoc" "$@"
 LAUNCH
+cp port/theoc.cfg "$OUT/theoc.cfg"
 chmod +x "$OUT/theoc" "$OUT/bin/theoc"
 
 cat > "$OUT/README.txt" <<DOC
@@ -180,6 +189,10 @@ libstdc++ from GCC 12 or newer.
 
 If the bundled libraries misbehave on your machine, THEOC_SYSTEM_LIBS=1
 ignores them and uses yours instead.
+
+Settings: edit theoc.cfg beside this file. Everything in it is commented out,
+so it changes nothing until you remove a #. Environment variables still win
+over it, so the knobs below keep working as one-offs.
 
 Useful knobs (full list in docs/porting/diagnostics.md):
   THEOC_FULLSCREEN=1      borderless fullscreen, 4:3 pillarboxed

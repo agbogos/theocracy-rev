@@ -180,8 +180,12 @@ rem it are found, while keeping the working directory the user started in (the
 rem game data is resolved relative to that).
 setlocal
 set "THEOC_HERE=%~dp0"
+rem theoc.cfg sits beside this launcher, not beside the binary in bin/, which is
+rem where the binary would look. Point at it, without overriding the user's own.
+if not defined THEOC_CONFIG if exist "%THEOC_HERE%theoc.cfg" set "THEOC_CONFIG=%THEOC_HERE%theoc.cfg"
 "%THEOC_HERE%bin\theoc.exe" %*
 BAT
+cp "$ROOT/port/theoc.cfg" "$OUT/theoc.cfg"
 
 cat >"$OUT/README.txt" <<TXT
 Theocracy — macOS/Linux/Windows port (Windows x86-64 build)
@@ -213,6 +217,11 @@ STATUS ON WINDOWS
     with a high-resolution waitable timer. All of it was measured in a VM, so
     if pacing looks wrong on your machine, measure before believing it:
     win-timing-probe.exe ships beside this file and needs no arguments.
+
+SETTINGS
+    Edit theoc.cfg beside this file. Every line in it is commented out, so it
+    changes nothing until you remove a #. Environment variables still win over
+    it, so anything below keeps working as a one-off.
 
 DIAGNOSTICS
     Every knob is an environment variable named THEOC_*. Start with:
