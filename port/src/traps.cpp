@@ -3712,14 +3712,53 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     if (next_sound_slice_.time_since_epoch().count() != 0 && now < next_sound_slice_)
         return false;
 
+    // Every cThread::Launch calls pthread_create with the SAME start_routine
+    // (cThread::Entry) and differs only in `arg`, the cThread* — so the entry
+    // address in the [thread] log cannot tell two soft threads apart, and this
+    // loop cannot either. It picks the first one whose running flag is set.
+    //
+    // That used to be the sound mixer purely because OpenSubsystems constructs
+    // cSoundCard_Linux before cApplication::Start constructs cVCDThread. Nothing
+    // declared that ordering, and getting the music thread instead would hang:
+    // cVCDThread::Main (game 0x81a39e0) is an infinite poll loop, and only
+    // cSoundCard_Linux::Main is patched to run one-shot. Music does not need it
+    // anyway — maybe_redirect_cd_advance calls StartTrackForMood directly.
+    // docs/subsystems/music-and-redbook.md.
+    uint32_t music_thread = 0;
+    try { music_thread = m.r32(G_VCDTHREAD); } catch (...) {}
+
     SoftThread* pick = nullptr;
+    int candidates = 0;
     for (auto& t : soft_threads_) {
         if (!t.entry || !t.arg) continue;
         uint8_t run = 0;
         try { m.read(t.arg + 0x10, &run, 1); } catch (...) { continue; }
-        if (run) { pick = &t; break; }
+        if (!run) continue;
+        candidates++;
+        if (music_thread && t.arg == music_thread) {
+            static bool warned;
+            if (!warned) {
+                warned = true;
+                std::fprintf(stderr,
+                            "  [thread] skipping cVCDThread (arg=%#x) as a mixer "
+                            "slice — its Main never returns\n", t.arg);
+            }
+            continue;
+        }
+        if (!pick) pick = &t;
     }
     if (!pick) return false;
+    {   // One line, once: how many cThreads are live and which one feeds audio.
+        // This is the observation the music work predicted and could not make.
+        static bool logged;
+        if (!logged) {
+            logged = true;
+            std::fprintf(stderr,
+                        "  [thread] %zu soft threads, %d running; mixer slice = "
+                        "arg=%#x (cVCDThread=%#x)\n",
+                        soft_threads_.size(), candidates, pick->arg, music_thread);
+        }
+    }
 
     // Keep the queue topped to a small target: enough to absorb inter-yield
     // jitter (steady-state yields are ~16ms apart) but low enough that queued

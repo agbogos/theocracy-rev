@@ -462,16 +462,21 @@ each time — so it belongs in neither option.
   `CDROMVOLCTRL` but nothing in the game calls it, and the `DAT_08648380` volume
   setting that gates `Resume` in `cVCDThread_UnmuteAndApplyVolume` has not been
   traced to where the options screen writes it.
-- **The host has a second soft thread it never runs.** `traps.cpp`'s
-  `pthread_create` pushes every `cThread` onto `soft_threads_`, and
-  `maybe_redirect_sound` green-runs the *first* entry whose running flag at
-  `arg+0x10` is set. Today that is always the `cSoundCard_Linux` mixer — but only
-  because `OpenSubsystems` constructs the sound card before `cApplication::Start`
-  constructs `cVCDThread`. The ordering is load-bearing and undeclared. Reviving
-  music means running this second thread too, and its body is an infinite loop,
-  so it cannot be green-run the way the mixer's one-shot-patched `Main` is.
-  *(Predicted from the source, not yet observed in a run — a `THEOC_*` log line
-  counting soft threads would confirm it.)*
+- ~~The host has a second soft thread it never runs~~ — **defended 2026-08-08.**
+  `maybe_redirect_sound` green-ran the *first* soft thread whose running flag was
+  set, and that was the `cSoundCard_Linux` mixer only because `OpenSubsystems`
+  constructs the sound card before `cApplication::Start` constructs
+  `cVCDThread` — an undeclared, load-bearing ordering. It now **skips the music
+  thread explicitly** (identified by `arg == DAT_084c9764`) and says so once.
+  Green-running it would hang: `cVCDThread::Main` is an infinite poll loop and
+  only `cSoundCard_Linux::Main` is patched one-shot. Music never needed it —
+  `maybe_redirect_cd_advance` calls `StartTrackForMood` directly.
+
+  Worth noting for anyone reading the `[thread]` log: **every `cThread::Launch`
+  passes the same `start_routine`** (`cThread::Entry`) and differs only in the
+  `cThread*` argument, so the `entry=` field cannot tell two soft threads apart.
+  `arg=` is the identity. A one-time `[thread] N soft threads, M running; mixer
+  slice = arg=…` line now records which one feeds audio.
 - ~~The host mixer is single-stream~~ / ~~decode strategy~~ — **both done
   2026-08-08**; see "The audio output half" above.
 - ~~Nobody has heard it yet~~ — **played 2026-08-08**, see above.

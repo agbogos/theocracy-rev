@@ -80,18 +80,8 @@ Tracks are copyrighted — they go in `data/cd-uk/` (gitignored), never in git.
 
 ## CLAUDE
 
-### 1. Confirm the second soft thread
-
-Predicted from source, not observed: `cVCDThread` calls `pthread_create`, so
-`soft_threads_` should hold **two** entries, and `maybe_redirect_sound` picks the
-mixer only because it is constructed first. Add a log line counting soft threads
-with their entry addresses, then read it off your next ordinary session — no
-special run needed.
-
-### 2. Rename one game-binary function (needs `.real` open in Ghidra)
-
-`0x081a3c80` is currently `cVCDThread_UnmuteAndApplyVolume`, named before the
-libmvos side was read. Driver slot `0x18` is **`Resume`**, not a volume call, so
-the accurate name is closer to `cVCDThread_UnmuteAndResume`. Trivial, but it is
-exactly the "plausible name becomes a fact" failure
-[`re-methodology.md`](docs/reference/re-methodology.md) §12 documents.
+Nothing queued. The music subsystem closed out on 2026-08-08 — what is left of
+it is genuine open threads in its own doc rather than tasks
+([`music-and-redbook.md`](docs/subsystems/music-and-redbook.md)), and the one
+*direction* it produced is the named first candidate in
+[`native-rewrite.md`](docs/porting/native-rewrite.md).
