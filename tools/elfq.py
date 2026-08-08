@@ -403,6 +403,42 @@ _GRP_EXT = {
 _IMM8 = (0x80, 0x83, 0xc6, 0xfe)
 _IMM32 = (0x81, 0xc7)
 
+# x87, opcodes D8-DF, keyed (opcode, /n) because the reg field selects both the
+# operation *and* the operand width — DB /0 reads a dword integer while DB /5
+# reads an 80-bit float at the same opcode. A memory operand is only ever read
+# or written here, never read-modify-written.
+#
+# This binary is float-heavy and its game logic really does reach globals this
+# way: the sacrifice value at 0x081b9fe8 divides by a global with `DA /6`
+# (fidivr), and without this table that read was reported as `operand?`.
+# Worth knowing while reading the results: g++ 2.x implements a C cast to
+# integer as fnstcw / `mov bh,0xc` / fldcw / fistp / fldcw, i.e. it switches the
+# rounding mode to **truncate**. Ghidra prints that as `ROUND(...)`, which reads
+# as round-to-nearest and is wrong — see docs/subsystems/mana-and-sacrifice.md,
+# where the difference decided whether a UI array index could go negative.
+_X87 = {
+    # D8: m32fp                     # DA: m32int
+    **{(0xd8, r): ("cmp" if r in (2, 3) else "read", "d") for r in range(8)},
+    **{(0xda, r): ("cmp" if r in (2, 3) else "read", "d") for r in range(8)},
+    # DC: m64fp                     # DE: m16int
+    **{(0xdc, r): ("cmp" if r in (2, 3) else "read", "q") for r in range(8)},
+    **{(0xde, r): ("cmp" if r in (2, 3) else "read", "w") for r in range(8)},
+    # D9: load/store m32fp, plus the control-word and environment forms
+    (0xd9, 0): ("read", "d"), (0xd9, 2): ("WRITE", "d"), (0xd9, 3): ("WRITE", "d"),
+    (0xd9, 4): ("read", "env"), (0xd9, 5): ("read", "w"),
+    (0xd9, 6): ("WRITE", "env"), (0xd9, 7): ("WRITE", "w"),
+    # DB: m32int load/store, m80fp load/store
+    (0xdb, 0): ("read", "d"), (0xdb, 2): ("WRITE", "d"), (0xdb, 3): ("WRITE", "d"),
+    (0xdb, 5): ("read", "t"), (0xdb, 7): ("WRITE", "t"),
+    # DD: m64fp load/store, save/restore, status word
+    (0xdd, 0): ("read", "q"), (0xdd, 2): ("WRITE", "q"), (0xdd, 3): ("WRITE", "q"),
+    (0xdd, 4): ("read", "env"), (0xdd, 6): ("WRITE", "env"), (0xdd, 7): ("WRITE", "w"),
+    # DF: m16int, m80bcd, m64int
+    (0xdf, 0): ("read", "w"), (0xdf, 2): ("WRITE", "w"), (0xdf, 3): ("WRITE", "w"),
+    (0xdf, 4): ("read", "t"), (0xdf, 5): ("read", "q"),
+    (0xdf, 6): ("WRITE", "t"), (0xdf, 7): ("WRITE", "q"),
+}
+
 
 def _classify_operand(b, o):
     """Classify the instruction whose 4-byte operand starts at file offset o.
@@ -424,6 +460,9 @@ def _classify_operand(b, o):
         # Two-byte 0F opcodes: movzx/movsx read a narrower field into a dword.
         if o >= 3 and b[o - 3] == 0x0f and op in (0xb6, 0xb7, 0xbe, 0xbf):
             return o - 3, "read", "b" if op in (0xb6, 0xbe) else "w", None
+        x87 = _X87.get((op, regf))
+        if x87 is not None:
+            return o - 2, x87[0], x87[1], None
         ent = _MODRM.get(op)
         if ent is not None:
             kind, size = ent
@@ -553,7 +592,8 @@ def v_xref_global(elf, args):
         summary = ", ".join(f"{v} {k}" for k, v in sorted(kinds.items()))
         print(f"{len(refs)} references to {ptr:#x}{elf.gtag(ptr)} in .text"
               + (f"  ({summary})" if refs else ""))
-        SZ = {"b": "byte", "w": "word", "d": "dword", "?": ""}
+        SZ = {"b": "byte", "w": "word", "d": "dword", "q": "qword",
+              "t": "tbyte", "env": "fpuenv", "?": ""}
         for va, kind, size, imm in refs:
             if kind.startswith("addr:"):
                 operand = f"{ptr:#x}"

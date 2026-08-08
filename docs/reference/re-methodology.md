@@ -111,6 +111,20 @@ exercises are where a wrong layout hides.** Mechanically-derived facts (the trap
 boundary, the copy-reloc inventory, `tools/elf_facts.py` output) need no
 re-checking at all.
 
+**A third artifact of the same family: `ROUND()` is not rounding.** Ghidra prints
+every x87 float→int conversion as `ROUND(...)`, which reads as round-to-nearest.
+g++ 2.x implements a C cast to integer by *changing the rounding mode first* —
+`fnstcw` / `mov bh,0xc` (RC = 11, toward zero) / `fldcw` / `fistp` / restore — so
+it is **truncation**, and the decompiler shows none of that. The difference is
+not cosmetic: on the mana gauge (`0x0815a0a0`) the expression approaches 11 from
+below without reaching it, so truncation keeps a sprite index inside `0..10`
+while round-to-nearest would drive it to `-1` above 21000 mana. An
+out-of-bounds-array finding was written up on the strength of the decompiler's
+`ROUND` and then deleted once the bytes were read
+([../subsystems/mana-and-sacrifice.md](../subsystems/mana-and-sacrifice.md), "A
+note on `ROUND`"). Any threshold, index or comparison that depends on a
+float→int conversion needs the instruction stream.
+
 ## 6. Guessed struct layouts are this port's dominant bug class
 
 Not typos, not misread logic — ABI contracts assumed rather than read. Four
