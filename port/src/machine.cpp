@@ -203,6 +203,23 @@ void Machine::add_code_traps(uint32_t base, uint32_t nslots, TrapFn fn,
              "uc_hook_add");
 }
 
+// A watch is the opposite of a trap: the instruction at `addr` still executes,
+// we only get to look. Registered one address at a time (begin == end) so
+// Unicorn filters for us and un-watched code pays nothing.
+void Machine::add_watch(uint32_t addr, WatchFn fn) {
+    watches_[addr] = std::move(fn);
+    uc_hook h;
+    uc_check(uc_hook_add(uc_, &h, UC_HOOK_CODE, (void*)&Machine::watch_hook,
+                         this, addr, addr),
+             "uc_hook_add(watch)");
+}
+
+void Machine::watch_hook(uc_engine*, uint64_t addr, uint32_t, void* user) {
+    Machine* m = static_cast<Machine*>(user);
+    auto it = m->watches_.find((uint32_t)addr);
+    if (it != m->watches_.end()) it->second(*m, (uint32_t)addr);
+}
+
 // Fires for EIP inside a registered trap window. Emulate a cdecl callee: read
 // the return address off the stack, run the native handler, then "ret" (pop the
 // return addr, jump to it) with the result in EAX. Args stay on the stack —

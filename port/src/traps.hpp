@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -59,6 +60,17 @@ public:
     // — that is what the engine's design allows and all it allows. See
     // docs/porting/frame-timing.md, "Why province stays at 12fps".
     void install_province_rate(Machine& m);
+
+    // THEOC_DUMP_WORLD — read the starting world out of the game's own loader.
+    // Passive watches on three game addresses; changes nothing, answers "which
+    // heroes and magic items does a given init.dat actually contain".
+    // See docs/subsystems/starting-world.md.
+    void install_world_dump(Machine& m);
+    // Prints the block for the last world loaded (nothing else flushes it).
+    void flush_world_dump();
+    // The dump's accumulator. Held as void so its type can stay local to
+    // install_world_dump; the deleter still runs the right destructor.
+    std::shared_ptr<void> world_dump_;
 
     // Game-space singleton pointers, resolved BY NAME in main.cpp. These are
     // R_386_COPY globals, so the executable's dynamic symbol table names them

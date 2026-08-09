@@ -762,6 +762,24 @@ std::string TrapLayer::resolve_path(const std::string& guest) const {
 #endif
         return guest;                                     // other absolute paths
     }
+    // THEOC_WORLD_FILE — serve one chosen file for every `init.dat` the guest
+    // opens. Every map's starting world is an init.dat under its own directory,
+    // and which one gets opened is decided by a menu the unattended harnesses
+    // cannot drive. Redirecting the open is enough because the file names its
+    // own scenario: LoadGame reads the id out of the savegame and builds the
+    // matching cGameInfo from it, so the campaign path can serve a scenario's
+    // world and still load it as that scenario. Diagnostic only — it pairs with
+    // THEOC_DUMP_WORLD; see docs/subsystems/starting-world.md.
+    if (const char* wf = std::getenv("THEOC_WORLD_FILE")) {
+        if (*wf && guest.size() >= 8 &&
+            guest.compare(guest.size() - 8, 8, "init.dat") == 0) {
+            static std::set<std::string> said;
+            if (said.insert(guest).second)
+                std::fprintf(stderr, "  [world] THEOC_WORLD_FILE: '%s' -> '%s'\n",
+                             guest.c_str(), wf);
+            return wf;
+        }
+    }
     // Guest uses "data/…"; install root is $THEOC_DATA (default data/game).
     return data_root_ + "/" + guest;
 }
@@ -3473,6 +3491,159 @@ void TrapLayer::install_province_rate(Machine& m) {
                          "Sim speed scales with it: %.2fx normal.\n",
                  kStock, us, ms, 1000.0 / ms, (double)kStock / us);
 }
+
+// THEOC_DUMP_WORLD — what actually ships in a starting world.
+//
+// Every `init.dat` in the data tree is a `theosg42` savegame, so the opening
+// state of the campaign and of all eight scenarios is *loaded*, not placed by
+// code. That makes a code audit blind to it: a hero or a magic item can reach
+// the game without any call site creating it (re-methodology.md §15). The
+// obvious answer is to re-implement the reader and parse the file — the load
+// chain is ~150 stream constructors deep — but the game already contains a
+// correct parser, so we watch that instead and let original code do the work.
+//
+// Three passive watches, no patching:
+//
+//   0x081a07f0  LoadGame(path)          entry; [esp+4] is the path, and every
+//                                       event after it belongs to that file
+//   0x080b22f6  cHero stream ctor       the instruction after the read that
+//                                       fills the hero-id byte; EBX is the cMan
+//                                       and the id is at +0x27c
+//   0x0820d1f0  Item_CreateById(id)     entry; [esp+4] is the id and [esp] the
+//                                       return address, which says *which
+//                                       channel* made it — 0x0820dbd5 is the
+//                                       one inside Item_CreateFromStream, i.e.
+//                                       "came out of the world file". Config
+//                                       placement and mission code land on
+//                                       other return addresses and are counted
+//                                       separately rather than filtered out,
+//                                       because "who else creates items" is the
+//                                       same question one level up.
+//
+// Watching Item_CreateById rather than Item_CreateFromStream is deliberate: it
+// is the single choke point all fifty item classes go through, so nothing can
+// be missed by forgetting a subclass.
+void TrapLayer::install_world_dump(Machine& m) {
+    const char* e = std::getenv("THEOC_DUMP_WORLD");
+    if (!e || !*e || (e[0] == '0' && !e[1])) return;
+
+    constexpr uint32_t kLoadGame      = 0x081a07f0;
+    constexpr uint32_t kHeroIdRead    = 0x080b22f6;
+    constexpr uint32_t kItemCreate    = 0x0820d1f0;
+    constexpr uint32_t kFromStreamRet = 0x0820dbd5;  // the call inside Item_CreateFromStream
+    // CreateMan, just past the read that fills the caste byte at [ebp-1]. Every
+    // man in a world file goes through here, so it is both the population count
+    // and the control that says the watches are firing at all.
+    constexpr uint32_t kCasteRead     = 0x081becfc;
+
+    // One accumulator, shared by the three watches; flushed when a new file is
+    // loaded and again at exit, so a run that loads two worlds reports two
+    // blocks instead of one merged pile.
+    struct Acc {
+        std::string file;
+        std::map<int, int> heroes;                    // hero id -> count
+        std::map<int, int> stream_items;              // item id -> count, from the world file
+        std::map<int, int> other_items;               // item id -> count, every other channel
+        std::map<uint32_t, int> other_sites;          // return address -> count
+        std::map<int, int> castes;                    // man caste -> count
+        bool dirty = false;
+
+        // The last world loaded has no next LoadGame to flush it, so the
+        // destructor does — main.cpp drops the reference once Start returns.
+        ~Acc() { flush(); }
+
+        void flush() {
+            if (!dirty) return;
+            std::fprintf(stderr, "[world] ==== %s ====\n",
+                         file.empty() ? "(no LoadGame seen)" : file.c_str());
+            std::string s;
+            char buf[32];
+            int men = 0;
+            for (auto& [c, n] : castes) men += n;
+            s.clear();
+            for (auto& [c, n] : castes) {
+                std::snprintf(buf, sizeof buf, "%d:%d ", c, n);
+                s += buf;
+            }
+            std::fprintf(stderr, "[world]   men in file: %d  (caste:count %s)\n",
+                         men, s.c_str());
+            s.clear();
+            for (auto& [id, n] : heroes) {
+                std::snprintf(buf, sizeof buf, "%d%s%s", id,
+                              n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                s += buf; s += ' ';
+            }
+            std::fprintf(stderr, "[world]   heroes in file (%zu distinct): %s\n",
+                         heroes.size(), s.empty() ? "(none)" : s.c_str());
+            s.clear();
+            for (auto& [id, n] : stream_items) {
+                std::snprintf(buf, sizeof buf, "%d%s%s", id,
+                              n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                s += buf; s += ' ';
+            }
+            std::fprintf(stderr, "[world]   items in file (%zu distinct): %s\n",
+                         stream_items.size(), s.empty() ? "(none)" : s.c_str());
+            if (!other_items.empty()) {
+                s.clear();
+                for (auto& [id, n] : other_items) {
+                    std::snprintf(buf, sizeof buf, "%d%s%s", id,
+                                  n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                    s += buf; s += ' ';
+                }
+                std::fprintf(stderr, "[world]   items from other channels (%zu distinct): %s\n",
+                             other_items.size(), s.c_str());
+                for (auto& [site, n] : other_sites)
+                    std::fprintf(stderr, "[world]     %d from caller %#x\n", n, site);
+            }
+            heroes.clear(); stream_items.clear();
+            other_items.clear(); other_sites.clear(); castes.clear();
+            dirty = false;
+        }
+    };
+    auto acc = std::make_shared<Acc>();
+    world_dump_ = acc;   // keeps it alive, and lets the shutdown path flush it
+
+    m.add_watch(kLoadGame, [acc](Machine& mm, uint32_t) {
+        uint32_t p = mm.r32(mm.esp() + 4);
+        std::string path = p ? mm.cstr(p, 256) : "(interactive slot dialog)";
+        acc->flush();
+        acc->file = path;
+        std::fprintf(stderr, "[world] LoadGame(\"%s\")\n", path.c_str());
+    });
+
+    m.add_watch(kCasteRead, [acc](Machine& mm, uint32_t) {
+        uint32_t ebp = mm.reg(UC_X86_REG_EBP);
+        uint8_t caste = 0;
+        try { mm.read(ebp - 1, &caste, 1); } catch (...) { return; }
+        acc->castes[caste]++;
+        acc->dirty = true;
+    });
+
+    m.add_watch(kHeroIdRead, [acc](Machine& mm, uint32_t) {
+        uint32_t obj = mm.reg(UC_X86_REG_EBX);
+        uint8_t id = 0;
+        try { mm.read(obj + 0x27c, &id, 1); } catch (...) { return; }
+        acc->heroes[id]++;
+        acc->dirty = true;
+    });
+
+    m.add_watch(kItemCreate, [acc](Machine& mm, uint32_t) {
+        uint32_t sp = mm.esp();
+        uint32_t ret = mm.r32(sp);
+        uint32_t id  = mm.r32(sp + 4);
+        if (ret == kFromStreamRet) acc->stream_items[(int)id]++;
+        else { acc->other_items[(int)id]++; acc->other_sites[ret]++; }
+        acc->dirty = true;
+    });
+
+    std::fprintf(stderr, "  [world] THEOC_DUMP_WORLD on: watching LoadGame %#x, "
+                         "cHero stream ctor %#x, Item_CreateById %#x\n",
+                 kLoadGame, kHeroIdRead, kItemCreate);
+}
+
+// Drops the accumulator, whose destructor prints the last world's block. Called
+// once Start returns, while stderr is still up.
+void TrapLayer::flush_world_dump() { world_dump_.reset(); }
 
 void TrapLayer::install_gd_refresh(Machine& m, uint32_t mvos_base) {
     if (std::getenv("THEOC_LEGACY_CURSOR")) {

@@ -351,6 +351,27 @@ parsed, and they are a live channel for both heroes and items:
 as "a new game, rather than a loaded world" — untested, and stated as a
 reading.
 
+### Resolved the same day — all nine world files read
+
+The channel is no longer unparsed. All nine `init.dat` files were read by the
+game's own loader under `THEOC_DUMP_WORLD`, and the census is in
+[starting-world.md](starting-world.md). Against the three items above:
+
+- **Mask of the Brave (1) is in none of the nine.** "Dead in the shipped game"
+  is re-established — this time across all four channels rather than one.
+- **Jarakhi (11) is in `data/campaign/init.dat`**, byte-wise, exactly as the
+  lore-based argument predicted. And **Tlechlal (19) is in `scn6/init.dat`** —
+  the third "assigned by nothing" hero, and the only one this doc had no story
+  for. Only **Umochi (9)** survives in nothing at all.
+- The **ten undescribed-and-uncreated items** are also in no world file, so "no
+  player will ever hold one" is restored for those ten. Four *other* members of
+  the fourteen (9, 32, 44, 47) do ship in the campaign world — which is why the
+  withdrawal was right to be made rather than merely cautious.
+
+The `+0x4c` reading above is **not** confirmed: `+0x4c` is the scenario id, and
+it is `0` for the campaign, yet no config placement was observed during a
+campaign start. See [starting-world.md](starting-world.md), "Open threads".
+
 ## Open threads
 
 - **`cMission_HeavyArmory`, `cMission_MountainVillage`, `cMission_Josda_Pre`,

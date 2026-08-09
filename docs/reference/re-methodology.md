@@ -431,6 +431,50 @@ connected.
   exist". **A result that contradicts something a player would know is a defect
   in the search, not a discovery.**
 
+## 16. To read a deep format, instrument the reader you already have
+
+The follow-on task from §15 was "parse `init.dat` and say what is in it". The
+obvious shape is a parser: walk the stream constructors, mirror them in Python,
+declare victory when the file is consumed exactly. That is a real and verifiable
+plan, and it was started — the load chain in
+[../subsystems/starting-world.md](../subsystems/starting-world.md) is its
+output. It was abandoned three hours in, correctly.
+
+The reason is the shape of the cost curve. A savegame parser is **all-or-nothing**:
+it produces no partial answer, because a single wrong field size desynchronises
+everything after it, and the chain here is ~150 stream constructors deep —
+provinces, 58 building classes, 42 man castes, roads, towns, unit commands,
+message queues. Every one of them has to be right before the first hero id can
+be read. Meanwhile the game contains a parser that is right by construction, and
+the port already runs it.
+
+So the answer came from four passive `UC_HOOK_CODE` watches — `LoadGame`, the
+caste read in `CreateMan_fromStream`, the hero-id read, and `Item_CreateById` —
+and nine headless runs. About eighty lines of host code against a multi-day
+re-implementation, and the result is stronger: it is what the shipped loader
+actually does, not what a reading of it predicts.
+
+- **Ask what the artefact is for.** A format that only one program reads has
+  exactly one authority, and it is not your parser.
+- **Prefer the chokepoint the design already has** to the one you would build.
+  `Item_CreateById` is a 50-way switch every item passes through, so hooking it
+  cannot miss a subclass; hooking `Item_CreateFromStream` would have been
+  narrower and would have needed a correctness argument.
+- **Instrument a control alongside the signal.** The first run reported zero
+  heroes and zero items, which is indistinguishable from "the watches never
+  fired" — and on that run it was in fact a bad run. The caste watch was added
+  precisely so that "1248 men" states, in the same line, that the instrument is
+  alive. Any watch-based finding needs one quantity that cannot legitimately be
+  zero.
+- The limit is honest and worth stating: this answers *what the loader does with
+  this file*, not *what the bytes are*. For "which heroes ship in the campaign"
+  those are the same question. For "what is the on-disk layout of a `cMan`" they
+  are not, and then the parser is the only route.
+
+This is §11 (*if it runs, run it before you read it*) applied to a data format
+rather than to a bug: the running system is evidence, and it is usually the
+cheaper evidence.
+
 ---
 
 ## Checklist

@@ -99,7 +99,7 @@ correction under it.
 
 | id | code | name | type | config keys | described | placed | status |
 |---|---|---|---|---|---|---|---|
-| 1 | ML | Mask of the Brave | 16 | — | **no** | **no code path** | **inert; reachability unresolved** |
+| 1 | ML | Mask of the Brave | 16 | — | **no** | **nothing, anywhere** | **dead in the shipped game** |
 | 2 | MH | Mask of the Snake | 16 | `MH_RANGE`, `MH_TIME_MIN/MAX` | **no** | — | works |
 | 3 | MD | Mask of Death | 16 | `MD_HP` | yes | hero | works |
 | 4 | ME | Mask of Eagle | 16 | `ME_VRAD` | yes | hero | works |
@@ -261,7 +261,7 @@ So the honest state of the question:
 
 - "**No code creates item 1**" — established.
 - "**Item 1 is dead in the shipped game**" — *not* established, and must not be
-  quoted from this doc until `init.dat` is parsed. See `todo.md`.
+  quoted from this doc until `init.dat` is parsed.
 - The ten-of-thirteen correlation stands as stated (it is a claim about code
   paths), but the inference from it to player experience does not.
 
@@ -269,6 +269,29 @@ The parallel correction on the hero side is sharper still, and is what surfaced
 this: Jarakhi is the campaign's **player character** and is assigned by no code
 path either — because he ships in the world state
 ([heroes.md](heroes.md), [missions.md](missions.md)).
+
+### …and the fourth channel has now been read — the withdrawal is lifted
+
+**2026-08-09, same day again.** All nine world files were read by the game's own
+loader ([starting-world.md](starting-world.md)), so the fourth channel is no
+longer an unknown:
+
+- **Mask of the Brave (1) is in none of the nine.** All four channels are now
+  checked, and the strong claim is restored: **item 1 is dead in the shipped
+  game**, reachable only from the developer console. Quote it again.
+- **Four of the fourteen do ship after all** — 9, 32, 44 and 47 are in
+  `data/campaign/init.dat`, placed with an editor rather than by any code. So
+  "created by no code path" was the right wording and the caution was warranted:
+  it was not, for those four, the same as absent.
+- **Ten of the fourteen are genuinely in nothing**: 1, 2, 7, 12, 17, 18, 29, 41,
+  49, 50. Nine of them work perfectly and no shipped content hands them out.
+- The ten-of-thirteen correlation is untouched, and now says something about the
+  player's experience as well as about code paths: the items nobody wrote lore
+  for are overwhelmingly the items nobody placed.
+
+The `placed by` column in the table above is still a code-path column. For what
+a player actually finds on the map, read the census in
+[starting-world.md](starting-world.md).
 
 ## Open threads
 
@@ -282,6 +305,8 @@ path either — because he ships in the world state
   (`MH_TIME_MIN`/`MAX`) is still unread.
 - **Slots 5–7 roles** are read from a sample of overriding bodies, not from all
   90. A full pass would firm up the slot table.
+- **Items 30 and 40** are placed by `mitem.cfg` and are in no world file — see
+  [starting-world.md](starting-world.md), "Open threads".
 
 ## Cross-references
 

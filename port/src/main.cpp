@@ -396,6 +396,11 @@ int main(int argc, char** argv) {
         // patch, and a game-*speed* one: province steps its sim once per frame.
         L.traps->install_province_rate(m);
 
+        // THEOC_DUMP_WORLD — read the starting world out of the game's own
+        // loader (heroes and magic items per init.dat). Passive; patches
+        // nothing. See docs/subsystems/starting-world.md.
+        L.traps->install_world_dump(m);
+
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";
         m.write(argv_str, kArg0, sizeof kArg0);
@@ -425,7 +430,11 @@ int main(int argc, char** argv) {
                         host_timeout ? "(host Start timeout — still in game; raise THEOC_START_SEC or use 0)" :
                                        "(timeout/early stop)");
             if (host_timeout) start_ok = true;  // window open = session was live
+            // Nothing else prints the last world's block; do it while stderr
+            // is still up and before any teardown noise.
+            L.traps->flush_world_dump();
         } catch (const std::exception& e) {
+            L.traps->flush_world_dump();
             std::fprintf(stderr, "Start FAULTED: %s\n", e.what());
             int n = 0;
             const uint32_t* st = m.last_fault_stack(&n);

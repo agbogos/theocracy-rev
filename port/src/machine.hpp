@@ -45,6 +45,8 @@ constexpr uint32_t LIBC_DATA_SIZE = 0x00001000;
 // to place in EAX. `slot` is the import index (== EIP - TRAP_BASE).
 class Machine;
 using TrapFn = std::function<uint32_t(Machine&, uint32_t slot, uint32_t esp)>;
+// A read-only observer of one guest address; see Machine::add_watch.
+using WatchFn = std::function<void(Machine&, uint32_t addr)>;
 
 class Machine {
 public:
@@ -75,6 +77,13 @@ public:
     void install_traps(uint32_t nslots, TrapFn dispatch) {
         add_code_traps(guestmap::TRAP_BASE, nslots, std::move(dispatch));
     }
+
+    // Passive observation of one guest instruction. Unlike add_code_traps this
+    // does NOT replace anything: the callback runs just before `addr` executes
+    // and must not touch EIP, so the guest carries on unchanged. For reading
+    // out what original code is doing (see THEOC_DUMP_WORLD) rather than
+    // standing in for it.
+    void add_watch(uint32_t addr, WatchFn fn);
 
     // --- execution ------------------------------------------------------
     // Call a guest function with cdecl args; returns EAX. Restores ESP.
@@ -156,6 +165,7 @@ public:
 
 private:
     static void code_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
+    static void watch_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     static bool mem_hook(uc_engine*, int type, uint64_t addr, int size,
                          int64_t value, void* user);
     static void block_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
@@ -173,6 +183,7 @@ private:
     struct TrapRegion { uint32_t lo, hi; TrapFn fn; };
     uc_engine* uc_ = nullptr;
     std::vector<TrapRegion> regions_;
+    std::unordered_map<uint32_t, WatchFn> watches_;
     bool last_returned_ = false;
     bool last_aborted_ = false;
     bool stop_requested_ = false;
