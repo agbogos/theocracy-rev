@@ -33,7 +33,49 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Mission code — the wall that heroes and magic items both hit
+### 1. Mission internals — what the 2026-08-09 pass deliberately left
+
+[`docs/subsystems/missions.md`](docs/subsystems/missions.md) answered the three
+questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
+
+- **What starts a mission.** The doc reads the lifecycle from `Start` onward and
+  never establishes who constructs a `cMission_*`, how one is bound to a province,
+  or how the campaign drives them. `cMissionTimer` / `cMissionTimer_Spain0/1` /
+  `cMissionTimer_Dragon0/1` and `"Initializing timer to (%s) for mission (%d)"`
+  (`0x08212f83`) are the entry points.
+- **The four unread named missions**: `cMission_HeavyArmory`,
+  `cMission_MountainVillage`, `cMission_Josda_Pre`, `cMission_WallChecker`. Their
+  vtables and slots are in the doc; only the bodies are missing. They were skipped
+  because none places a hero or an item.
+- **The eight campaign missions** (`cMission_S*_*`). Established: they share the
+  base vtable and the `.man` machinery. `cMission_S4_0_Start` (`0x0822f260`) looks
+  its commander and hero up by man type via `FUN_08211e10` instead of creating
+  them — that helper, and the `flag:%d` REF-node scanning around it
+  (`0x08211ead`–`0x082124aa`), is the next target.
+- **Province virtual `+0xe0`** — the predicate choosing between the two placement
+  paths in `MissionCfg_PlaceMen`. Named from its use, body unread.
+
+### 2. Is `+0x27c` the hero id, or a general subtype byte?
+
+`cMan_Comm1`'s constructor (`0x08245920`) writes `26` to `+0x27c`, and
+`FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Nothing
+currently rests on the answer — every hero id is written by `cHero_SetHeroId`,
+verified as the sole writer — but [`heroes.md`](docs/subsystems/heroes.md)'s
+headline claim is flagged as class-scoped until this is read. Cheap: read
+`cMan_Comm1` and whoever calls `FUN_08246150`.
+
+### 3. Mission code — the wall that heroes and magic items both hit — DONE 2026-08-09
+
+Kept for one commit as a record of what the task asked versus what it found;
+delete on the next pass. All three questions answered in
+[`docs/subsystems/missions.md`](docs/subsystems/missions.md): the ring pieces
+combine in `cBld_Ring`, five of the eight heroes are mission rewards, and Mask
+of the Brave is dead in the shipped game — one of fourteen items nothing creates.
+The lead the task recommended starting from (xref `Item_CreateById`) was the one
+dead end; see [`re-methodology.md`](docs/reference/re-methodology.md) §15.
+
+<details>
+<summary>original task text</summary>
 
 Written to be picked up cold. Everything needed to start is below; the
 background is in [`docs/subsystems/heroes.md`](docs/subsystems/heroes.md) and
@@ -110,7 +152,11 @@ Into the "Open threads" sections of the two existing docs, and their
 missions turn out to be a subsystem in their own right rather than a handful of
 scripted placements — that call is yours to make once the shape is clear.
 
-### 2. Smaller leftovers, worth doing only alongside something else
+</details>
+
+*(It was a subsystem. `docs/subsystems/missions.md` exists.)*
+
+### 4. Smaller leftovers, worth doing only alongside something else
 
 - The `+0x04` equip-restriction field on items: the checker is unread, so
   bitmask-of-carriers vs. category id is unsettled
@@ -121,5 +167,7 @@ scripted placements — that call is yours to make once the shape is clear.
   ([heroes.md](docs/subsystems/heroes.md)).
 - The `+0x18` field on items 2, 8 and 50 — three items allocate four extra bytes
   and only id 2's initialisation was observed.
-- `hero.cfg` columns 3 and 4 are `i32` map coordinates that are `0` in every
-  shipped row; the province virtual `+0xe4` that consumes them is unread.
+- ~~`hero.cfg` columns 3 and 4 / province virtual `+0xe4`~~ — **done
+  2026-08-09.** `+0xe4` is `(prov, pos, manType, tribe) -> cMan*`, and columns 3
+  and 4 are the first eight bytes of the record, passed as that `pos`. See
+  [missions.md](docs/subsystems/missions.md).

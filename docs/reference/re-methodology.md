@@ -362,6 +362,37 @@ access adjustments and inlined trivia, so "has its own entry" is nearly free.
 
 ---
 
+## 15. A factory tells you who uses the factory, not who builds the type
+
+`magic-items.md` recorded `Item_CreateById` (`0x0820d1f0`) as "the only way an
+item comes into existence" — a switch over ids 1..50, each case calling that
+item's own constructor. It reads like a chokepoint, so the mission task's
+cheapest first move was to xref it. Eight call sites came back: two config-file
+placers, save-load, and the developer console. **No mission.**
+
+Every one of those eight is real, and the conclusion they invite —
+"missions don't place items, so the Ring Pieces are unreachable" — is false.
+Mission code does `new(0x18)` and calls `cMagicItem_RingPiece1_ctor` **directly**,
+skipping the switch. Xref'ing the fifty constructors instead of the one factory
+turns up 25 with a non-factory caller, and with them the entire quest-reward
+layer: the ring combination, five hero rewards, and 25 item placements.
+
+- **A factory is a convenience for its callers, not a gate on construction.** In
+  C++ it cannot be one: any code with the class definition can call the
+  constructor. Treat "the only way X is created" as a claim needing the
+  *constructors* xref'd, and say which you checked.
+- The tell was available and was not read: `Item_CreateById`'s callers are all
+  **data-driven** — a config file, a save, a console string. Code that knows at
+  compile time which item it wants has no reason to go through an id switch.
+- Symmetrically, `cHero_SetHeroId` *is* the sole writer of the hero id, and that
+  was established by scanning writes to the field (`+0x27c`), not by trusting
+  the setter's name. That is the check that makes the claim carry.
+- Cost here: near zero, because the false negative was caught within one step.
+  It would have been expensive one step later — "the Ring Pieces combine
+  nowhere" was ready to be written into two docs.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:

@@ -92,10 +92,13 @@ which is a branch, not a number.
 
 `type` is the raw `+0x04` value. `placed` is which data file puts the item on
 the map — `hero` = `hero.cfg`'s two item columns, `mitem` = `data/mitem.cfg`.
+**The column predates the mission channel and lists data files only**; for the
+25 items mission code places, and for the fourteen nothing places, see "The
+third placement channel" above and [missions.md](missions.md).
 
 | id | code | name | type | config keys | described | placed | status |
 |---|---|---|---|---|---|---|---|
-| 1 | ML | Mask of the Brave | 16 | — | **no** | — | **inert** |
+| 1 | ML | Mask of the Brave | 16 | — | **no** | **nothing** | **inert, and unreachable** |
 | 2 | MH | Mask of the Snake | 16 | `MH_RANGE`, `MH_TIME_MIN/MAX` | **no** | — | works |
 | 3 | MD | Mask of Death | 16 | `MD_HP` | yes | hero | works |
 | 4 | ME | Mask of Eagle | 16 | `ME_VRAD` | yes | hero | works |
@@ -203,18 +206,48 @@ developers' own, typo included. Eight items are placed this way; `hero.cfg`
 places up to two more per hero.
 
 Between them the two files place 17 of the 50 items. **That is not evidence the
-other 33 are unreachable** — mission code is unread, and the two most narratively
-loaded items in the game (the Ring pieces and the Ring of Concordance) appear in
-neither file, which is exactly what you would expect of quest rewards.
+other 33 are unreachable** — and it turned out not to be: mission code places 25
+more, including the Ring pieces. See "The third placement channel" below.
+
+## The third placement channel — mission code
+
+**Read 2026-08-09; full write-up in [missions.md](missions.md).** The claim
+above that `Item_CreateById` is "the only way an item comes into existence" is
+**wrong, and was wrong in the confident direction**: mission code calls the fifty
+per-item constructors *directly*, bypassing the factory switch. Xref'ing the
+constructors rather than the factory finds 25 items with a non-factory caller
+([re-methodology.md](../reference/re-methodology.md) §15).
+
+That closes both of this doc's headline open questions:
+
+- **The Ring Pieces do combine.** `cMission_TwoRings_Start` (`0x0821c5e0`) drops
+  ids 24 and 25 on the map. When one man carrying both walks into the mission's
+  `cBld_Ring` building, its "man entered" virtual (`+0xd4`,
+  `cBld_Ring_OnManEntered` at `0x08295d10`) destroys both halves, constructs
+  **id 26 Ring of Concordance** and gives it to that same man — the Ring
+  *replaces* the pieces on their carrier. Either carry order works. So ids 24
+  and 25 are inert *as items* and load-bearing *as quest tokens*, exactly as
+  this doc guessed, and the mechanism is in the building rather than in the
+  items — which is why nothing in their own vtables showed it.
+- **Mask of the Brave (1) is dead in the shipped game.** With the construction
+  surface now complete, nothing creates it: not `mitem.cfg`, not `hero.cfg`, not
+  any mission, and `.man` files have no item column. Only the developer console
+  can produce one.
+
+But it is **not uniquely dead**. The union of all three channels is 36 items;
+**fourteen are created by nothing** — ids 1, 2, 7, 9, 12, 17, 18, 29, 32, 41,
+44, 47, 49, 50. Item 1 is merely the only one of the fourteen that is *also*
+inert, which is what made it look singular from the code side.
+
+And the two gaps coincide. **Ten of the thirteen undescribed items are also
+never placed** (1, 2, 7, 12, 17, 18, 29, 41, 49, 50); the only ones a player can
+actually obtain are 20 and the two Ring Pieces. The finding at the top of this
+doc — the missing text is a writing gap, not cut content — stands as a statement
+about the *code*, and needs one qualification as a statement about the *game*:
+ten of those items work perfectly and no player will ever hold one.
 
 ## Open threads
 
-- **The Ring Piece → Ring of Concordance step.** Nothing found yet that consumes
-  ids 24 and 25 or produces 26. Mission code is the lead, as it is for the eight
-  unplaced heroes.
-- **Is Mask of the Brave reachable at all?** If no mission places item 1, it is
-  dead in the shipped game rather than merely silent. That is a search of the
-  mission code, not of these two files.
 - **The `+0x04` type field's exact semantics** — the equip checker is unread.
 - **The `+0x18` field on ids 2, 8 and 50** — **partly answered.** The three
   28-byte items are exactly the three that need to remember something between

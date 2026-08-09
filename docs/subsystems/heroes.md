@@ -99,21 +99,21 @@ province index and the two item slots from `hero.cfg`.
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Shibiri | spear | -50 | -1500 | 10 | 10 | Soul | `TEAMREG_FRAME`, `TEAMREG_HP` | 34 / 5,0 |
 | 2 | Kathapi | spear | 25 | 1500 | 20 | 2 | — | `JARAKHI_HIT_PERCENT` | 22 / 10,0 |
-| 3 | Toomoo | — | 25 | 3000 | 20 | 2 | Moon | `DRAGONK_`/`MOONPRIEST_`/`STONEW_HIT_PERCENT` | not placed |
+| 3 | Toomoo | — | 25 | 3000 | 20 | 2 | Moon | `DRAGONK_`/`MOONPRIEST_`/`STONEW_HIT_PERCENT` | — / mission Scroll |
 | 4 | Shaloc | spear | 25 | 3000 | -10 | 6 | — | — | 31 / 27,0 |
-| 5 | Kukurbuki | — | 0 | 3000 | 10 | 2 | Nature | `REG_FRAME`, `REG_HP` | not placed |
+| 5 | Kukurbuki | — | 0 | 3000 | 10 | 2 | Nature | `REG_FRAME`, `REG_HP` | — / mission TwoRings |
 | 6 | Chimoki | spear | 25 | 0 | -10 | 2 | **all @90** | `MAGICRESISTANCE` | 0 / 3,0 |
 | 7 | Koloth | sword | 50 | 4000 | 40 | -5 | — | `REG_FRAME`, `REG_HP` | 17 / 36,0 |
-| 8 | Akrisi | — | -25 | 1500 | 20 | 2 | Soul | — | not placed |
+| 8 | Akrisi | — | -25 | 1500 | 20 | 2 | Soul | — | — / mission Josda |
 | 9 | **Umochi** | — | 0 | -2000 | 10 | 6 | — | — | not placed |
-| 10 | Garkuna | — | 50 | 2000 | 25 | 0 | Nature | — | not placed |
+| 10 | Garkuna | — | 50 | 2000 | 25 | 0 | Nature | — | — / mission VillageOfJaguar |
 | 11 | Jarakhi | — | 0 | 3000 | 10 | 6 | — | `KATHAPI_HIT_PERCENT` | not placed |
 | 12 | Turmoth | arch | 50 | 2000 | 10 | 5 | — | `VIS_MOD`, `RANGE_MOD` | 6 / 35,0 |
 | 13 | Vatlar | sword | 50 | -4000 | 25 | 12 | Star | — | 36 / 39,22 |
 | 14 | Pocotli | sword | -25 | 4000 | 25 | 8 | Nature | `JAGUAR_`/`NATUREPRIEST_HIT_PERCENT` | 16 / 0,0 |
 | 15 | Fakhuma | sword | 50 | 2000 | 25 | 0 | — | `REG_FRAME`, `REG_ST`, `SWORDSMAN_ATT_PERCENT` | 7 / 42,0 |
 | 16 | HuorMuah | sword | 50 | -4000 | 40 | 0 | — | — | 35 / 16,4 |
-| 17 | Skalaki | — | 50 | 1000 | 30 | 5 | — | `SPEEDPERCENT_IN_FOREST` | not placed |
+| 17 | Skalaki | — | 50 | 1000 | 30 | 5 | — | `SPEEDPERCENT_IN_FOREST` | — / mission TheWall |
 | 18 | Morhamum | arch | 50 | 0 | 30 | -2 | Sun | `PRIEST_HIT_PERCENT` | 8 / 33,0 |
 | 19 | Tlechlal | — | 25 | 0 | 40 | 8 | — | — | not placed |
 
@@ -153,8 +153,8 @@ looks strange:
 | 0 | `+0x08` u8 | man type (33/34/35) |
 | 1 | `+0x09` u8 | hero id → `SetHeroId` |
 | 2 | `+0x0e` u8 | nation / tribe |
-| 3 | `+0x00` i32 | always `0` in the shipped file |
-| 4 | `+0x04` i32 | always `0` in the shipped file |
+| 3 | `+0x00` i32 | map x — the first half of the position handed to province virtual `+0xe4`; always `0` in the shipped file |
+| 4 | `+0x04` i32 | map y — likewise |
 | 5 | `+0x0a` i32 | province index |
 | 6 | `+0x0f` u8 | magic item slot 1 |
 | 7 | `+0x10` u8 | magic item slot 2 |
@@ -193,8 +193,11 @@ exists in a data file and is never reached by code.
    reads them. Only `HERO1_TEAMREG_FRAME` / `HERO1_TEAMREG_HP` are real. Note the
    suffix differs too — the live pair ends `_HP`, the dead ones `_MO` — so this
    looks like an ability that was redesigned and left behind in the data.
-3. **Eight heroes are fully specified but never placed.** Not a defect on its own
-   — see the mission-code thread — but worth stating alongside the above.
+3. **Three heroes are fully specified and never placed anywhere.** Umochi (9),
+   Jarakhi (11) and Tlechlal (19). This started as eight; mission code accounts
+   for five of them (see below), and these three survive the full audit of every
+   `SetHeroId` call site in the binary. Jarakhi's absence also kills one half of
+   the rivalry described above.
 
 ## How this was found
 
@@ -215,16 +218,43 @@ for a config key gives a **false negative**, because the file is encrypted. This
 cost a wrong intermediate conclusion ("`selap.txt` has no hero keys" — it has
 103).
 
+## Where the other eight enter — answered 2026-08-09
+
+**Five of the eight are mission rewards; three are placed by nothing.** Full
+write-up in [missions.md](missions.md); the short form:
+
+`cHero_SetHeroId` is a virtual at hero-vtable slot `+0x58`, and it is the only
+writer of the id — established by scanning every write to `+0x27c`, not by
+trusting the name. Across the whole binary **five call sites pass a constant
+id**, plus `hero.cfg` and the developer console:
+
+| mission | hook | hero | items given |
+|---|---|---|---|
+| `cMission_VillageOfJaguar` | `Finish` | **10 Garkuna** | 15 |
+| `cMission_Scroll` | `Finish` | **3 Toomoo** | 21, 11 |
+| `cMission_TwoRings` | `Finish` | **5 Kukurbuki** | 45, 28 |
+| `cMission_Josda` | `Finish` | **8 Akrisi** | 31, 13 |
+| `cMission_TheWall` | **`Start`** | **17 Skalaki** | 34 |
+
+So sixteen of the nineteen reach the game. **Umochi (9), Jarakhi (11) and
+Tlechlal (19) are set by nothing** — which promotes all three into the
+unfinished-content list above. Jarakhi is the notable one: the rivalry below is
+half-dead in the shipped game, because Kathapi *is* placed and his
+`JARAKHI_HIT_PERCENT` bonus applies to an opponent that can never appear.
+
+A sixth site places a hero-type man and never assigns an id
+(`cMission_Scroll_lost_Finish`), leaving the `0` the constructor wrote.
+
 ## Open threads
 
 - **Who reads `+0x88..0x90`.** The offset→school mapping rests on description
   text. Reading the spell-application path would confirm it from the consumer
   side and pin the school enum order.
-- **Where the other eight heroes enter.** `cMission_S4_0::Start` and its
-  `"Hero not found."` assert are the lead.
-- **Province virtual `+0xe4`.** The man-spawning call in `hero.cfg`'s consumer;
-  unread, and the owner of the two always-zero i32 columns, which are plausibly
-  map coordinates but have never been observed non-zero.
+- **Is `+0x27c` really *the* hero-id field, or a general subtype byte?**
+  `cMan_Comm1`'s constructor (`0x08245920`) writes `26` to it and `FUN_08246150`
+  copies a man *type* (`+0xb3`) into it. Nothing above depends on the answer —
+  every hero id goes through `cHero_SetHeroId` — but read this doc's claim as
+  class-scoped until it is settled.
 - **`HERO12_RANGE_MOD` and the regen keys** are registered and therefore live,
   but their consumers have not been read — only `VIS_MOD` was traced into
   `SetHeroId`.
