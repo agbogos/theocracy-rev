@@ -93,12 +93,13 @@ which is a branch, not a number.
 `type` is the raw `+0x04` value. `placed` is which data file puts the item on
 the map — `hero` = `hero.cfg`'s two item columns, `mitem` = `data/mitem.cfg`.
 **The column predates the mission channel and lists data files only**; for the
-25 items mission code places, and for the fourteen nothing places, see "The
-third placement channel" above and [missions.md](missions.md).
+25 items mission code places, and for the fourteen no code path places — which
+is *not* the same as "never appear" — see "The third placement channel" and the
+correction under it.
 
 | id | code | name | type | config keys | described | placed | status |
 |---|---|---|---|---|---|---|---|
-| 1 | ML | Mask of the Brave | 16 | — | **no** | **nothing** | **inert, and unreachable** |
+| 1 | ML | Mask of the Brave | 16 | — | **no** | **no code path** | **inert; reachability unresolved** |
 | 2 | MH | Mask of the Snake | 16 | `MH_RANGE`, `MH_TIME_MIN/MAX` | **no** | — | works |
 | 3 | MD | Mask of Death | 16 | `MD_HP` | yes | hero | works |
 | 4 | ME | Mask of Eagle | 16 | `ME_VRAD` | yes | hero | works |
@@ -235,16 +236,39 @@ That closes both of this doc's headline open questions:
   can produce one.
 
 But it is **not uniquely dead**. The union of all three channels is 36 items;
-**fourteen are created by nothing** — ids 1, 2, 7, 9, 12, 17, 18, 29, 32, 41,
-44, 47, 49, 50. Item 1 is merely the only one of the fourteen that is *also*
+**fourteen are created by no code path** — ids 1, 2, 7, 9, 12, 17, 18, 29, 32,
+41, 44, 47, 49, 50. Item 1 is merely the only one of the fourteen that is *also*
 inert, which is what made it look singular from the code side.
 
-And the two gaps coincide. **Ten of the thirteen undescribed items are also
-never placed** (1, 2, 7, 12, 17, 18, 29, 41, 49, 50); the only ones a player can
-actually obtain are 20 and the two Ring Pieces. The finding at the top of this
-doc — the missing text is a writing gap, not cut content — stands as a statement
-about the *code*, and needs one qualification as a statement about the *game*:
-ten of those items work perfectly and no player will ever hold one.
+And the two gaps coincide. **Ten of the thirteen undescribed items are among the
+fourteen** (1, 2, 7, 12, 17, 18, 29, 41, 49, 50); the only described-less ones
+any code path places are 20 and the two Ring Pieces.
+
+### Correction — there is a fourth channel, and it is not code
+
+**Same day.** The paragraph above first read "created by nothing… no player will
+ever hold one". Withdrawn: the audit was exhaustive over *code* and there is a
+data channel it cannot see.
+
+**Every `init.dat` in the tree — the campaign's and all eight scenarios' — is a
+`theosg42` savegame** ([save-format.md](save-format.md)), so the starting world
+of every map is *loaded*, not placed. Items in it come up through the **stream
+constructor at `0x0820dbb0`**, which reads an id byte and calls
+`Item_CreateById` — meaning a shipped world file can materialise **any of the
+fifty**, including Mask of the Brave.
+
+So the honest state of the question:
+
+- "**No code creates item 1**" — established.
+- "**Item 1 is dead in the shipped game**" — *not* established, and must not be
+  quoted from this doc until `init.dat` is parsed. See `todo.md`.
+- The ten-of-thirteen correlation stands as stated (it is a claim about code
+  paths), but the inference from it to player experience does not.
+
+The parallel correction on the hero side is sharper still, and is what surfaced
+this: Jarakhi is the campaign's **player character** and is assigned by no code
+path either — because he ships in the world state
+([heroes.md](heroes.md), [missions.md](missions.md)).
 
 ## Open threads
 

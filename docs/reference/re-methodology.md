@@ -384,12 +384,52 @@ layer: the ring combination, five hero rewards, and 25 item placements.
 - The tell was available and was not read: `Item_CreateById`'s callers are all
   **data-driven** — a config file, a save, a console string. Code that knows at
   compile time which item it wants has no reason to go through an id switch.
-- Symmetrically, `cHero_SetHeroId` *is* the sole writer of the hero id, and that
-  was established by scanning writes to the field (`+0x27c`), not by trusting
-  the setter's name. That is the check that makes the claim carry.
 - Cost here: near zero, because the false negative was caught within one step.
   It would have been expensive one step later — "the Ring Pieces combine
   nowhere" was ready to be written into two docs.
+
+### …and the same mistake one level down, in the same session
+
+The write-up above claimed, as its own contrast case, that `cHero_SetHeroId`
+*is* the sole writer of the hero id — "established by scanning writes to the
+field (`+0x27c`), not by trusting the setter's name." **That was wrong**, and
+wrong for a third distinct reason, caught within the hour by a reader who knew
+the game's story: Jarakhi is the campaign's player character and is obviously in
+the game, while the audit said no code places him.
+
+Two defects, both in the *scan*, not in the reasoning built on it:
+
+1. **A `lea` is a write you cannot see.** The scan matched stores — `movb %cl,
+   0x27c(%ebx)`. `cHero`'s stream constructor instead does `leal 0x27c(%ebx),
+   %edx` and hands that address to a stream reader, which fills the byte from
+   file data. Taking the address of a field is a write in every sense that
+   matters, and it matches no store pattern. **Grep for `lea` on the field too,
+   or the "sole writer" claim is only about literal `mov`s.**
+2. **Construction through a registered function pointer has no call site.** The
+   stream constructor is reached through the per-man-type *caste properties*
+   struct, which stores three function pointers (`FUN_08254570` writes
+   `_DAT_0866d828 = FUN_082543b0`). There is no rel32 to find. The `.eh_frame`
+   check that cleared the item constructors of exactly this suspicion was never
+   run on the man side.
+
+And the deeper one, which is not about scanning at all: **a code audit cannot
+see content that ships as data.** Every `init.dat` in the tree is a `theosg42`
+savegame — the starting world of the campaign and of all eight scenarios is
+*loaded*, not placed. `save-format.md` already recorded that the console's
+`save` command writes `init.dat`; the fact was in the repo and simply was not
+connected.
+
+- Before writing "X is created/assigned by nothing", enumerate the **channels**,
+  not just the call sites: code, config files, *and serialised state*. This
+  project ships its initial world as save data, so the third channel is always
+  live for anything an object can carry.
+- The tell was available: `hero.cfg` is loaded only under
+  `*(int *)(g_GameSession + 0x4c) == 0`. A condition on *placement* implies a
+  path where placement is skipped because the objects already exist.
+- Domain knowledge outranks a clean sweep. The sweep was internally consistent,
+  exhaustive over what it searched, and produced "the player character does not
+  exist". **A result that contradicts something a player would know is a defect
+  in the search, not a discovery.**
 
 ---
 

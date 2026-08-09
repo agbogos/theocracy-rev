@@ -93,7 +93,9 @@ has not been read — see Open threads.
 ## The nineteen
 
 `type` is from `hero.cfg` where the hero is placed there. `prov / items` is the
-province index and the two item slots from `hero.cfg`.
+province index and the two item slots from `hero.cfg`. **"no code path" is not
+"absent"** — the shipped world state is a savegame and can carry a hero
+directly; see the correction below.
 
 | id | name | type | HP | ST | ATT | DEF | immune | other config keys | prov / items |
 |---|---|---|---|---|---|---|---|---|---|
@@ -105,9 +107,9 @@ province index and the two item slots from `hero.cfg`.
 | 6 | Chimoki | spear | 25 | 0 | -10 | 2 | **all @90** | `MAGICRESISTANCE` | 0 / 3,0 |
 | 7 | Koloth | sword | 50 | 4000 | 40 | -5 | — | `REG_FRAME`, `REG_HP` | 17 / 36,0 |
 | 8 | Akrisi | — | -25 | 1500 | 20 | 2 | Soul | — | — / mission Josda |
-| 9 | **Umochi** | — | 0 | -2000 | 10 | 6 | — | — | not placed |
+| 9 | **Umochi** | — | 0 | -2000 | 10 | 6 | — | — | no code path |
 | 10 | Garkuna | — | 50 | 2000 | 25 | 0 | Nature | — | — / mission VillageOfJaguar |
-| 11 | Jarakhi | — | 0 | 3000 | 10 | 6 | — | `KATHAPI_HIT_PERCENT` | not placed |
+| 11 | Jarakhi | — | 0 | 3000 | 10 | 6 | — | `KATHAPI_HIT_PERCENT` | **player character — ships in `init.dat`** |
 | 12 | Turmoth | arch | 50 | 2000 | 10 | 5 | — | `VIS_MOD`, `RANGE_MOD` | 6 / 35,0 |
 | 13 | Vatlar | sword | 50 | -4000 | 25 | 12 | Star | — | 36 / 39,22 |
 | 14 | Pocotli | sword | -25 | 4000 | 25 | 8 | Nature | `JAGUAR_`/`NATUREPRIEST_HIT_PERCENT` | 16 / 0,0 |
@@ -115,7 +117,7 @@ province index and the two item slots from `hero.cfg`.
 | 16 | HuorMuah | sword | 50 | -4000 | 40 | 0 | — | — | 35 / 16,4 |
 | 17 | Skalaki | — | 50 | 1000 | 30 | 5 | — | `SPEEDPERCENT_IN_FOREST` | — / mission TheWall |
 | 18 | Morhamum | arch | 50 | 0 | 30 | -2 | Sun | `PRIEST_HIT_PERCENT` | 8 / 33,0 |
-| 19 | Tlechlal | — | 25 | 0 | 40 | 8 | — | — | not placed |
+| 19 | Tlechlal | — | 25 | 0 | 40 | 8 | — | — | no code path |
 
 Four heroes — **Shaloc (4), Umochi (9), HuorMuah (16), Tlechlal (19)** — have no
 ability of any kind beyond the four numbers. For three of them that is clearly
@@ -193,11 +195,12 @@ exists in a data file and is never reached by code.
    reads them. Only `HERO1_TEAMREG_FRAME` / `HERO1_TEAMREG_HP` are real. Note the
    suffix differs too — the live pair ends `_HP`, the dead ones `_MO` — so this
    looks like an ability that was redesigned and left behind in the data.
-3. **Three heroes are fully specified and never placed anywhere.** Umochi (9),
-   Jarakhi (11) and Tlechlal (19). This started as eight; mission code accounts
-   for five of them (see below), and these three survive the full audit of every
-   `SetHeroId` call site in the binary. Jarakhi's absence also kills one half of
-   the rivalry described above.
+3. **Umochi (9) is placed by no code path** — and unlike the other two that
+   audit turned up, no world-state file rescues him, because his description is
+   still the string `Umochi`. This started as eight unplaced heroes; mission code
+   accounts for five, **Jarakhi (11) is the campaign's player character and ships
+   in `init.dat`**, and Tlechlal (19) is unresolved — he may be baked into a map
+   the same way. See the correction below.
 
 ## How this was found
 
@@ -236,11 +239,38 @@ id**, plus `hero.cfg` and the developer console:
 | `cMission_Josda` | `Finish` | **8 Akrisi** | 31, 13 |
 | `cMission_TheWall` | **`Start`** | **17 Skalaki** | 34 |
 
-So sixteen of the nineteen reach the game. **Umochi (9), Jarakhi (11) and
-Tlechlal (19) are set by nothing** — which promotes all three into the
-unfinished-content list above. Jarakhi is the notable one: the rivalry below is
-half-dead in the shipped game, because Kathapi *is* placed and his
-`JARAKHI_HIT_PERCENT` bonus applies to an opponent that can never appear.
+So sixteen of the nineteen are placed by code. **Umochi (9), Jarakhi (11) and
+Tlechlal (19) are assigned by no code path** — but see the correction directly
+below before reading anything into that.
+
+### Correction — a hero can ship in the world state
+
+**2026-08-09, same day.** This section first said those three "are set by
+nothing" and moved them into the unfinished-content list. That was wrong, and
+`cHero_SetHeroId` is **not** the only writer of the id.
+
+`cHero` has a **second, stream constructor** (`0x080b22c0`) which runs the base
+`cMan` stream ctor, installs the hero vtable, and reads **one byte straight into
+`+0x27c`** from the file. It is reached through the per-man-type caste-properties
+table rather than by any direct call, so it appears in no xref sweep — and the
+original scan for writes to `+0x27c` missed it because the constructor takes the
+field's *address* (`leal 0x27c(%ebx), %edx`) instead of storing to it.
+
+And there is data for it to read: **every `init.dat` in the tree — the campaign's
+and all eight scenarios' — is a `theosg42` savegame**
+([save-format.md](save-format.md)). The starting world is loaded, not placed.
+
+**Jarakhi (11) is the campaign's player character**, which is why nothing spawns
+or rewards him: he ships in the starting world state. That also *restores* the
+rivalry below rather than killing it — both Kathapi and Jarakhi are present, and
+the two symmetric `*_HIT_PERCENT` keys do what they say. His portrait being
+preloaded by a caste registration (`0x08254def`, grouped with heroes 1–8) is
+consistent with this.
+
+Umochi (9) is the one of the three that a stream-loaded hero would not rescue:
+his description is the string `Umochi`, and no map data changes that.
+
+Not yet verified byte-wise — `init.dat` has not been parsed. See `todo.md`.
 
 A sixth site places a hero-type man and never assigns an id
 (`cMission_Scroll_lost_Finish`), leaving the `0` the constructor wrote.

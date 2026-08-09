@@ -161,6 +161,10 @@ vtable (`0x0831af20`, installed at `0x080b229b`). The base `cMan` vtable
 (`0x0831ae00`) has a different function in that slot, so the slot alone is not
 enough — every candidate was checked for a two-argument call.
 
+It is **not** the only writer of the hero id, though this doc first said so:
+`cHero`'s stream constructor writes `+0x27c` directly from save data. See "The
+third channel" below. It is the only writer that *chooses* an id.
+
 Across the whole binary there are **exactly five call sites that pass a constant
 hero id**, plus the two variable ones (`hero.cfg` at `0x08215293`, the dev
 console at `0x081f1c7d`):
@@ -176,17 +180,20 @@ console at `0x081f1c7d`):
 So five of the eight heroes `hero.cfg` leaves out are mission rewards. Skalaki
 is the odd one: he is handed over when The Wall *begins*, not when it ends.
 
-### The three that are still nowhere
+### The three no code path assigns
 
 `hero.cfg` places 11, missions place 5 — sixteen of the nineteen. **Umochi (9),
-Jarakhi (11) and Tlechlal (19) are set by nothing.** No data file, no mission,
-no code path outside the developer console.
+Jarakhi (11) and Tlechlal (19) are assigned by no code path**: no data file, no
+mission, nothing outside the developer console.
 
-For Umochi that confirms what [heroes.md](heroes.md) already argued from his
-placeholder description. Jarakhi is the more interesting loss: heroes.md
-documents a Kathapi↔Jarakhi rivalry that exists as two symmetric `selap.txt`
-keys, and Kathapi *is* placed by `hero.cfg` — so his `JARAKHI_HIT_PERCENT`
-bonus is a bonus against an opponent the shipped game can never field.
+**That is not the same as "never appear", and for Jarakhi it is definitely not**
+— see "The third channel" below, which is the correction that matters most in
+this doc. He is the campaign's player character and ships in the world state.
+
+For Umochi the code-side silence still agrees with what [heroes.md](heroes.md)
+argued from his placeholder description, and he is the one of the three whose
+absence a stream-loaded hero would *not* explain away — his description is the
+string `Umochi`, which no amount of map data fixes.
 
 ### One hero placed without an identity
 
@@ -270,39 +277,79 @@ items 19 and 38 at `(0x8e, 0xa2)`.
 the man's item slots for id `0x15` (21, the Dragon Ring) and sets the same
 `+0x178` flag, with no transformation.
 
-## Fourteen items the shipped game never creates
+## Fourteen items no *code* path creates — and the channel that is not code
 
-With the construction surface now complete — `Item_CreateById`'s four callers
-plus 25 direct constructor calls — the placement question closes for all fifty
-items. The one way it could still be wrong is an *indirect* call through a
-stored function pointer, which `elfq.py xref-call` (rel32 only) would not see;
-scanning the image for the address of `Item_CreateById` and of each of the
-fourteen constructors below finds exactly one occurrence each, all inside
-`.eh_frame` (`0x084e3be8`–`0x08597400`), i.e. unwind FDEs and not a dispatch
-table.
+**Corrected 2026-08-09, the same day, after this section first claimed those
+fourteen were "created by nothing". They are not. See "The third channel" below
+before using any number here.**
 
 Placed by `mitem.cfg` (8), `hero.cfg` (12) or mission code (25), the union is
-**36 items**. The other **fourteen are created by nothing**: ids **1, 2, 7, 9,
-12, 17, 18, 29, 32, 41, 44, 47, 49, 50**. Their only constructors in a shipped
-game are the developer console's `mitem` command and reloading a save that
-already contains one — and since nothing else can put one in a save, that second
-route is closed too.
+**36 items**. The other **fourteen are created by no code path in the image**:
+ids **1, 2, 7, 9, 12, 17, 18, 29, 32, 41, 44, 47, 49, 50**.
 
-This settles `magic-items.md`'s third question and overshoots it. **Mask of the
-Brave (1) is dead in the shipped game** — the stronger claim it flagged as
-publishable if it held. But it is not uniquely dead; it is one of fourteen, and
-it is the only one of the fourteen that is *also* inert, which is why it looked
-singular from the code side.
+That statement is exhaustive over *code*, and the exhaustiveness is real:
+`Item_CreateById`'s four callers plus 25 direct constructor calls, and no
+indirect call through a stored function pointer — scanning the image for the
+address of `Item_CreateById` and of each of those fourteen constructors finds
+exactly one occurrence each, all inside `.eh_frame`
+(`0x084e3be8`–`0x08597400`), i.e. unwind FDEs and not a dispatch table.
 
-The two gaps line up. Of the thirteen items whose description is just their own
-name, **ten are also never placed** (1, 2, 7, 12, 17, 18, 29, 41, 49, 50); the
-only described-less items a player can actually obtain are 20 (`mitem.cfg`) and
-the two Ring Pieces. So the missing flavour text is not an isolated writing gap
-after the fact — the same ten items were never wired into the world either.
-`magic-items.md`'s "the code works, so it is a writing gap not cut content"
-stands as a statement about the *code*, and needs this qualification as a
-statement about the *game*: ten of those items work perfectly and no player will
-ever hold one.
+The two gaps line up neatly, and this part survives: of the thirteen items whose
+description is just their own name, **ten are among the fourteen** (1, 2, 7, 12,
+17, 18, 29, 41, 49, 50). The only described-less items any code path places are
+20 (`mitem.cfg`) and the two Ring Pieces.
+
+## The third channel — the shipped world is a savegame
+
+**Every `init.dat` in the data tree is a `theosg42` save file**: the campaign's
+(`data/campaign/init.dat`, 550 831 bytes) and all eight scenarios'
+(`data/scenario/scn*/init.dat`). The magic is at offset `0x40` and the first
+`0x40` bytes are exactly the uninitialised-stack header
+[save-format.md](save-format.md) documents — which had already recorded that the
+console's `save` command writes `init.dat`. The connection was there to be made
+and this doc's first version did not make it.
+
+So **the starting state of every map is loaded, not placed**, and objects in it
+come up through *stream constructors* rather than through any of the three
+channels above:
+
+- **`cHero`'s stream constructor is `0x080b22c0`.** It runs the base `cMan`
+  stream ctor, installs the hero vtable, and then reads **one byte straight into
+  `+0x27c`** — the hero id, never touching `cHero_SetHeroId`.
+- **Items likewise**: `0x0820dbb0` reads an id byte and calls `Item_CreateById`,
+  so a stream can materialise any of the fifty.
+
+And this is why neither showed up in an xref sweep. The per-man-type **caste
+properties** struct carries three function pointers, and the stream loader is
+one of them — `FUN_08254570` registers `_DAT_0866d828 = FUN_082543b0` for man
+type `0x21`. Construction goes through that table, so it is an indirect call
+with no rel32 anywhere. Exactly the shape of the factory-vs-constructor trap one
+level up: the same sweep that was exhaustive over direct calls was blind to a
+registered pointer ([re-methodology.md](../reference/re-methodology.md) §15).
+
+### What this does to the claims above
+
+Every "created by nothing" / "placed by nothing" statement in this doc must be
+read as **"assigned by no code path"**. The world-state files have not been
+parsed, and they are a live channel for both heroes and items:
+
+- **Mask of the Brave (1)** may be sitting in a province in `init.dat`. "Dead in
+  the shipped game" is *not* established; "no code creates it" is.
+- **Jarakhi (11)** is the concrete counter-example, from the game's own lore:
+  he is the **player character** of the campaign, so he is neither spawned nor
+  rewarded — he ships in the starting world state, which is precisely what a
+  code-only audit cannot see. Supporting evidence in the binary: his portrait is
+  preloaded by a caste registration (`0x08254def`, in the same block as heroes
+  1–8), which the game would not do for content that never appears. Not yet
+  verified byte-wise in `init.dat` — see `todo.md`.
+- The **ten undescribed-and-uncreated** items remain the interesting
+  correlation, but "no player will ever hold one" is withdrawn until `init.dat`
+  is read.
+
+`hero.cfg`'s load condition gains a likely meaning here too: it runs only when
+`*(int *)(g_GameSession + 0x4c) == 0` ([heroes.md](heroes.md)), which now reads
+as "a new game, rather than a loaded world" — untested, and stated as a
+reading.
 
 ## Open threads
 

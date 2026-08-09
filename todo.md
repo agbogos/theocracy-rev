@@ -33,7 +33,42 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Mission internals — what the 2026-08-09 pass deliberately left
+### 1. Parse `init.dat` — what actually ships in the starting world
+
+**The highest-value item here**, because three docs currently carry claims that
+only this can settle. Established 2026-08-09: **every `init.dat` in the tree is a
+`theosg42` savegame** — `data/campaign/init.dat` (550 831 bytes) and all eight
+`data/scenario/scn*/init.dat` — so the starting state of every map is *loaded*,
+not placed by code. Objects arrive through stream constructors:
+
+- `cHero`'s is **`0x080b22c0`** — base `cMan` stream ctor, hero vtable, then one
+  byte straight into `+0x27c`.
+- The base `cMan` one is `0x080aeb10`, itself chaining to `0x08094730`.
+- Items: `0x0820dbb0` reads an id byte and calls `Item_CreateById`, so a world
+  file can materialise **any of the fifty**.
+- Both are reached through the per-man-type **caste properties** struct, which
+  stores the loader at `caste+0x48` (`FUN_08254570` writes
+  `_DAT_0866d828 = FUN_082543b0` for man type `0x21`) — an indirect call with no
+  rel32, which is why they were missed.
+
+Walk the stream-ctor chain to get the `cMan` record layout, then answer:
+
+1. **Is Jarakhi (hero 11) in `data/campaign/init.dat`?** The user reports he is
+   the campaign's player character — neither spawned nor rewarded because he
+   ships with the map. Confirming it byte-wise closes the loop.
+2. **Is Tlechlal (19) baked in somewhere too?** Same audit; currently
+   unexplained.
+3. **Which of the 14 no-code-path items appear?** Especially **Mask of the Brave
+   (1)** — "dead in the shipped game" is withdrawn until this is run, in
+   [`magic-items.md`](docs/subsystems/magic-items.md) and
+   [`missions.md`](docs/subsystems/missions.md).
+
+Note `save-format.md` already recorded that the console's `save` command writes
+`init.dat`; the fact was in the repo and went unconnected. Also worth testing:
+`hero.cfg` loads only under `*(int *)(g_GameSession + 0x4c) == 0`, which now
+reads as "new game, not a loaded world".
+
+### 2. Mission internals — what the 2026-08-09 pass deliberately left
 
 [`docs/subsystems/missions.md`](docs/subsystems/missions.md) answered the three
 questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
@@ -55,24 +90,27 @@ questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
 - **Province virtual `+0xe0`** — the predicate choosing between the two placement
   paths in `MissionCfg_PlaceMen`. Named from its use, body unread.
 
-### 2. Is `+0x27c` the hero id, or a general subtype byte?
+### 3. Is `+0x27c` the hero id, or a general subtype byte?
 
 `cMan_Comm1`'s constructor (`0x08245920`) writes `26` to `+0x27c`, and
-`FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Nothing
-currently rests on the answer — every hero id is written by `cHero_SetHeroId`,
-verified as the sole writer — but [`heroes.md`](docs/subsystems/heroes.md)'s
+`FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Note the
+"sole writer" framing this task originally had was **wrong** — `cHero`'s stream
+constructor writes the byte too, via `lea` rather than a store, which is how the
+first scan missed it (task 1). Little rests on the answer, but [`heroes.md`](docs/subsystems/heroes.md)'s
 headline claim is flagged as class-scoped until this is read. Cheap: read
 `cMan_Comm1` and whoever calls `FUN_08246150`.
 
-### 3. Mission code — the wall that heroes and magic items both hit — DONE 2026-08-09
+### 4. Mission code — the wall that heroes and magic items both hit — DONE 2026-08-09
 
 Kept for one commit as a record of what the task asked versus what it found;
 delete on the next pass. All three questions answered in
 [`docs/subsystems/missions.md`](docs/subsystems/missions.md): the ring pieces
-combine in `cBld_Ring`, five of the eight heroes are mission rewards, and Mask
-of the Brave is dead in the shipped game — one of fourteen items nothing creates.
-The lead the task recommended starting from (xref `Item_CreateById`) was the one
-dead end; see [`re-methodology.md`](docs/reference/re-methodology.md) §15.
+combine in `cBld_Ring`, and five of the eight heroes are mission rewards.
+Question 3 came back as "Mask of the Brave is dead in the shipped game" and that
+answer is **withdrawn the same day** — it was scoped to code paths and the
+starting world ships as save data (task 1). The lead the task recommended
+starting from (xref `Item_CreateById`) was the one dead end; both that and the
+data-channel miss are [`re-methodology.md`](docs/reference/re-methodology.md) §15.
 
 <details>
 <summary>original task text</summary>
@@ -156,7 +194,7 @@ scripted placements — that call is yours to make once the shape is clear.
 
 *(It was a subsystem. `docs/subsystems/missions.md` exists.)*
 
-### 4. Smaller leftovers, worth doing only alongside something else
+### 5. Smaller leftovers, worth doing only alongside something else
 
 - The `+0x04` equip-restriction field on items: the checker is unread, so
   bitmask-of-carriers vs. category id is unsettled
