@@ -33,34 +33,41 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Do `hero.cfg` / `mitem.cfg` ever run at play time?
+### 1. Quantify what world generation omits
 
-Fallout from the `init.dat` work (now
-[`starting-world.md`](docs/subsystems/starting-world.md), done 2026-08-09). All
-three questions that task asked are answered; this is the one thing it opened.
+The campaign builder is recovered and runs (`THEOC_NEW_WORLD=1`, see
+[`starting-world.md`](docs/subsystems/starting-world.md)). Played 2026-08-09: it
+produces a **scaffold, not a campaign** — fewer AI provinces, a different unit
+mix, and **zero slaves**, so the opening move is demoting soldiers to feed the
+first province. Interesting as a hard-start campaign; not playable as-is.
 
-`HeroCfg_PlaceHeroes` (`0x08215200`) and `MitemCfg_PlaceItems` (`0x08214e30`)
-are gated on `*(int *)(g_GameSession + 0x4c) == 0`. `+0x4c` is the **scenario
-id read out of the world file**, and it is `0` for the campaign — so the gate is
-*true* on exactly the path where nine instrumented runs saw **no** item created
-outside the load stream. Either the call site is reached under some other
-condition, or later than boot → province (~40s) went.
+What is missing is a measurement. `THEOC_DUMP_WORLD`'s caste counter watches
+`CreateMan_fromStream` (`0x081becfc`), which is the **load** path only, so a
+generated world reports `men in file: 0` — an instrument gap, not an empty map.
 
-Read the caller. Cheap, and it decides how to word the `prov / items` column in
-[`heroes.md`](docs/subsystems/heroes.md): authoring input, or live placement.
+Add a watch on the **non-stream** man constructor and print the same caste
+histogram, then diff the two worlds. That diff is the spec for turning the
+scaffold into something playable, and it settles "meaningfully different" with
+numbers instead of impressions. The caste creator table is `PTR_DAT_084c9ee0`
+(42 entries, `+0xc` is the stream creator — find its sibling).
 
-Re-run the instrument if useful — no display needed:
+### 2. Do `hero.cfg` / `mitem.cfg` ever run at play time? — ANSWERED, keep the note
 
-```sh
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy THEOC_SKIP_MOVIES=1 \
-  THEOC_AUTO_PROVINCE=1 THEOC_DUMP_WORLD=1 THEOC_START_SEC=40 \
-  ./port/build/theoc 2>&1 >/dev/null | grep '^\[world\]'
-```
+Delete on the next pass; kept one commit as the record of a question that had a
+better answer than the one it assumed.
 
-Related, same doc: **items 30 and 40** are placed by `mitem.cfg` and appear in
-no world file.
+The gate `*(int *)(g_GameSession + 0x4c) == 0` is real but is **not** the
+load-vs-generate switch — it only picks campaign over scenario. Both placers sit
+inside the world **generator** (`0x081fb5b0`), which the shipped menu never
+reaches, so they never run at play time on any path. Confirmed by nine headless
+runs and by a UI session: zero items created outside the load stream. Their
+output reaches players baked into `init.dat`.
 
-### 2. Mission internals — what the 2026-08-09 pass deliberately left
+Same doc, also answered: **items 30 and 40** are placed by `mitem.cfg` and
+missing from the shipped world because a designer removed them — the generator
+places both.
+
+### 3. Mission internals — what the 2026-08-09 pass deliberately left
 
 [`docs/subsystems/missions.md`](docs/subsystems/missions.md) answered the three
 questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
@@ -87,7 +94,7 @@ questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
 - **Province virtual `+0xe0`** — the predicate choosing between the two placement
   paths in `MissionCfg_PlaceMen`. Named from its use, body unread.
 
-### 3. Is `+0x27c` the hero id, or a general subtype byte?
+### 4. Is `+0x27c` the hero id, or a general subtype byte?
 
 `cMan_Comm1`'s constructor (`0x08245920`) writes `26` to `+0x27c`, and
 `FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Note the
@@ -103,7 +110,7 @@ and 35 read an extra byte** — the three hero man types. So on the *load* path
 `+0x27c` is the hero id and nothing else writes it. That does not settle the
 runtime writers, which is what this task is about.
 
-### 4. Smaller leftovers, worth doing only alongside something else
+### 5. Smaller leftovers, worth doing only alongside something else
 
 - The `+0x04` equip-restriction field on items: the checker is unread, so
   bitmask-of-carriers vs. category id is unsettled

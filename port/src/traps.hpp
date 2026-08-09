@@ -66,11 +66,40 @@ public:
     // heroes and magic items does a given init.dat actually contain".
     // See docs/subsystems/starting-world.md.
     void install_world_dump(Machine& m);
+
+    // THEOC_NEW_WORLD — select the game's own "init mode" instead of "normal
+    // mode" at the two game launchers, so the world is generated rather than
+    // loaded from init.dat. Recovers the developers' campaign builder.
+    void install_world_gen(Machine& m);
+    // True once install_world_gen has armed; gates the two helpers below.
+    bool world_gen_ = false;
+
+    // hero.cfg and mitem.cfg are the only two config files in the tree that
+    // ship as plain text, and cTextFile accepts only `RSA4096`-wrapped files —
+    // so the campaign builder cannot read its own inputs. Returns a read-only
+    // fd serving an encrypted copy built in memory (anonymous temp file, never
+    // a named path), or -1 when the file needs no help. The shipped tree is
+    // left exactly as it is, which is the point: players edit the plain text.
+    int open_converted_config(const std::string& guest_path);
+
+    // The console's `save` writes <mapdir>/init.dat — straight over the shipped
+    // world. Redirects that one write; THEOC_WORLD_OUT names the target,
+    // default `init.generated.dat` beside the original. Returns `host`
+    // unchanged for everything else.
+    std::string redirect_world_out(const std::string& guest,
+                                   const std::string& host) const;
     // Prints the block for the last world loaded (nothing else flushes it).
     void flush_world_dump();
-    // The dump's accumulator. Held as void so its type can stay local to
-    // install_world_dump; the deleter still runs the right destructor.
-    std::shared_ptr<void> world_dump_;
+    // The dump's accumulator, behind a tiny interface so the concrete type can
+    // stay local to install_world_dump. Held by this AND by every watch lambda
+    // (which live inside the Machine), so it must be flushed explicitly rather
+    // than from a destructor — see flush_world_dump.
+    struct WorldDump {
+        virtual ~WorldDump() = default;
+        virtual void flush() = 0;
+        virtual void detach() = 0;   // stop touching guest memory
+    };
+    std::shared_ptr<WorldDump> world_dump_;
 
     // Game-space singleton pointers, resolved BY NAME in main.cpp. These are
     // R_386_COPY globals, so the executable's dynamic symbol table names them

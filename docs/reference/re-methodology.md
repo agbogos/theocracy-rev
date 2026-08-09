@@ -475,6 +475,30 @@ This is §11 (*if it runs, run it before you read it*) applied to a data format
 rather than to a bug: the running system is evidence, and it is usually the
 cheaper evidence.
 
+### …and a §12 relapse in the same session: adjacent strings are not a set
+
+Chasing why the recovered campaign builder died on `Fatal:Unknown textfile
+format! data/mitem.cfg`, a scan of libmvos turned up three strings sitting
+together next to that message:
+
+```
+0x9e274 'RSA4096'   0x9e27c 'theocracy sux'   0x9e28a 'mutant technology'
+```
+
+Reported, confidently, as "`cTextFile` accepts three formats". They are **one**
+magic and **two XOR keys**, periods 13 and 17 — which
+[phls-format.md](phls-format.md) has documented since the format was cracked, in
+this repo, unread. The census that "confirmed" the reading (4473 files with
+`RSA4096`, zero with either other string) is exactly what two keys would produce,
+and it was quoted as evidence *for* the wrong model.
+
+The conclusion happened to survive — plain text is not a format either way — but
+the reasoning did not, and this is §12 with a different surface: a *name* was
+invented for a string from its neighbours rather than from a reference to it.
+Two cheap guards, both skipped: **xref the string** (none of the three is
+referenced as a format tag), and **grep `docs/` before describing a format this
+project has already reverse-engineered.**
+
 ---
 
 ## Checklist

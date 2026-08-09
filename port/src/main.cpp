@@ -401,6 +401,10 @@ int main(int argc, char** argv) {
         // nothing. See docs/subsystems/starting-world.md.
         L.traps->install_world_dump(m);
 
+        // THEOC_NEW_WORLD — select the game's own "init mode" so the world is
+        // generated rather than loaded. Its campaign builder, recovered.
+        L.traps->install_world_gen(m);
+
         uint32_t argv_str = SCRATCH + 0x90000, argv_arr = SCRATCH + 0x90100;
         const char kArg0[] = "theocracy";
         m.write(argv_str, kArg0, sizeof kArg0);

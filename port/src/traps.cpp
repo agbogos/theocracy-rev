@@ -2759,6 +2759,17 @@ void TrapLayer::register_builtins() {
         // saves, the .pck archives and the cutscenes. On POSIX 'b' is ignored,
         // so this is unconditional rather than another #ifdef.
         if (mode.find('b') == std::string::npos) mode.push_back('b');
+        if (writing) host = redirect_world_out(path, host);
+        if (!writing) {
+            if (int cfd = open_converted_config(path); cfd >= 0) {
+                if (FILE* cfp = fdopen(cfd, "rb")) {
+                    uint32_t gp = bump_alloc(128);
+                    files_[gp] = HostFile{cfp, -1, false, false, false};
+                    return gp;
+                }
+                ::close(cfd);
+            }
+        }
         FILE* fp = std::fopen(host.c_str(), mode.c_str());
         if (!fp) {
             // Fallback: try path as-is relative to cwd.
@@ -2904,6 +2915,12 @@ void TrapLayer::register_builtins() {
         if (flags & 2) hflags = O_RDWR;         // O_RDWR=2
         // O_CREAT etc. ignored for bring-up unless needed.
         hflags |= O_BINARY;   // no-op on POSIX; prevents CRLF mangling on Windows
+        if (hflags & (O_WRONLY | O_RDWR)) host = redirect_world_out(path, host);
+        else if (int cfd = open_converted_config(path); cfd >= 0) {
+            int gfd0 = next_fd_++;
+            fds_[gfd0] = HostFile{nullptr, cfd, false, false, false};
+            return (uint32_t)gfd0;
+        }
         int hfd = ::open(host.c_str(), hflags);
         if (hfd < 0) hfd = ::open(path.c_str(), hflags);
         if (hfd < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
@@ -3535,27 +3552,63 @@ void TrapLayer::install_world_dump(Machine& m) {
     // man in a world file goes through here, so it is both the population count
     // and the control that says the watches are firing at all.
     constexpr uint32_t kCasteRead     = 0x081becfc;
+    // cHero::SetHeroId — the *other* way a hero gets its id. The stream ctor
+    // above covers worlds that are loaded; this covers worlds that are built
+    // (hero.cfg placement and mission rewards), which is the whole generated
+    // path. Watching only one of the two reports an empty world for the other.
+    constexpr uint32_t kSetHeroId     = 0x080b23d0;
+    // FUN_081f99b0(world) — realm init, entered on BOTH the load and generate
+    // paths with the cWorld in [esp+4]. Grabbing the pointer here is how the
+    // date gets read without resolving g_World by name: it is a game-space
+    // global that the executable does not export.
+    constexpr uint32_t kRealmInit     = 0x081f99b0;
+    constexpr uint32_t kWorldDateOff  = 0x83c;      // cDate, see calendar.md
 
-    // One accumulator, shared by the three watches; flushed when a new file is
-    // loaded and again at exit, so a run that loads two worlds reports two
+    // One accumulator, shared by the watches; flushed when a new file is loaded
+    // and again once Start returns, so a run that loads two worlds reports two
     // blocks instead of one merged pile.
-    struct Acc {
+    struct Acc : WorldDump {
         std::string file;
         std::map<int, int> heroes;                    // hero id -> count
         std::map<int, int> stream_items;              // item id -> count, from the world file
         std::map<int, int> other_items;               // item id -> count, every other channel
         std::map<uint32_t, int> other_sites;          // return address -> count
         std::map<int, int> castes;                    // man caste -> count
+        std::map<int, int> set_heroes;                // hero id -> count, via SetHeroId
+        uint32_t world = 0;                           // cWorld*, for the date
+        Machine* mach = nullptr;
         bool dirty = false;
 
-        // The last world loaded has no next LoadGame to flush it, so the
-        // destructor does — main.cpp drops the reference once Start returns.
-        ~Acc() { flush(); }
+        // NOT flushed from the destructor. The watch lambdas each hold a
+        // reference, and those live inside the Machine, so the last reference
+        // goes at Machine teardown — by which point the uc_engine is closed and
+        // reading guest memory for the date segfaults. main.cpp calls
+        // flush_world_dump() explicitly instead, while everything is still up.
+        void detach() override { mach = nullptr; world = 0; }
 
-        void flush() {
+        void flush() override {
             if (!dirty) return;
             std::fprintf(stderr, "[world] ==== %s ====\n",
                          file.empty() ? "(no LoadGame seen)" : file.c_str());
+            // The world date, which is the whole point when comparing a
+            // generated campaign against the shipped one. cDate holds a day
+            // count; the calendar is a fixed 20-day month and 365-day year
+            // (calendar.md), and both cDate_ToString and the console's `date`
+            // command are 1-based on month and day.
+            if (world && mach) {
+                try {
+                    // cDate keeps the date decomposed, not as a day count:
+                    // +0 year, +4 month index, +8 day index. Measured — the
+                    // shipped campaign reads 1419/6/3 here and the game shows
+                    // 1419/07/04, so both the month and the day are 0-based and
+                    // the UI adds one (which is also what the console's `date`
+                    // command subtracts back off). See calendar.md.
+                    uint32_t y = mach->r32(world + kWorldDateOff);
+                    uint32_t mo = mach->r32(world + kWorldDateOff + 4);
+                    uint32_t d = mach->r32(world + kWorldDateOff + 8);
+                    std::fprintf(stderr, "[world]   date: %04u/%02u/%02u\n", y, mo + 1, d + 1);
+                } catch (...) {}
+            }
             std::string s;
             char buf[32];
             int men = 0;
@@ -3569,16 +3622,22 @@ void TrapLayer::install_world_dump(Machine& m) {
                          men, s.c_str());
             s.clear();
             for (auto& [id, n] : heroes) {
-                std::snprintf(buf, sizeof buf, "%d%s%s", id,
-                              n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                // "%d(x%d)" rather than "%dx%d": id 0 with 10 placements
+                // printed as "0x10", which reads as hex.
+                std::snprintf(buf, sizeof buf, "%d(x%d)", id, n);
                 s += buf; s += ' ';
             }
             std::fprintf(stderr, "[world]   heroes in file (%zu distinct): %s\n",
                          heroes.size(), s.empty() ? "(none)" : s.c_str());
             s.clear();
+            for (auto& [id, n] : set_heroes) { std::snprintf(buf, sizeof buf, "%d(x%d) ", id, n); s += buf; }
+            std::fprintf(stderr, "[world]   heroes via SetHeroId (%zu distinct): %s\n",
+                         set_heroes.size(), s.empty() ? "(none)" : s.c_str());
+            s.clear();
             for (auto& [id, n] : stream_items) {
-                std::snprintf(buf, sizeof buf, "%d%s%s", id,
-                              n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                // "%d(x%d)" rather than "%dx%d": id 0 with 10 placements
+                // printed as "0x10", which reads as hex.
+                std::snprintf(buf, sizeof buf, "%d(x%d)", id, n);
                 s += buf; s += ' ';
             }
             std::fprintf(stderr, "[world]   items in file (%zu distinct): %s\n",
@@ -3586,8 +3645,7 @@ void TrapLayer::install_world_dump(Machine& m) {
             if (!other_items.empty()) {
                 s.clear();
                 for (auto& [id, n] : other_items) {
-                    std::snprintf(buf, sizeof buf, "%d%s%s", id,
-                                  n > 1 ? "x" : "", n > 1 ? std::to_string(n).c_str() : "");
+                    std::snprintf(buf, sizeof buf, "%d(x%d)", id, n);
                     s += buf; s += ' ';
                 }
                 std::fprintf(stderr, "[world]   items from other channels (%zu distinct): %s\n",
@@ -3595,13 +3653,13 @@ void TrapLayer::install_world_dump(Machine& m) {
                 for (auto& [site, n] : other_sites)
                     std::fprintf(stderr, "[world]     %d from caller %#x\n", n, site);
             }
-            heroes.clear(); stream_items.clear();
+            heroes.clear(); stream_items.clear(); set_heroes.clear();
             other_items.clear(); other_sites.clear(); castes.clear();
             dirty = false;
         }
     };
     auto acc = std::make_shared<Acc>();
-    world_dump_ = acc;   // keeps it alive, and lets the shutdown path flush it
+    world_dump_ = acc;   // the shutdown path calls flush() on this
 
     m.add_watch(kLoadGame, [acc](Machine& mm, uint32_t) {
         uint32_t p = mm.r32(mm.esp() + 4);
@@ -3609,6 +3667,18 @@ void TrapLayer::install_world_dump(Machine& m) {
         acc->flush();
         acc->file = path;
         std::fprintf(stderr, "[world] LoadGame(\"%s\")\n", path.c_str());
+    });
+
+    m.add_watch(kRealmInit, [acc](Machine& mm, uint32_t) {
+        acc->world = mm.r32(mm.esp() + 4);
+        acc->mach  = &mm;
+        acc->dirty = true;   // a world exists even if nothing else fires
+    });
+
+    m.add_watch(kSetHeroId, [acc](Machine& mm, uint32_t) {
+        uint32_t sp = mm.esp();
+        acc->set_heroes[(int)mm.r32(sp + 8)]++;   // (this, id)
+        acc->dirty = true;
     });
 
     m.add_watch(kCasteRead, [acc](Machine& mm, uint32_t) {
@@ -3641,9 +3711,161 @@ void TrapLayer::install_world_dump(Machine& m) {
                  kLoadGame, kHeroIdRead, kItemCreate);
 }
 
-// Drops the accumulator, whose destructor prints the last world's block. Called
-// once Start returns, while stderr is still up.
-void TrapLayer::flush_world_dump() { world_dump_.reset(); }
+// Prints the last world's block. Called once Start returns — while stderr and
+// the uc_engine are both still up, which is why this is not a destructor.
+void TrapLayer::flush_world_dump() {
+    if (!world_dump_) return;
+    world_dump_->flush();
+    world_dump_->detach();   // no more guest reads after this point
+}
+
+// THEOC_NEW_WORLD — build a world instead of loading one.
+//
+// The game ships its own campaign builder. Both launchers take a mode argument
+// with three values, and the developers' names for them are in their own printf
+// strings:
+//
+//   SetupGame(mode)          0x081457e0   the campaign ("Prophecy")
+//   FUN_08145550(mode, id)   0x08145550   the scenarios ("Chronicles")
+//
+//     mode 0  "init mode"    GameSession_Construct(new(0x58), id, paused=1)
+//     mode 1  "edit mode"    LoadGame("<map>/init.dat", paused=1)
+//     mode 2  "normal mode"  LoadGame("<map>/init.dat", paused=0)   <- what the menu sends
+//
+// Mode 0 is the only one that does not touch `init.dat`. It runs the non-stream
+// cWorld constructor (0x081fc4b0), which leaves world+0x5b4 at zero, and that
+// byte is the entire load-vs-generate fork: FUN_081f99b0 branches on it to
+// FUN_081fb5b0, which builds the realm from `/realm/realm.raw`, seeds the AI
+// tribes, places `data/mitem.cfg` and `data/hero.cfg`, and sets the campaign
+// date to SPAIN_ENTER_YEAR-independent **1323/07/04** — 196 years before the
+// Spanish, against the 100 the shipped save gives.
+//
+// Nothing here is dead code that was left behind. It is the pipeline the world
+// files were made with, gated by which constant the menu passes: generate →
+// edit → the developer console's `save`, which writes `<map>/init.dat`. Mode 0
+// even asks for paused=1, i.e. the game's own edit mode, which is precisely
+// what makes `save` legal (dev-console.md).
+//
+// So the knob does not add a code path, it selects one: rewrite the argument
+// from 2 to 0 on the way in. Pair it with THEOC_CONSOLE=1 to get Alt+V and
+// `save`. See docs/subsystems/starting-world.md.
+void TrapLayer::install_world_gen(Machine& m) {
+    const char* e = std::getenv("THEOC_NEW_WORLD");
+    if (!e || !*e || (e[0] == '0' && !e[1])) return;
+
+    constexpr uint32_t kSetupGame     = 0x081457e0;  // campaign;  mode at [esp+4]
+    constexpr uint32_t kScenarioSetup = 0x08145550;  // scenarios; mode at [esp+4]
+
+    auto force_init_mode = [](const char* which) {
+        return [which](Machine& mm, uint32_t) {
+            uint32_t sp = mm.esp();
+            uint32_t mode = mm.r32(sp + 4);
+            // Only "normal mode" is rewritten. Mode 1 is the game asking for a
+            // loaded-and-paused world on purpose, and mode 0 is already what we
+            // want — rewriting either would be us inventing behaviour.
+            if (mode != 2) return;
+            mm.w32(sp + 4, 0);
+            std::fprintf(stderr, "  [newworld] %s: mode 2 (load) -> 0 (generate)\n", which);
+        };
+    };
+    m.add_watch(kSetupGame,     force_init_mode("SetupGame/campaign"));
+    m.add_watch(kScenarioSetup, force_init_mode("scenario setup"));
+    world_gen_ = true;
+
+    std::fprintf(stderr,
+                 "  [newworld] THEOC_NEW_WORLD on: the world will be BUILT from "
+                 "realm.raw + hero.cfg/mitem.cfg, not loaded from init.dat.\n"
+                 "  [newworld] It starts paused, in the game's own edit mode. Add "
+                 "THEOC_CONSOLE=1, then Alt+V and `save` to write <map>/init.dat.\n");
+}
+
+#if defined(_WIN32)
+#  define theoc_dup    _dup
+#  define theoc_fileno _fileno
+#else
+#  define theoc_dup    dup
+#  define theoc_fileno fileno
+#endif
+
+// The `RSA4096` cipher, engine-side. The header is a joke and so are the keys:
+// the two strings sitting next to it in libmvos are not other formats (an easy
+// misread — they look like magics), they are the two XOR keys, periods 13 and
+// 17. Documented in docs/reference/phls-format.md; this is the same transform
+// as tools/theocracy_crypt.py, which is what it was checked against.
+static std::string rsa4096_encrypt(const std::string& plain) {
+    static const char k1[] = "theocracy sux";       // period 13
+    static const char k2[] = "mutant technology";   // period 17
+    std::string out = "RSA4096";
+    out.reserve(7 + plain.size());
+    for (size_t i = 0; i < plain.size(); ++i)
+        out.push_back((char)((unsigned char)plain[i]
+                             ^ (unsigned char)k2[i % 17]
+                             ^ (unsigned char)k1[i % 13]));
+    return out;
+}
+
+int TrapLayer::open_converted_config(const std::string& guest) {
+    if (!world_gen_) return -1;
+    auto ends = [&](const char* s) {
+        size_t n = std::strlen(s);
+        return guest.size() >= n && guest.compare(guest.size() - n, n, s) == 0;
+    };
+    if (!ends("hero.cfg") && !ends("mitem.cfg")) return -1;
+
+    std::string host = resolve_path(guest);
+    FILE* in = std::fopen(host.c_str(), "rb");
+    if (!in) return -1;
+    std::string blob;
+    char buf[8192];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, in)) > 0) blob.append(buf, n);
+    std::fclose(in);
+    // Already in the engine's format — leave it alone. Keeps the knob a no-op
+    // for anyone who converted their files by hand.
+    if (blob.size() >= 7 && blob.compare(0, 7, "RSA4096") == 0) return -1;
+
+    std::string enc = rsa4096_encrypt(blob);
+    FILE* tmp = std::tmpfile();          // anonymous: no name, gone on close
+    if (!tmp) return -1;
+    std::fwrite(enc.data(), 1, enc.size(), tmp);
+    std::fflush(tmp);
+    int fd = theoc_dup(theoc_fileno(tmp));
+    std::fclose(tmp);
+    if (fd < 0) return -1;
+    ::lseek(fd, 0, SEEK_SET);
+    static std::set<std::string> said;
+    if (said.insert(guest).second)
+        std::fprintf(stderr, "  [newworld] '%s' is plain text; serving an RSA4096 copy "
+                             "(%zu bytes). Your file is untouched.\n",
+                     guest.c_str(), enc.size());
+    return fd;
+}
+
+std::string TrapLayer::redirect_world_out(const std::string& guest,
+                                          const std::string& host) const {
+    size_t n = std::strlen("init.dat");
+    if (guest.size() < n || guest.compare(guest.size() - n, n, "init.dat") != 0)
+        return host;
+    // Only reachable from the console's `save`, which needs edit mode, which
+    // needs one of our knobs — so nothing stock is affected. Redirect anyway
+    // rather than ask: silently destroying the shipped campaign is the one
+    // outcome worth engineering against, and it is not undoable.
+    std::string out;
+    if (const char* e = std::getenv("THEOC_WORLD_OUT")) {
+        if (!*e) return host;
+        out = e;
+    } else {
+        out = host.substr(0, host.size() - n) + "init.generated.dat";
+    }
+    if (out == host) return host;        // explicit opt-in to overwriting
+    static std::set<std::string> said;
+    if (said.insert(out).second)
+        std::fprintf(stderr, "  [newworld] save redirected: '%s' -> '%s' "
+                             "(THEOC_WORLD_OUT to change; set it to the original "
+                             "path to overwrite for real)\n",
+                     host.c_str(), out.c_str());
+    return out;
+}
 
 void TrapLayer::install_gd_refresh(Machine& m, uint32_t mvos_base) {
     if (std::getenv("THEOC_LEGACY_CURSOR")) {

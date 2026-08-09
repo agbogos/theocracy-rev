@@ -225,18 +225,163 @@ run entered through the campaign menu, so this says nothing about what a
 scenario started from its own menu entry does. And each run observed only boot →
 province, about 40 seconds, so placement later in a session is not excluded.
 
+## The campaign builder, recovered
+
+The shipped game contains the tool its own worlds were made with. Both launchers
+take a mode argument, and the developers' names for the three values are in
+their own `printf` strings:
+
+| | `SetupGame(mode)` — Prophecy, `0x081457e0` | `FUN_08145550(mode, id)` — Chronicles, `0x08145550` |
+|---|---|---|
+| **0** "init mode" | `GameSession_Construct(new(0x58), 0, paused=1)` | `GameSession_Construct(new(0x58), id, paused=1)` |
+| **1** "edit mode" | `LoadGame("<map>/init.dat", paused=1)` | same |
+| **2** "normal mode" | `LoadGame("<map>/init.dat", paused=0)` | same |
+
+The menu sends **2**. Mode 0 is the only one that never touches `init.dat`: it
+runs the **non-stream** `cWorld` constructor (`0x081fc4b0`), which leaves
+`world+0x5b4` at zero — and that byte is the whole load-vs-generate fork.
+`FUN_081f99b0` branches on it:
+
+```
+FUN_081f99b0(world)              0x081f99b0   realm init, both paths
+  world+0x5b4 == 0  →  FUN_081fb5b0   BUILD:   realm from /realm/realm.raw,
+                                               seed the AI tribes, place
+                                               mitem.cfg + hero.cfg, date := 1323/07/04
+  world+0x5b4 != 0  →  FUN_081fb170   RESTORE: the world came from a file
+```
+
+`cWorld_ctor_fromStream` sets `+0x5b4 = 1`, so in the shipped game the generate
+branch is unreachable. Mode 0 also asks for **paused = 1**, i.e. the game's own
+edit mode — which is exactly what makes the console's `save` command legal
+([dev-console.md](dev-console.md)). `save` writes `<mapdir>/init.dat`.
+
+So the pipeline is **generate → edit → `save`**, gated by one constant. This is
+not code left behind by accident: a small team used the game as its own campaign
+builder rather than writing a separate editor, and closed the door on the way
+out. The `1323` in the generator is a default the authoring overrode, not a
+forgotten value.
+
+### Its inputs had already stopped working
+
+Generation dies immediately on `Fatal:Unknown textfile format! data/mitem.cfg`.
+`cTextFile` accepts exactly **one** format — a file prefixed `RSA4096` — and
+`data/mitem.cfg` and `data/hero.cfg` are two of only **four** files in the whole
+tree with no magic at all (the others are `mvos.cfg`, which is ours, and
+`servers.txt`). 4473 shipped files are `RSA4096`.
+
+Beware the misread this doc originally made: `theocracy sux` and
+`mutant technology` sit next to the magic in libmvos and look like two more
+formats. They are the two **XOR keys**, periods 13 and 17
+([phls-format.md](../reference/phls-format.md)). Three adjacent strings, one
+format.
+
+So the campaign builder cannot read its own inputs in the shipped build. That is
+further evidence the path was closed deliberately — once nothing read those two
+files at runtime, nothing forced them to keep up with the format.
+
+### Driving it
+
+Three knobs, all diagnostics ([diagnostics.md](../porting/diagnostics.md)):
+
+```sh
+# build a fresh campaign; lands paused in edit mode
+THEOC_NEW_WORLD=1 THEOC_CONSOLE=1 ./port/build/theoc      # Prophecy → Alt+V → save
+
+# play the result — an ordinary load, no special mode
+THEOC_WORLD_FILE=$PWD/data/game/data/campaign/init.generated.dat ./port/build/theoc
+```
+
+`THEOC_NEW_WORLD` serves `RSA4096` copies of the two config files from an
+anonymous temp file, so the tree stays as shipped and the plain text stays
+editable. `save` is redirected to `init.generated.dat` beside the original —
+`THEOC_WORLD_OUT` names another target, and pointing it at the original path is
+the explicit opt-in to overwriting. Nothing is patched; the guest runs unchanged.
+
+### Shipped versus generated
+
+| | shipped `init.dat` | generated |
+|---|---|---|
+| date | 1419/07/04 | **1323/07/04** |
+| runway to the Spanish | 99 y 8 m | **195 y 8 m** |
+| heroes | 12 — `hero.cfg`'s 11 **plus Jarakhi** | 11 — `hero.cfg` only |
+| magic items | 20 distinct; the four editor-placed ones (9, 32, 44, 47); **no 30, 40** | 19 distinct; **30 and 40 present**; none of the four |
+| guest heap | 28.6 MB | 23.6 MB |
+
+Both dates were read out of the running game rather than computed. Note the
+generated world has **no player character** — Jarakhi is a hand-edit.
+
+**And then it was played** (2026-08-09), which is the only thing that could
+settle what "generated" actually means:
+
+- **Every AI tribe starts with fewer provinces.**
+- **The starting province has different units and a different distribution.**
+- **The player starts with zero slaves**, so the opening move has to be demoting
+  soldiers just to feed the province. It is **not playable as shipped content**.
+
+That is the finding. Generation produces a *scaffold* — a legal world, not a
+designed one — and the designer's job was everything between it and
+`data/campaign/init.dat`: the population, the balance of provinces, the player
+character, and four items placed by hand. It also makes the "empty start"
+a genuinely interesting basis for a new campaign, which is what the recovered
+builder is now for.
+
+## The Spanish, and what the start date costs
+
+`SPAIN_ENTER_YEAR=1519` in `selap.txt` — historically exact for Cortés — and the
+campaign mission handler turns it into an **absolute** date, not an offset from
+world start:
+
+```c
+cDate_ctor_YMD(&d, SPAIN_ENTER_YEAR, 3, 7);        // 1519/03/07
+FUN_081a1f30(&off, SPAIN_TIME_OFFSET_DAY / 2);     // second wave, +45 days
+```
+
+Then reinforcements every `SPAIN_TIME_OFFSET_DAY` = 90 days,
+`SPAIN_UNITS_BY_PROV` = 3 waves per province, each printing the developers' own
+`Incrasing spain units on realm [%d]`. `SPAIN_RND_YEAR=5` exists and is read at
+four sites this pass did not follow — a player reports the arrival is slightly
+randomised, which those sites presumably explain.
+
+Because the arrival is absolute, **the start date is the campaign length**:
+1419 leaves 99 years 8 months, 1323 leaves 195 years 8 months. The shipped
+campaign is very close to exactly half the one the generator builds.
+
+Whether that was a rush or a decision is not settled by anything here, and both
+readings survive: 1419 → a historically exact 1519 is a clean century, while
+1323 sits on the founding of Tenochtitlan. What *is* established is that the
+change was made in the data, late, and the code still carries the longer default.
+
+**The mission deadlines are relative and were not retuned.** They are
+`current date + N`, so halving the campaign did not tighten any individual
+mission — it removed the slack around all of them:
+
+```
+MISSION_001/002_YEARLEFT=5      MISSION_003_MONTHLEFT=2     MISSION_007_YEARLEFT=1
+MISSION_004/006/010_YEARLEFT=10
+```
+
+plus two deadlines hardcoded rather than configured — `cDate_ctor_YMD(&d, 0, 0, 15)`,
+**fifteen days**, gated on holding 6+ and 5+ provinces.
+
+The console's `date <year> <month> <day>` command sets the world date directly,
+so the shipped world can be played at its original length without the generator
+at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
+
 ## Open threads
 
-- **`hero.cfg` / `mitem.cfg` at play time.** When, if ever, do
-  `HeroCfg_PlaceHeroes` (`0x08215200`) and `MitemCfg_PlaceItems` (`0x08214e30`)
-  actually run? The gate is `*(int *)(g_GameSession + 0x4c) == 0`, and `+0x4c` is
-  the scenario id read from the world file, which is `0` for the campaign — so
-  the condition is *true* for the very path where nothing was observed to fire.
-  Either the call site is reached under some other condition, or it is reached
-  later than these runs went. Reading the caller settles it.
-- **Items 30 and 40** (Jaguar Killer, Falcon Blade) are placed by `mitem.cfg` —
-  provinces 16 and 41 — and are in no world file. Under the "generated, then
-  edited" reading they were deliberately removed, but that is inference.
+- **What exactly generation omits.** Play says fewer AI provinces, a different
+  unit mix, and **no slaves at all**. Quantifying it needs a watch on the
+  *non-stream* man constructor: `THEOC_DUMP_WORLD`'s caste counter sits on
+  `CreateMan_fromStream` and therefore reports zero men for a generated world —
+  an instrument gap, not an empty map. A caste-by-caste diff of the two worlds
+  is the spec for turning the scaffold into a playable campaign.
+- **`SPAIN_RND_YEAR`.** Read at four sites this pass did not follow, and
+  `SPAIN_ENTER_YEAR` has a second reader at `0x08217de8`. The campaign path sets
+  the timer to exactly 1519/03/07 with no jitter, which contradicts a player's
+  recollection that the arrival varies. One of those other sites explains it.
+- **The four editor-placed items** (9, 32, 44, 47) and **Jarakhi** are the
+  hand-edits that separate the shipped campaign from the generated one. Nothing
+  records *why* those four items; they may simply be where a designer stood.
 - **The rest of the record layout.** This doc pins the *chain*, not the bytes.
   The 58 building classes, the per-caste `cMan` extras and the mission/timer
   loaders behind `cMissionHandler_Load` are mapped only as far as "these are the
