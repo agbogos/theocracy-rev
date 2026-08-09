@@ -369,12 +369,26 @@ at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
 
 ## Open threads
 
-- **What exactly generation omits.** Play says fewer AI provinces, a different
-  unit mix, and **no slaves at all**. Quantifying it needs a watch on the
-  *non-stream* man constructor: `THEOC_DUMP_WORLD`'s caste counter sits on
-  `CreateMan_fromStream` and therefore reports zero men for a generated world —
-  an instrument gap, not an empty map. A caste-by-caste diff of the two worlds
-  is the spec for turning the scaffold into a playable campaign.
+- **Whether a generated world is playable is deliberately not a question here.**
+  Closed 2026-08-09 by decision, not by evidence: the builder's job was always to
+  hand a designer something to work on, so "not survivable as-is" is the expected
+  output rather than a defect to chase. What the builder is *for* now is new
+  campaigns, and the interesting version of the question is what a 195-year
+  campaign should open with — a design question, not an RE one.
+
+  One caveat to keep, because it will otherwise be misread: `THEOC_DUMP_WORLD`'s
+  caste counter sits on `CreateMan_fromStream`, which is the **load** path, so a
+  generated world reports `men in file: 0`. That is the instrument, not the map.
+
+- **Does the AI attack independent provinces?** The sharpest difference play
+  found: in the shipped campaign the AI tribes already hold everything they will
+  ever hold and the grey provinces are left alone, while a generated world leaves
+  roughly 60% of the map unclaimed. If the AI never takes independents, a
+  generated campaign has opponents that cannot grow, which changes the game more
+  than the missing slaves do. **Testable in-game without any RE**: the console's
+  `aiprov` command prints, for the province under the pointer, each tribe's
+  capital distance, optimal force and actual force ([dev-console.md](dev-console.md)).
+  Optimal force of zero on a grey province across all seven tribes is the answer.
 - **`SPAIN_RND_YEAR`.** Read at four sites this pass did not follow, and
   `SPAIN_ENTER_YEAR` has a second reader at `0x08217de8`. The campaign path sets
   the timer to exactly 1519/03/07 with no jitter, which contradicts a player's

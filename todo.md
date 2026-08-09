@@ -33,41 +33,27 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Quantify what world generation omits
+### 1. Does the AI attack independent provinces?
 
-The campaign builder is recovered and runs (`THEOC_NEW_WORLD=1`, see
-[`starting-world.md`](docs/subsystems/starting-world.md)). Played 2026-08-09: it
-produces a **scaffold, not a campaign** — fewer AI provinces, a different unit
-mix, and **zero slaves**, so the opening move is demoting soldiers to feed the
-first province. Interesting as a hard-start campaign; not playable as-is.
+Not campaign-gen archaeology — a live gameplay question that the generated world
+raises and the shipped one hides. Shipped: every AI tribe already holds all it
+will ever hold, greys untouched. Generated: ~60% of the map is unclaimed, so an
+AI that ignores independents has opponents that can never grow.
 
-What is missing is a measurement. `THEOC_DUMP_WORLD`'s caste counter watches
-`CreateMan_fromStream` (`0x081becfc`), which is the **load** path only, so a
-generated world reports `men in file: 0` — an instrument gap, not an empty map.
+**Try it in-game first, there may be no RE to do.** The console's `aiprov`
+prints, for the province under the pointer, each tribe's capital distance,
+optimal force and actual force. All-zero optimal force on a grey province
+answers it:
 
-Add a watch on the **non-stream** man constructor and print the same caste
-histogram, then diff the two worlds. That diff is the spec for turning the
-scaffold into something playable, and it settles "meaningfully different" with
-numbers instead of impressions. The caste creator table is `PTR_DAT_084c9ee0`
-(42 entries, `+0xc` is the stream creator — find its sibling).
+```sh
+THEOC_NEW_WORLD=1 THEOC_CONSOLE=1 ./port/build/theoc   # Alt+V, hover a grey province, `aiprov`
+```
 
-### 2. Do `hero.cfg` / `mitem.cfg` ever run at play time? — ANSWERED, keep the note
+If the AI *does* value them and still never moves, the target selection is the
+next read: `FUN_0815b130(tribe, buf, province)` is the per-tribe valuation
+`aiprov` prints, and whatever calls it is the AI's province chooser.
 
-Delete on the next pass; kept one commit as the record of a question that had a
-better answer than the one it assumed.
-
-The gate `*(int *)(g_GameSession + 0x4c) == 0` is real but is **not** the
-load-vs-generate switch — it only picks campaign over scenario. Both placers sit
-inside the world **generator** (`0x081fb5b0`), which the shipped menu never
-reaches, so they never run at play time on any path. Confirmed by nine headless
-runs and by a UI session: zero items created outside the load stream. Their
-output reaches players baked into `init.dat`.
-
-Same doc, also answered: **items 30 and 40** are placed by `mitem.cfg` and
-missing from the shipped world because a designer removed them — the generator
-places both.
-
-### 3. Mission internals — what the 2026-08-09 pass deliberately left
+### 2. Mission internals — what the 2026-08-09 pass deliberately left
 
 [`docs/subsystems/missions.md`](docs/subsystems/missions.md) answered the three
 questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
@@ -94,7 +80,7 @@ questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
 - **Province virtual `+0xe0`** — the predicate choosing between the two placement
   paths in `MissionCfg_PlaceMen`. Named from its use, body unread.
 
-### 4. Is `+0x27c` the hero id, or a general subtype byte?
+### 3. Is `+0x27c` the hero id, or a general subtype byte?
 
 `cMan_Comm1`'s constructor (`0x08245920`) writes `26` to `+0x27c`, and
 `FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Note the
@@ -110,7 +96,7 @@ and 35 read an extra byte** — the three hero man types. So on the *load* path
 `+0x27c` is the hero id and nothing else writes it. That does not settle the
 runtime writers, which is what this task is about.
 
-### 5. Smaller leftovers, worth doing only alongside something else
+### 4. Smaller leftovers, worth doing only alongside something else
 
 - The `+0x04` equip-restriction field on items: the checker is unread, so
   bitmask-of-carriers vs. category id is unsettled
