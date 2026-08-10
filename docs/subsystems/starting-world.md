@@ -380,19 +380,34 @@ at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
   caste counter sits on `CreateMan_fromStream`, which is the **load** path, so a
   generated world reports `men in file: 0`. That is the instrument, not the map.
 
-- **Does the AI attack independent provinces?** The sharpest difference play
-  found: in the shipped campaign the AI tribes already hold everything they will
-  ever hold and the grey provinces are left alone, while a generated world leaves
-  roughly 60% of the map unclaimed. If the AI never takes independents, a
-  generated campaign has opponents that cannot grow, which changes the game more
-  than the missing slaves do. **Testable in-game without any RE**: the console's
-  `aiprov` command prints, for the province under the pointer, each tribe's
-  capital distance, optimal force and actual force ([dev-console.md](dev-console.md)).
-  Optimal force of zero on a grey province across all seven tribes is the answer.
-- **`SPAIN_RND_YEAR`.** Read at four sites this pass did not follow, and
-  `SPAIN_ENTER_YEAR` has a second reader at `0x08217de8`. The campaign path sets
-  the timer to exactly 1519/03/07 with no jitter, which contradicts a player's
-  recollection that the arrival varies. One of those other sites explains it.
+- ~~**Does the AI attack independent provinces?**~~ **Answered 2026-08-10 by
+  play: it does.** The worry was that the shipped campaign hides the question —
+  there the AI tribes already hold everything they will ever hold and the grey
+  provinces are simply left alone, whereas a generated world leaves roughly 60%
+  of the map unclaimed, so an AI that ignored independents would have opponents
+  that could never grow. It was going to be the largest gap between a generated
+  campaign and a designed one, larger than the missing slaves. It is not a gap:
+  a generated world was played and the AI takes independent provinces. The
+  standing "the AI only fights other tribes" assumption was wrong, and the
+  province chooser (`FUN_0815b130`'s caller) needs no reading on this account.
+
+  Worth keeping for whoever asks the next version of this question: the console's
+  `aiprov` prints, for the province under the pointer, each tribe's capital
+  distance, optimal force and actual force ([dev-console.md](dev-console.md)),
+  which is how a *quantitative* answer — do they value greys as highly as an
+  enemy's province? — would be got without any RE.
+- ~~**`SPAIN_RND_YEAR`.**~~ **Closed 2026-08-10** — the player's recollection was
+  right and the code has two mechanisms, neither of them jitter on the default
+  date. First, the arrival is **two staggered waves**: `Spain0` at
+  `SPAIN_ENTER_YEAR/03/07`, `Spain1` at that plus `SPAIN_TIME_OFFSET_DAY / 2`,
+  each re-arming itself every `SPAIN_TIME_OFFSET_DAY` until a counter seeded from
+  `SPAIN_UNITS_BY_PROV` runs out. Second, `SpainTimer_MaybeReroll` (`0x081fa6a0`,
+  the other reader, called from `SimulationUpdate`) **re-rolls the whole arrival
+  to a random day within `SPAIN_RND_YEAR` years once the player is down to
+  `SPAIN_PROV_LIMIT` provinces they do not own** — i.e. the Spanish come early
+  when you are close to winning. `0x08217de8` is the guard that makes it fire at
+  most once: it tests whether the timer is still sitting on its default date.
+  Full read in [missions.md](missions.md).
 - **The four editor-placed items** (9, 32, 44, 47) and **Jarakhi** are the
   hand-edits that separate the shipped campaign from the generated one. Nothing
   records *why* those four items; they may simply be where a designer stood.

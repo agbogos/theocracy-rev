@@ -33,52 +33,38 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### 1. Does the AI attack independent provinces?
+### ~~1. Does the AI attack independent provinces?~~ — done 2026-08-10
 
-Not campaign-gen archaeology — a live gameplay question that the generated world
-raises and the shipped one hides. Shipped: every AI tribe already holds all it
-will ever hold, greys untouched. Generated: ~60% of the map is unclaimed, so an
-AI that ignores independents has opponents that can never grow.
+Answered by play, no RE needed: **it does**. The assumption that it wouldn't
+does not hold, so a generated world's ~60% grey map is not the dead end it
+looked like. Written up in
+[`starting-world.md`](docs/subsystems/starting-world.md), "Open threads".
 
-**Try it in-game first, there may be no RE to do.** The console's `aiprov`
-prints, for the province under the pointer, each tribe's capital distance,
-optimal force and actual force. All-zero optimal force on a grey province
-answers it:
+### ~~2. Mission internals~~ — done 2026-08-10
 
-```sh
-THEOC_NEW_WORLD=1 THEOC_CONSOLE=1 ./port/build/theoc   # Alt+V, hover a grey province, `aiprov`
-```
+All four bullets answered, in
+[`docs/subsystems/missions.md`](docs/subsystems/missions.md): `iMissionHandler`
+and its daily `Update`, the mission↔province switch, the four timers and the
+Spanish invasion, the four unread missions, `Mission_FindManByFlag`, and province
+virtual `+0xe0`. It also corrected the "units manager" at `g_World+0x1f394` in
+three docs. What it left is below.
 
-If the AI *does* value them and still never moves, the target selection is the
-next read: `FUN_0815b130(tribe, buf, province)` is the per-tribe valuation
-`aiprov` prints, and whatever calls it is the AI's province chooser.
+### 2. Mission internals — the residue
 
-### 2. Mission internals — what the 2026-08-09 pass deliberately left
+Ghidra: `theocracy.real`. All small; none blocks anything.
 
-[`docs/subsystems/missions.md`](docs/subsystems/missions.md) answered the three
-questions the previous task asked and stopped there. Ghidra: `theocracy.real`.
-
-- **What starts a mission.** The doc reads the lifecycle from `Start` onward and
-  never establishes who constructs a `cMission_*`, how one is bound to a province,
-  or how the campaign drives them. `cMissionTimer` / `cMissionTimer_Spain0/1` /
-  `cMissionTimer_Dragon0/1` and `"Initializing timer to (%s) for mission (%d)"`
-  (`0x08212f83`) are the entry points. **New lead (2026-08-09):**
-  `cMissionHandler_Load` (`0x0820fcd0`) reads a day count and then **four timers
-  and twelve missions straight out of the world file**, each through its own
-  vtable slot `+0xc` — so mission state is *serialised with the world*, which is
-  a different answer from "constructed by the campaign". See
-  [`starting-world.md`](docs/subsystems/starting-world.md).
-- **The four unread named missions**: `cMission_HeavyArmory`,
-  `cMission_MountainVillage`, `cMission_Josda_Pre`, `cMission_WallChecker`. Their
-  vtables and slots are in the doc; only the bodies are missing. They were skipped
-  because none places a hero or an item.
-- **The eight campaign missions** (`cMission_S*_*`). Established: they share the
-  base vtable and the `.man` machinery. `cMission_S4_0_Start` (`0x0822f260`) looks
-  its commander and hero up by man type via `FUN_08211e10` instead of creating
-  them — that helper, and the `flag:%d` REF-node scanning around it
-  (`0x08211ead`–`0x082124aa`), is the next target.
-- **Province virtual `+0xe0`** — the predicate choosing between the two placement
-  paths in `MissionCfg_PlaceMen`. Named from its use, body unread.
+- **The eight campaign missions** (`cMission_S*_*`) still have unread bodies.
+  Their lookup helper is read now, so the open part is **which bits mean what in
+  `man+0x28`**, the mission-flag mask `Mission_FindManByFlag` tests. The `.man`
+  files and `init.dat` men are where the bits are set.
+- **The eight scenario `iMissionHandler` subclasses.** Only the campaign's six
+  virtuals were read; the scenario ones are the eight remaining callers of
+  `iMissionHandler_ctor` (`0x0820f420`). Cheap, and it would say whether the
+  scenarios script anything or just hold missions.
+- **`prov+0x400fb`** — the placement-mode byte behind province virtual `+0xe0`.
+  No writer found; a `xref-global` will not help since it is an object field.
+- **Mission field `+0x39`**, read by the campaign handler's `+0x1c` province
+  predicate. No writer found.
 
 ### 3. Is `+0x27c` the hero id, or a general subtype byte?
 

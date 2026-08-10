@@ -197,9 +197,16 @@ clock — the tick *is* the day. Two consequences worth stating:
   is a real behaviour of the original, not a port artefact.
 
 The two `cDate_ToDayCount` calls inside `SimulationStep` are consumers of the
-value this loop maintains: one feeds the current day count to the units manager,
-the other measures alliance age for the `ALLIED_JOIN_YEARS` mechanic
-([simulation-step.md](simulation-step.md)).
+value this loop maintains: one feeds the current day count to the **mission
+handler** (`g_World+0x1f394` — corrected 2026-08-10 from "the units manager",
+see [missions.md](missions.md)), the other measures alliance age for the
+`ALLIED_JOIN_YEARS` mechanic ([simulation-step.md](simulation-step.md)).
+
+That first consumer is worth a sentence here rather than only there: because the
+handler is stepped once per tick and a tick is a day, **every date in the
+campaign script — mission delays, the Spanish arrival, the dragon — is measured
+in the calendar this doc describes**, and inherits its behaviour, including the
+lost days when catch-up exceeds ten ticks.
 
 > **This corrected a wrong claim.** `simulation-step.md` and
 > `game-loop-and-simulation.md` both described `g_World+0x83c` as the sim's

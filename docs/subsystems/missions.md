@@ -6,9 +6,18 @@ hand out heroes and magic items when it is met. This is the wall that
 [heroes.md](heroes.md) and [magic-items.md](magic-items.md) both hit, and it
 answers all three of their questions.
 
-**Read off `theocracy.real` 2026-08-09.** Addresses are Ghidra space, game base
+**Read off `theocracy.real` 2026-08-09**, and the layer above them —
+`iMissionHandler`, what constructs a mission, what binds it to a province and
+what starts it — **2026-08-10**. Addresses are Ghidra space, game base
 `0x08048000`. Findings are mirrored into the Ghidra DB as renames and
 decompiler comments.
+
+> **The 2026-08-10 pass also killed a claim three other docs carried.**
+> `g_World+0x1f394` was described everywhere as "the units manager", and
+> `simulation-step.md` listed it as the biggest remaining piece of the
+> simulation. It is the `iMissionHandler` — the object this section is about —
+> and the units *container* is the next word up at `g_World+0x1f398`. See
+> [re-methodology.md](../reference/re-methodology.md) §12.
 
 ## The trap that hid all of this
 
@@ -74,11 +83,20 @@ against a decompiled body.
 |---|---|---|
 | `+0x00` | delta, always `0` | GNU v2 |
 | `+0x04` | `__rtti_si` getter | 12 distinct, one per class |
-| `+0x0c`, `+0x10` | base `cMission` (`0x0820e570` / `0x0820e610`) | shared by 11 of 12 |
+| `+0x08` | destructor | |
+| `+0x0c` | **`Load(stream)`** — base `0x0820e570` | called on every mission by `cMissionHandler_Load`; `cMission_WallChecker` is the one class that overrides it (`0x0821ec60`) |
+| `+0x10` | **`Save(stream)`** — base `0x0820e610` | the mirror call in `cMissionHandler_Save` (`0x0820fd60`); WallChecker's override at `0x0821ec90` |
 | `+0x14` | **`Start(province)`** | stores the province at `this+0x24`; `cMission_TwoRings_Start`, `cMission_TheWall_Start`, `cMission_S4_0_Start` |
 | `+0x18` | **`Check()` → state** | returns `this+0x2c`; `cMission_TwoRings_Check` |
 | `+0x1c` | **`Activate()`** | `this` only; `cMission_Josda_Activate` loads its man file here, `cMission_TwoRings`' does nothing but set two flags |
 | `+0x2c` | **`Finish()`** | branches on the state byte; five of the six hero rewards live here |
+
+> **`+0x0c`/`+0x10` corrected 2026-08-10.** This table used to list them as
+> anonymous "base `cMission`" slots. They are `Load` and `Save`: the handler
+> serialises every mission through them, which is how mission state survives a
+> save (and why it ships inside `init.dat`). The same two slots hold `Load`/`Save`
+> on `cMissionTimer` — whose vtable pointer sits at `+0x14`, not `+0x08` — and at
+> `+0x24`/`+0x28` on `iMissionHandler` itself.
 
 Both `+0x14` and `+0x1c` spawn men, depending on the mission — four of the six
 man files are loaded from `Activate` and two from `Start`. That is a real
@@ -90,12 +108,18 @@ at `0x0821d050` loads `misi010.man`).
 
 | offset | meaning |
 |---|---|
+| `+0x0c` | **a `cDate`** — the mission's own due date, set by the handler |
 | `+0x24` | the `cProvince*` the mission runs in |
+| `+0x28` | `cLocaleEntry*` — the mission's display name, printed by every diagnostic |
 | `+0x2c` | **state**: `0` running, `1` complete, `2` failed |
 | `+0x2d` | active |
 | `+0x2e` | started |
+| `+0x2f` | **time condition armed** — set when the handler writes `+0x0c` |
 | `+0x38` | already finished — `Finish` returns immediately if set |
+| `+0x39` | read by one of the handler's province predicates; writer unread |
 | `+0x3c`… | per-mission: the watched building, the placed items, REF-node lists |
+| `+0x48`/`+0x4c` | on the capture missions: head/tail of the watched-building list |
+| `+0x54` | on the capture missions: buildings still to take |
 
 ## The man config files
 
@@ -143,9 +167,9 @@ lists are certain and the bodies are not.
 
 | slot | signature | what |
 |---|---|---|
-| `+0x1c` | `(out, prov, &xy, flags)` | resolve a raw map `(x,y)` pair into the engine's position form |
+| `+0x1c` | `(out, prov, &xy, radius)` | find a free cell near a raw map `(x,y)` — a ring search, `(-1,-1)` if none (read 2026-08-10, below) |
 | `+0xd8` | `(prov, pos, item)` | drop a magic item on the ground |
-| `+0xe0` | `(prov)` | a mode predicate — selects between the two placement paths in `MissionCfg_PlaceMen` |
+| `+0xe0` | `(prov)` | selects between the two placement paths in `MissionCfg_PlaceMen`; a stored byte, not a computation (read 2026-08-10, below) |
 | `+0xe4` | `(prov, pos, manType, tribe)` → `cMan*` | create a man |
 
 `+0xe4` is the same virtual `HeroCfg_PlaceHeroes` uses, and it is handed the
@@ -372,21 +396,297 @@ The `+0x4c` reading above is **not** confirmed: `+0x4c` is the scenario id, and
 it is `0` for the campaign, yet no config placement was observed during a
 campaign start. See [starting-world.md](starting-world.md), "Open threads".
 
+## What starts a mission — `iMissionHandler`
+
+**Read 2026-08-10.** The previous pass read the lifecycle from `Start` onward and
+stopped; this is the layer above it, and it turns out to be one object driven
+once per in-game day.
+
+`iMissionHandler` (RTTI `15iMissionHandler`, vtable `0x0839e780`) is a **plain
+static table of missions and timers**, not a registry anything registers with:
+
+| offset | field |
+|---|---|
+| `+0x00` | `cMission**` — the mission array |
+| `+0x04` | `cMissionTimer**` — the timer array |
+| `+0x08` | a `cDate` — the handler's copy of the world date |
+| `+0x20` | mission count |
+| `+0x24` | timer count |
+| `+0x28` | vtable |
+
+| vtable slot | role |
+|---|---|
+| `+0x0c` | `GetMissionsForProvince(prov)` → `cList*` |
+| `+0x10` | **`Update(dayCount)`** — the driver |
+| `+0x14` | `ForceActivate(missionId)` |
+| `+0x18` | `OnGameEnd(result)` |
+| `+0x1c`, `+0x20` | two per-province mission predicates |
+| `+0x24`, `+0x28` | `Load` / `Save` |
+
+Six of those are **pure virtual** in the base (`0x082c8d90` in every slot), so
+each scenario supplies its own; only `Load`/`Save` are shared. Nine subclasses
+exist — the campaign plus the eight scenarios — found by xref'ing the base
+constructor `iMissionHandler_ctor` (`0x0820f420`), which has exactly nine callers.
+The campaign's is `cMissionHandler_Campaign_ctor` (`0x08215f00`), held by the
+`cScenario` subclass `"CampaignGame"` (`0x08229730`) at `scenario+0x08`.
+
+### The array index is the mission number
+
+The constructor builds the whole campaign in one straight line: `new` each of the
+twelve mission classes into a 13-slot array, then the four timers. **Slot 0 is
+left `NULL`**, so the index is 1-based — and it lines up exactly with the
+`misiNNN.man` filenames and the `selap.txt` keys, which is what promotes this
+from a plausible ordering to a confirmed one:
+
+| # | class | `.man` file | activation key |
+|---|---|---|---|
+| 1 | `cMission_MountainVillage` | | `MISSION_001_YEARLEFT` |
+| 2 | `cMission_VillageOfJaguar` | | `MISSION_002_YEARLEFT` |
+| 3 | `cMission_Scroll` | `misi003.man` | `MISSION_003_MONTHLEFT` |
+| 4 | `cMission_Scroll_lost` | `misi004.man` | `MISSION_004_YEARLEFT` |
+| 5 | `cMission_Vampire` | `misi005.man` | — |
+| 6 | `cMission_Dragon` | | `MISSION_006_YEARLEFT` |
+| 7 | `cMission_HeavyArmory` | | `MISSION_007_YEARLEFT` |
+| 8 | `cMission_TwoRings` | `misi008.man` | — |
+| 9 | `cMission_Josda_Pre` | | — |
+| 10 | `cMission_Josda` | `misi010.man` | `MISSION_010_YEARLEFT` |
+| 11 | `cMission_TheWall` | `misi011.man` | — |
+| 12 | `cMission_WallChecker` | | — |
+
+`ForceActivate` (`0x08217500`) confirms the range from the other side: it opens
+with `if (missionId > 12) return;` and prints `"Force activated mission %d:(%s)."`
+
+### A mission is bound to a province by a hardcoded switch
+
+Nothing on the mission or in any data file says which province it belongs to.
+`cMissionHandler_Campaign_GetProvinceMissions` (`0x08216310`) is a `switch` on the
+province **id** returning the missions to offer there, and the campaign handler
+carries two more copies of the same mapping in its `+0x1c` and `+0x20` predicates:
+
+| province | mission(s) |
+|---|---|
+| 2 | 11 TheWall, 12 WallChecker |
+| 5 | 7 HeavyArmory |
+| 11 | 8 TwoRings |
+| 19 | 1 MountainVillage |
+| 23 | 5 Vampire |
+| 26 | 2 VillageOfJaguar |
+| 28 | 3 Scroll, and 4 Scroll_lost |
+| 38 | 9 Josda_Pre, 10 Josda |
+| 43 | 6 Dragon |
+
+Where two missions share a province the first is offered only while it is still
+running (`+0x2d` set and `+0x2c` zero) — the pairs are a mission and its
+successor, not two concurrent offers.
+
+### The driver runs once per in-game day
+
+`SimulationStep` calls the handler's `Update` with the current day count:
+
+```c
+handler = *(int *)(g_World + 0x1f394);
+(**(code **)(*(int *)(handler + 0x28) + 0x10))(handler, cDate_ToDayCount(g_World + 0x83c));
+```
+
+and [calendar.md](calendar.md) already established that one tick is one day. So
+the entire scripted layer advances exactly once per game day.
+
+`cMissionHandler_Campaign_Update` (`0x08216480`) is then one long straight-line
+script — about 400 lines of decompile with no loop over missions at all, each
+mission written out by hand. Per mission it does two things: **arm** a due date
+when its precondition is met (`mission+0x0c = today + delay`, `+0x2f = 1`,
+printing `"Activating time condition on mission [%s] to (%s)"`), and **activate**
+it once that date arrives (printing `"Initializing [%s]"` and calling slot
+`+0x1c`). Which settles what the `selap.txt` keys mean: `MISSION_00N_YEARLEFT` is
+the **delay before the mission starts**, not a deadline to finish it.
+
+| # | precondition | delay |
+|---|---|---|
+| 1 | none — armed on the first update | `MISSION_001_YEARLEFT` years |
+| 2 | player owns province 32, 33 or 18 | `MISSION_002_YEARLEFT` years |
+| 3 | player owns province 28 | `MISSION_003_MONTHLEFT` months; plays `scroll.mpg` on activation |
+| 4 | **mission 3 has state 2 (failed)** | `MISSION_004_YEARLEFT` years |
+| 5 | none — activated directly, no timer | — |
+| 6 | player captures province 43 | `MISSION_006_YEARLEFT` years + 1 month + 10 days; plays `dragon.mpg` |
+| 7 | player owns province 15, 16, 3 or 8 | `MISSION_007_YEARLEFT` years |
+| 8 | none — activated directly, no timer | — |
+| 9 | player holds **more than 5** provinces | 15 days |
+| 10 | mission 9 has activated | `MISSION_010_YEARLEFT` years |
+| 11 | player holds **more than 4** provinces | 15 days |
+| 12 | re-armed every update — see below | — |
+
+The two "15 days" entries are hardcoded `cDate_ctor_YMD(&d, 0, 0, 15)` and are
+the pair [starting-world.md](starting-world.md) had already spotted from the
+other end.
+
+**Mission 4 is the interesting one**: Scroll_lost is not an alternative the
+player picks, it is what the campaign runs *because* Scroll failed. Its
+one hero (the man placed with no id, above) is the consolation branch.
+
+**Mission 12 is not a mission**, it is a poll. `cMission_WallChecker_Activate`
+(`0x0821ecc0`) sets active and started and **clears the state byte**, and the
+first thing `Update` does each day is call it whenever the state is non-zero — so
+it re-arms itself forever rather than completing.
+
+### The four timers
+
+`cMissionTimer_Dragon0`, `Dragon1`, `Spain0`, `Spain1` — RTTI-confirmed, in that
+array order, Dragon0/1 sharing one intermediate base and Spain0/1 another. A
+timer is a `cDate` (`+0x00`), a fired flag (`+0x19`), an armed flag (`+0x1a`), a
+mission id (`+0x18`, `0xff` for none) and a vtable at `+0x14`; `Fire` is slot
+`+0x14`. The polling loop is four lines at the top of `Update`:
+
+```c
+for (i = 0; i < 4; i++)
+    if (!t[i]->fired && t[i]->armed && today >= t[i]->date) {
+        t[i]->fired = 1;
+        t[i]->Fire();
+    }
+```
+
+- **Dragon0** (`0x08213440`) — armed either when mission 3 succeeds (+10 years,
+  `"Initializing Dragon Timer because mission %s is completed succesfully."`) or
+  when the player takes province 42 (+1 year, `"…because captured the province
+  [42]."`). It only announces: looks its mission up and shows the message.
+- **Dragon1** (`0x082134e0`) — the payload the developers named in their own
+  printf, `"Initializing Dragon timer 2 (kill all people and destry all
+  buindings)."` It walks province 43 destroying every building through building
+  virtual `+0xf4`, kills every man in all 11 tribe lists, and hands the province
+  to tribe 7.
+- **Spain0** (`0x082138d0`) and **Spain1** (`0x08213ad0`) — the invasion, below.
+
+### The Spanish, and why the arrival looks random
+
+This closes [starting-world.md](starting-world.md)'s `SPAIN_RND_YEAR` thread.
+
+The default arrival is fixed: `Update` arms Spain0 at
+`cDate(SPAIN_ENTER_YEAR, 3, 7)` — an absolute date — and Spain1 at that date plus
+`SPAIN_TIME_OFFSET_DAY / 2`. **Two staggered waves, half a period apart**, which
+is already enough to make "the Spanish arrive" feel like more than one event.
+
+Each `Fire` picks a province, spawns a Spanish unit group (tribe 6) with
+`SPAIN_UNIT1_FORCE` / `SPAIN_UNIT2_FORCE`, then **re-arms itself**: date +=
+`SPAIN_TIME_OFFSET_DAY`, fired flag cleared, and a counter at `+0x1c` — seeded
+from `SPAIN_UNITS_BY_PROV` — decremented, printing `"Incrasing spain units on
+realm [%d]"`. So it is a wave every `SPAIN_TIME_OFFSET_DAY` days until the
+counter runs out, not a single landing. Spain0's first wave additionally checks
+whether mission 10 completed (`"A 10-es mission-t sikeresen teljesitetted."` —
+*"you completed mission 10 successfully"*), picks one of two texts accordingly,
+and plays `spain.mpg`.
+
+And the jitter a player remembers is real, but it is not jitter — it is a
+**difficulty response**. `SpainTimer_MaybeReroll` (`0x081fa6a0`), called once per
+`SimulationUpdate` that ran at least one tick, does:
+
+```c
+if (scenario id == 0 && SpainTimer_IsAtDefaultDate(handler)) {
+    notMine = provinces not owned by the player;
+    if (notMine <= SPAIN_PROV_LIMIT)
+        SpainTimer_SetArrivalInDays(handler, Rnd() * (365 * SPAIN_RND_YEAR + 1));
+}
+```
+
+**When the player gets close to holding the map, the conquistadors are
+rescheduled to a random day inside the next `SPAIN_RND_YEAR` years** — printing
+`"Spanish date is reset to %d days..."` — and the guard means it happens at most
+once, since the timer is no longer at its default date afterwards. Campaign only:
+`g_GameSession+0x4c` (the scenario id) must be `0`.
+
+## The four missions the previous pass skipped
+
+None places a hero or an item, which is why they were left; three of the four
+turn out to be the same mission twice and a no-op.
+
+**`cMission_MountainVillage` (1) and `cMission_HeavyArmory` (7) are the same
+mission.** `Start` walks the province's building list for every building whose
+flags have bit `2` set — the same **capture** bit `cMission_TwoRings_Start` uses
+to find its ring house — counts them into `+0x54`, and holds each in a `cNode`
+list at `+0x48`/`+0x4c`, printing `" - Capture Building flag:%d"`. `Check` fails
+the mission if the player has no living man left in the province (the shared
+`"Nincs elo ember[%d] a provincian (mission fail)."`), otherwise re-walks its list
+and, for each building now owned by the player and still flagged, clears the flag,
+prints `"You are captured a mission building."` and decrements `+0x54`. At zero:
+`"Mission complete"`. `Finish` hands the whole province to the player.
+
+The two bodies are instruction-for-instruction the same shape with different
+locale ids, **except for one thing**: MountainVillage's no-men-left branch is an
+`else` and returns immediately, HeavyArmory's is not, so HeavyArmory continues
+into the scan and can overwrite the failure with success in the same call if the
+last building was already taken. Recorded as observed; whether that is deliberate
+is not decidable from the code.
+
+**`cMission_Josda_Pre` (9) is a gift, not a task.** Its `Start` (`0x0821ce60`)
+shows one text, calls `FUN_081d7e10(prov)` and then hands the province to the
+player, and sets its own state to `1` on the spot. Its `Check` is `return
+this->state;` and nothing else. It exists to be the precondition of mission 10 —
+which is exactly how `Update` uses it.
+
+**`cMission_WallChecker` (12) watches one map tile.** Its `Check` reads a single
+cell of the province's tile array and tests the low 12 bits of the `u16` at
+`tile+2` against `0x19E`; if it matches, it prints `"Ho-ho le lett rombolva a
+fal."` (*"Ho-ho, the wall has been destroyed."*) and reports complete. Read from
+the disassembly rather than the decompile, because the pointer arithmetic matters:
+the guard tests column `0x28` against the province width, while the address it
+then computes is `base + 15 × (width × 0x60 + 0x28 + 0x30)` — i.e. the **bounds
+check and the addressed cell disagree by 48 columns**. Stated as read; on the
+shipped province 2 both are in range, so nothing observable follows from it.
+
+## How missions hold on to men
+
+`Mission_FindManByFlag` (`0x08211e10`) is the helper `cMission_S4_0_Start` uses
+instead of creating its commander and hero:
+
+```c
+u16* Mission_FindManByFlag(cProvince* prov, u32 flagMask, int tribe, u32 manType);
+```
+
+For one tribe or all 11, it walks three lists per tribe — leaders
+(`prov+0x40b98 + tribe*0x30`), each leader's inferiors, and "lonlies"
+(`prov+0x40bb0 + tribe*0x30`) — and returns the first living man matching the man
+type and having `man[0x28] & flagMask` set, printing `" - Found mission man in
+{leaders,inferiors,lonlies}, flag:%d"`. **`man+0x28` is a bitmask of mission
+flags**, which is what the `flag:%d` diagnostics scattered through this layer are
+printing.
+
+What it returns is not a `cMan*` but a freshly allocated **`u16` holding the man's
+id** (`man+0x96`), with `DAT_08601108[id]` incremented — a global refcount table.
+`MissionCfg_PlaceMen` does the same with its optional third argument: each man it
+spawns is appended to the caller's list as one of these 16-bit id handles, wrapped
+in a `cNode`. So **missions refer to men by id, not by pointer**, which is what
+lets mission state be serialised straight into the world file.
+
+So the campaign missions are content-driven the same way the named ones are: the
+men are already in the province — from `init.dat` or from a `.man` file — and the
+mission finds the ones the designer flagged.
+
+## Province virtual `+0xe0`
+
+Read, and it is not a predicate at all: `cProvince_GetPlaceModeFlag`
+(`0x081d03f0`) is `return *(char*)(prov + 0x400fb);` — one stored byte. When set,
+`MissionCfg_PlaceMen` resolves the record's `(x,y)` through virtual `+0x1c` before
+creating the man; when clear it passes the raw pair straight to `+0xe4`.
+
+Reading `+0x1c` (`0x081d0400`) at the same time sharpens this doc's earlier
+description of it: it is not a coordinate conversion but a **ring search** —
+expanding rings around the requested cell, testing each for a free walkable tile,
+returning `(-1,-1)` if none is found within the requested radius, which is the
+`"Failed to place man becouse VOID_POS"` path.
+
+Who writes `prov+0x400fb` is unread.
+
 ## Open threads
 
-- **`cMission_HeavyArmory`, `cMission_MountainVillage`, `cMission_Josda_Pre`,
-  `cMission_WallChecker`** are named and slotted but unread. None places a hero
-  or an item, which is why they were not needed here.
-- **The eight campaign missions (`cMission_S*_*`)** are read only far enough to
-  establish that they share the base vtable and the `.man` machinery.
-  `cMission_S4_0_Start` looks its commander and hero up by man type through
-  `FUN_08211e10` rather than creating them — that lookup helper, and the
-  `flag:%d` REF-node scanning around it, is the natural next target.
-- **What starts a mission**, and how the twelve named ones are bound to
-  provinces and to the campaign, is not read here. Only the lifecycle after
-  `Start` is.
-- **Province virtual `+0xe0`**, the predicate that picks between the two
-  placement paths, is unread — named from its use, not its body.
+- **The eight campaign missions (`cMission_S*_*`)** still have unread bodies.
+  Their lookup helper is now read (`Mission_FindManByFlag`, above), so what is
+  left is per-mission specifics and **which flag bits mean what** in `man+0x28`.
+- **The other eight `iMissionHandler` subclasses.** Only the campaign's six
+  virtuals were read. The scenario handlers are at the eight remaining callers of
+  `iMissionHandler_ctor`; two of them (`0x0822ed30`, `0x08233210`) extend `Load`
+  with a scenario-specific `u16`.
+- **`prov+0x400fb`**, the placement-mode byte behind province virtual `+0xe0` —
+  no writer found.
+- **Mission field `+0x39`**, read by the handler's `+0x1c` predicate; no writer
+  found.
 - **`cMan_Comm1` writes `26` to `+0x27c`** in its constructor (`0x08245920`) and
   `FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Either
   `+0x27c` is a general subtype byte that `cHero` uses for the hero id, or one of

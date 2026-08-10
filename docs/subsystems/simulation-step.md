@@ -14,7 +14,19 @@ From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
 
 ## What one tick does
 1. **cDayTime** stamps (profiling).
-2. **Units-manager update** (unpaused only): compute the **current day count** — `cDate_ToDayCount(g_World+0x83c)` — and pass it to the units manager (`g_World+0x1f394`, virtual `+0x10` on its `+0x28` sub-object). The units manager is driven by *the date*, not by a command. Then the **win/lose check** — if `g_World+0x140c → +0x4f4 == 0`, print `"### Most ki kene lepni ###"` (Hungarian: "should exit now").
+2. **Mission-handler update** (unpaused only): compute the **current day count** — `cDate_ToDayCount(g_World+0x83c)` — and pass it to the `iMissionHandler` at `g_World+0x1f394`, through vtable slot `+0x10`. This is the scripted layer — mission time conditions, the four `cMissionTimer`s, the Spanish invasion — and it advances exactly once per tick, i.e. once per in-game day ([missions.md](missions.md)). Then the **win/lose check** — if `g_World+0x140c → +0x4f4 == 0`, print `"### Most ki kene lepni ###"` (Hungarian: "should exit now").
+
+   > **Corrected 2026-08-10.** This step used to read "units-manager update", with
+   > `g_World+0x1f394` called the units manager and `+0x28` its "sub-object".
+   > `+0x28` is the object's vtable pointer, and the object is the mission
+   > handler: the same pointer is passed to `iMissionHandler_GetMission`
+   > (`0x0820fcb0`, which indexes `handler[0]` bounds-checked by `handler[8]` —
+   > the 13-slot mission array) and to `SpainTimer_IsAtDefaultDate`, which reads
+   > `handler+4`, the 4-slot timer array. The units **container** is one word up
+   > at `g_World+0x1f398` (count `+0x1f3a0`) and is iterated by
+   > `SimulationUpdate`, not here. Same failure shape as the `+0x83c` command
+   > queue, in the same function, one field apart —
+   > [re-methodology.md](../reference/re-methodology.md) §12.
 3. **Per-player debug pass** (only if `DAT_084c9da6`): `FUN_0815af50` over the 8 slots, skipping the local player. (Debug output — low importance.)
 4. **Manager-list update**: iterate `g_World+0x1490` (count `+0x1498`), virtual `+0x10` on each. These are the pluggable per-tick systems registered in `InitWorldForPlay`.
 5. **Movement/transport update**: iterate `g_World+0x147c` (count `+0x1484`) → `UpdateMovementQueue` on each (below).
@@ -90,7 +102,7 @@ alliance age**, not the "periodic divine/random event system" this doc
 previously guessed at — a god-game prior that the binary does not support.
 
 ## Open threads
-- **Units manager** at `g_World+0x1f394` and the virtual it dispatches — the unit AI/movement core (biggest remaining piece).
+- ~~**Units manager** at `g_World+0x1f394`~~ — **withdrawn 2026-08-10, it was never there.** That address is the `iMissionHandler` and is now read end to end ([missions.md](missions.md)). The unit AI/movement core is still the biggest remaining piece, but the way in is the units **container** at `g_World+0x1f398` / count `+0x1f3a0` and the per-unit call `FUN_0812bcb0(unit, ticks)` in `SimulationUpdate`.
 - **`TriggerProvinceEvent` → `FUN_081d6570`** — decode the actual province event effect.
 - `g_World+0x1490` manager list — enumerate the registered per-tick systems (what each vtable is).
 - Province struct: map fields around `+0x40aae` (owner) and `+0x40e84`; confirm province record size/stride. (Both offsets are ~0x40000 in, so the province record is large — likely an embedded tile map ahead of the header fields.)

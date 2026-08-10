@@ -303,6 +303,33 @@ It was found only when a *different* doc (`calendar.md`) read the same address
 properly and the two descriptions collided. That is worth generalising: when
 work lands in a doc, grep the other docs for the addresses it touches.
 
+### It happened again, in the same function, one field over
+
+**2026-08-10.** Step 2 of that same `SimulationStep` passed the day count to
+`g_World+0x1f394`, which three docs called **the units manager** — and
+`simulation-step.md` ranked "the units manager and the virtual it dispatches" as
+the biggest remaining piece of the simulation. There is no units manager at that
+address. It is the `iMissionHandler`, and what step 2 actually does is advance the
+campaign's scripted layer by one day ([missions.md](../subsystems/missions.md)).
+
+Everything about the first instance repeats, which is the point of recording it
+twice:
+
+- **The guess was reasonable again.** Something gets the day count once per tick,
+  in a function full of unit work, and the units container really is at
+  `g_World+0x1f398` — *one word away*. The name was never absurd; it was just
+  never read.
+- **It survived the correction of its own neighbour.** The `+0x83c` fix landed in
+  this very step on 2026-08-06 and rewrote the sentence around it. Correcting one
+  clause of a sentence does not audit the rest of it.
+- **It set the agenda.** Because the phantom was ranked "biggest remaining
+  piece", it shaped what the next task would have been. A wrong name costs more
+  than a wrong fact: it also costs the work you do because of it.
+
+The cheap check that would have caught either, at any point: **the object's
+vtable slot is callable — call it.** One decompile of `*(handler+0x28)+0x10`
+answers "what is this thing" outright, and neither instance had ever done it.
+
 So: when a doc names something the code does not — `FUN_…` renamed to
 `OrderQueue_Read`, or prose calling an address "the command queue" — either the
 function has been read or the name is a hypothesis. Mark it as one. This project
