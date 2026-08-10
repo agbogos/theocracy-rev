@@ -33,43 +33,26 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-Nothing here gates anything. Ghidra: `theocracy.real` for all of it.
+**Empty, deliberately — 2026-08-10.**
 
-### 1. Which men in `init.dat` carry a mission flag
+The port has been a release candidate since 2026-08-04 and nothing below the line
+changes it. The RE side reached the point where every remaining question was
+archaeology with no consumer: four sessions on 2026-08-10 closed four tasks and
+opened four more, leaving the list exactly the size it started. That is what
+reverse-engineering does — every answer exposes two things you now realise you
+cannot explain — so the list does not converge, and the only way it ends is by
+deciding it has.
 
-**The code half is done** (2026-08-10): `man+0x28` is written by nothing except
-the two `cMan` constructors — zero, or four bytes straight from the world file —
-so the flags are pure map-editor data, and only bits 0 and 1 are ever queried.
-See [`missions.md`](docs/subsystems/missions.md), "Where the flags come from".
+What was here has **not** been thrown away. Unknowns belong in each doc's own
+**"Open threads"** section, which is where `CLAUDE.md` says they live and where a
+reader meets them in context instead of as a stray line in a task file:
 
-What is left is not a Ghidra task. Extend `THEOC_DUMP_WORLD` to print `man+0x28`
-alongside the caste and run it over the nine world files, the same way
-[`starting-world.md`](docs/subsystems/starting-world.md) read the hero and item
-census. That answers which designer-placed men each campaign mission is looking
-for, and it is the last piece the `cMission_S*_*` bodies need.
+| what | now in |
+|---|---|
+| Which men in `init.dat` carry a mission flag; the eight scenario `iMissionHandler` subclasses; `prov+0x400fb`; mission `+0x39` | [`missions.md`](docs/subsystems/missions.md) |
+| Bone Horn's slot-5 body; item slots 5–7; items 30 and 40 | [`magic-items.md`](docs/subsystems/magic-items.md) |
+| The regen and `*_HIT_PERCENT` keys; `cMan_Comm1`'s subtype byte; where a spell's `+0x350` school is set | [`heroes.md`](docs/subsystems/heroes.md) |
+| The unit AI/movement core — the one genuinely large unread mass | [`simulation-step.md`](docs/subsystems/simulation-step.md) |
 
-Needs a headless run, so it is a **YOU**-adjacent task in practice — the port
-change is mine, the run is yours.
-
-### 2. The eight scenario `iMissionHandler` subclasses
-
-Only the campaign's six virtuals were read. The scenario ones are the eight
-remaining callers of `iMissionHandler_ctor` (`0x0820f420`); two of them
-(`0x0822ed30`, `0x08233210`) extend `Load` with a scenario-specific `u16`.
-Cheap, and it would settle whether the scenarios script anything or just hold
-missions. See [`missions.md`](docs/subsystems/missions.md), "What starts a
-mission".
-
-### 3. Smaller leftovers, worth doing only alongside something else
-
-- **Bone Horn (50)'s slot-5 body** — whether its uninitialised `+0x18` counter
-  is observable in play or harmlessly reset on first use
-  ([`magic-items.md`](docs/subsystems/magic-items.md), "Open threads").
-- **Where a spell's `+0x350` school is set.** Only its use is read. Chasing it
-  would turn the Moon magic-school slot from elimination into a direct reading
-  ([`heroes.md`](docs/subsystems/heroes.md), "The five magic schools").
-- **`prov+0x400fb`**, the placement-mode byte behind province virtual `+0xe0`.
-  No writer found, and `xref-global` cannot help — it is an object field, so it
-  needs the [§17](docs/reference/re-methodology.md) displacement scan.
-- **Mission field `+0x39`**, read by the campaign handler's `+0x1c` province
-  predicate. No writer found.
+Refill this section when something has a *reason* — a bug, a port change, a
+question you actually want answered — not to keep a queue non-empty.

@@ -435,6 +435,12 @@ story, and a key absent from it is not therefore dead.
 - **What `cMan_Comm1`'s subtype byte is for.** Read and written through vtable
   `+0xe0`/`+0xe8`, seeded to `26`, set from another man's man type — but the
   setter is only ever reached by virtual dispatch, so its caller was not chased.
+- **Where a spell's school (`spell+0x350`) is set.** Only its *use* is read, in
+  `cMan_ApplyMagicDamage`. It is not written by any `mov [reg+0x350], imm32` in
+  the image, so it comes from a register — probably the spell base constructor.
+  Chasing it would turn the **Moon** slot from elimination into a direct reading,
+  which is the one link in the school table above that is inferred rather than
+  read.
 
 ## Cross-references
 
