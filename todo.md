@@ -33,76 +33,47 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-### ~~1. Does the AI attack independent provinces?~~ — done 2026-08-10
+Nothing here gates anything. Ghidra: `theocracy.real` for all of it.
 
-Answered by play, no RE needed: **it does**. The assumption that it wouldn't
-does not hold, so a generated world's ~60% grey map is not the dead end it
-looked like. Written up in
-[`starting-world.md`](docs/subsystems/starting-world.md), "Open threads".
+### 1. The mission-flag mask on `man+0x28`
 
-### ~~2. Mission internals~~ — done 2026-08-10
+The way into the eight campaign missions (`cMission_S*_*`), whose bodies are
+still unread. `Mission_FindManByFlag` (`0x08211e10`) selects men by
+`man[0x28] & mask`, and the `flag:%d` diagnostics all over the mission layer are
+printing it — but which bit means what is unknown. The `.man` files and the
+`init.dat` men are where the bits are set, so
+[`starting-world.md`](docs/subsystems/starting-world.md)'s `THEOC_DUMP_WORLD`
+hooks are one way to read them off a live load rather than out of the code.
 
-All four bullets answered, in
-[`docs/subsystems/missions.md`](docs/subsystems/missions.md): `iMissionHandler`
-and its daily `Update`, the mission↔province switch, the four timers and the
-Spanish invasion, the four unread missions, `Mission_FindManByFlag`, and province
-virtual `+0xe0`. It also corrected the "units manager" at `g_World+0x1f394` in
-three docs. What it left is below.
+See [`missions.md`](docs/subsystems/missions.md), "How missions hold on to men".
 
-### 2. Mission internals — the residue
+### 2. Man vtable `+0x24` — the item-carrier mask
 
-Ghidra: `theocracy.real`. All small; none blocks anything.
+The per-man-class "which item types can I carry" mask. Read only from its *use*
+in `cMan_TryEquipItemSlot` (`0x080a81f0`); the bodies are unread. Reading them
+across the man classes would give the carrier table for all 50 items, which is
+the one thing [`magic-items.md`](docs/subsystems/magic-items.md)'s type column
+still cannot say in player-facing terms.
 
-- **The eight campaign missions** (`cMission_S*_*`) still have unread bodies.
-  Their lookup helper is read now, so the open part is **which bits mean what in
-  `man+0x28`**, the mission-flag mask `Mission_FindManByFlag` tests. The `.man`
-  files and `init.dat` men are where the bits are set.
-- **The eight scenario `iMissionHandler` subclasses.** Only the campaign's six
-  virtuals were read; the scenario ones are the eight remaining callers of
-  `iMissionHandler_ctor` (`0x0820f420`). Cheap, and it would say whether the
-  scenarios script anything or just hold missions.
-- **`prov+0x400fb`** — the placement-mode byte behind province virtual `+0xe0`.
-  No writer found; a `xref-global` will not help since it is an object field.
+### 3. The eight scenario `iMissionHandler` subclasses
+
+Only the campaign's six virtuals were read. The scenario ones are the eight
+remaining callers of `iMissionHandler_ctor` (`0x0820f420`); two of them
+(`0x0822ed30`, `0x08233210`) extend `Load` with a scenario-specific `u16`.
+Cheap, and it would settle whether the scenarios script anything or just hold
+missions. See [`missions.md`](docs/subsystems/missions.md), "What starts a
+mission".
+
+### 4. Smaller leftovers, worth doing only alongside something else
+
+- **Bone Horn (50)'s slot-5 body** — whether its uninitialised `+0x18` counter
+  is observable in play or harmlessly reset on first use
+  ([`magic-items.md`](docs/subsystems/magic-items.md), "Open threads").
+- **Where a spell's `+0x350` school is set.** Only its use is read. Chasing it
+  would turn the Moon magic-school slot from elimination into a direct reading
+  ([`heroes.md`](docs/subsystems/heroes.md), "The five magic schools").
+- **`prov+0x400fb`**, the placement-mode byte behind province virtual `+0xe0`.
+  No writer found, and `xref-global` cannot help — it is an object field, so it
+  needs the [§17](docs/reference/re-methodology.md) displacement scan.
 - **Mission field `+0x39`**, read by the campaign handler's `+0x1c` province
   predicate. No writer found.
-
-### ~~3. Is `+0x27c` the hero id, or a general subtype byte?~~ — done 2026-08-10
-
-Neither: `sizeof(cMan) == 0x27c`, so it is the first byte of the **derived**
-class and `cHero` and `cMan_Comm1` each declare their own field there. Settled by
-scanning `.text` for the displacement rather than by reading decompiles, which
-also enumerated every use of the byte in the image. `heroes.md`'s claim needed no
-scoping. Bonus: `HERO12_RANGE_MOD`'s consumer fell out of the same scan, so hero
-abilities are now known to live in two places — baked in by `SetHeroId`, or
-applied live in a per-class getter. See
-[`heroes.md`](docs/subsystems/heroes.md), "What `+0x27c` actually is".
-
-### ~~4. Smaller leftovers~~ — done 2026-08-10
-
-- ~~The `+0x04` equip-restriction field on items~~ — a **bitmask** for the carry
-  test (AND-ed against a per-man-class capability mask from man vtable `+0x24`)
-  and an equality key for the duplicate test, with types `0x80` and `0x20` exempt
-  from the latter. `cMan_TryEquipItemSlot` (`0x080a81f0`).
-- ~~Who reads a man's `+0x88..0x90` magic-school slots~~ — `cMan_GetMagicResistance`
-  (`0x080aded0`) and `cMan_ApplyMagicDamage` (`0x08098180`). It is one five-element
-  `u16` array and a **percentage damage reduction**, not five flags. Four schools
-  named from the spell classes that read their own slot; Moon by elimination.
-- ~~The `+0x18` field on items 2, 8 and 50~~ — mechanism was already known;
-  what is new is that **only id 2 initialises it**, so Moon Shield and Bone Horn
-  read uninitialised heap. See [magic-items.md](docs/subsystems/magic-items.md),
-  "Open threads".
-- ~~`hero.cfg` columns 3 and 4 / province virtual `+0xe4`~~ — **done
-  2026-08-09.** `+0xe4` is `(prov, pos, manType, tribe) -> cMan*`, and columns 3
-  and 4 are the first eight bytes of the record, passed as that `pos`. See
-  [missions.md](docs/subsystems/missions.md).
-
-### 4. What this pass opened
-
-- **Bone Horn (50)'s slot-5 body** — needed to say whether its uninitialised
-  `+0x18` counter is observable in play, or harmlessly reset on first use.
-- **Man vtable `+0x24`**, the per-class "which item types can I carry" mask. Read
-  from its use in the equip checker, body unread; reading it would give the
-  carrier table for all 50 items.
-- **Spell `+0x350`** is the school id. Only its use is read; where a spell's
-  school is set was not chased, and doing so would turn the Moon slot from
-  elimination into a direct reading.
