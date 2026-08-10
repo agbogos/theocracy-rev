@@ -528,6 +528,46 @@ project has already reverse-engineered.**
 
 ---
 
+## 17. To enumerate every use of a struct field, scan for the displacement
+
+Xrefs answer "who calls this function" and "who touches this global". Neither
+question is "who touches `this+0x27c`", and that is the question a struct claim
+actually rests on. Ghidra will not enumerate it, and sweeping decompiles for the
+offset is how [§15](#15-a-factory-tells-you-who-uses-the-factory-not-who-builds-the-type)'s
+mistake gets made a level down — a decompile shows the accesses the decompiler
+chose to render, and an address-take (`lea 0x27c(%ebx), %edx`) does not look like
+a field access at all. That is exactly how `heroes.md` first got a "sole writer"
+claim wrong.
+
+The instruction stream has no such gaps. On x86 a field access carries the offset
+as a literal disp32, so:
+
+1. Scan `.text` for the four bytes of the offset, little-endian.
+2. Classify each hit by the **one or two opcode bytes in front of it** —
+   `8a`/`80`/`8b` are reads, `88`/`c6`/`89` writes, `8d`/`81` address-takes, and
+   `0f 84`, `e8`, `68` are the false positives (`jcc` rel32, `call` rel32, `push
+   imm32`) that make an unclassified count meaningless.
+3. Map each surviving address to its containing function and see how they cluster.
+
+Done for `+0x27c` on 2026-08-10: 43 raw hits, 10 false positives, and the
+remaining 33 fell into exactly two translation units plus one subclass method.
+The clustering *was* the finding — a field used by two classes and nothing else
+is a field the two classes each declared, which is what
+`sizeof(cMan) == 0x27c` then confirmed from the allocators.
+
+Two things this technique makes cheap and nothing else does:
+
+- **Negative claims.** "Nothing outside `cHero` reads this" is a statement about
+  the whole image, and only an exhaustive pass can support it.
+- **Spotting that the offset is shared by unrelated types.** Two of the 33 hits
+  were 32-bit writes in classes that are not `cMan` at all. An xref-shaped tool
+  would never have shown them; a decompile sweep would have quietly folded them
+  into the evidence.
+
+Cost: about ten lines of Python against the ELF, no Ghidra. The same scan works
+for any offset whose value exceeds `0x7f` — smaller offsets use disp8 and need
+the ModRM byte matched instead, which is more work but the same idea.
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -568,3 +608,10 @@ Before a finding lands in `docs/` or in host code:
     file decrypted before it was read? (§13)
 12. If a claim rests on a table differing per entry (vtables, dispatch tables),
     were the *bodies* compared, or only the addresses? (§14)
+13. Is the claim about a **struct field** — who writes it, who reads it, "nothing
+    else touches it"? Xrefs cannot answer that and decompiles hide address-takes.
+    Scan `.text` for the displacement and classify each hit. (§17)
+14. Is the claim about **who constructs an object**, and is it resting on a
+    factory or on one construction path? Check the constructors, and remember
+    that a stream loader reached through a registered function pointer appears in
+    no xref at all. (§15)

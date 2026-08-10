@@ -66,21 +66,16 @@ Ghidra: `theocracy.real`. All small; none blocks anything.
 - **Mission field `+0x39`**, read by the campaign handler's `+0x1c` province
   predicate. No writer found.
 
-### 3. Is `+0x27c` the hero id, or a general subtype byte?
+### ~~3. Is `+0x27c` the hero id, or a general subtype byte?~~ — done 2026-08-10
 
-`cMan_Comm1`'s constructor (`0x08245920`) writes `26` to `+0x27c`, and
-`FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Note the
-"sole writer" framing this task originally had was **wrong** — `cHero`'s stream
-constructor writes the byte too, via `lea` rather than a store, which is how the
-first scan missed it. Little rests on the answer, but [`heroes.md`](docs/subsystems/heroes.md)'s
-headline claim is flagged as class-scoped until this is read. Cheap: read
-`cMan_Comm1` and whoever calls `FUN_08246150`.
-
-**Half-evidence already in hand (2026-08-09):** all 42 caste constructors were
-swept for stream reads beyond the base `cMan` record, and **only castes 33, 34
-and 35 read an extra byte** — the three hero man types. So on the *load* path
-`+0x27c` is the hero id and nothing else writes it. That does not settle the
-runtime writers, which is what this task is about.
+Neither: `sizeof(cMan) == 0x27c`, so it is the first byte of the **derived**
+class and `cHero` and `cMan_Comm1` each declare their own field there. Settled by
+scanning `.text` for the displacement rather than by reading decompiles, which
+also enumerated every use of the byte in the image. `heroes.md`'s claim needed no
+scoping. Bonus: `HERO12_RANGE_MOD`'s consumer fell out of the same scan, so hero
+abilities are now known to live in two places — baked in by `SetHeroId`, or
+applied live in a per-class getter. See
+[`heroes.md`](docs/subsystems/heroes.md), "What `+0x27c` actually is".
 
 ### 4. Smaller leftovers, worth doing only alongside something else
 

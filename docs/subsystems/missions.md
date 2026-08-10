@@ -687,13 +687,11 @@ Who writes `prov+0x400fb` is unread.
   no writer found.
 - **Mission field `+0x39`**, read by the handler's `+0x1c` predicate; no writer
   found.
-- **`cMan_Comm1` writes `26` to `+0x27c`** in its constructor (`0x08245920`) and
-  `FUN_08246150` copies a man *type* (`+0xb3`) into the same byte. Either
-  `+0x27c` is a general subtype byte that `cHero` uses for the hero id, or one of
-  the two readings is wrong. It does not affect anything above — the five
-  constant writes all go through `cHero_SetHeroId` — but
-  [heroes.md](heroes.md)'s "the hero id is the byte at `+0x27c`" should be read
-  as class-scoped until this is settled.
+- ~~**`cMan_Comm1` writes `26` to `+0x27c`**~~ — **closed 2026-08-10.** Both
+  readings were right and they never conflicted: `sizeof(cMan)` is `0x27c`, so
+  that byte is the first member of the *derived* class and `cHero` and
+  `cMan_Comm1` each own their own. [heroes.md](heroes.md)'s claim needed no
+  scoping after all.
 
 ## Cross-references
 

@@ -11,7 +11,10 @@ in-game description text instead, it says so.
 ## Two tiers, one byte apart
 
 A hero is not a separate unit — it is a **`cMan` with a hero id**, one byte at
-**`+0x27c`**. `cHero` is a real class (RTTI `5cHero`), and the RTTI also carries
+**`+0x27c`** — which, as of 2026-08-10, is known to be the byte `cHero` *adds*
+rather than a `cMan` field it borrows: `sizeof(cMan)` is exactly `0x27c`. See
+"What `+0x27c` actually is" below. `cHero` is a real class (RTTI `5cHero`), and
+the RTTI also carries
 `19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`, `16cMan_Archer_Hero`, plus the
 projectiles `10cHeroArrow` and `10cHeroSpear`.
 
@@ -294,19 +297,90 @@ an open thread in [starting-world.md](starting-world.md).
 A sixth site places a hero-type man and never assigns an id
 (`cMission_Scroll_lost_Finish`), leaving the `0` the constructor wrote.
 
+## What `+0x27c` actually is
+
+**Settled 2026-08-10**, and the question as this doc posed it — *the* hero id, or
+a general subtype byte? — turns out to be a false choice. It is neither: it is
+**the first byte past the end of `cMan`**, so every subclass that adds one byte
+gets its own field at that offset.
+
+`sizeof(cMan) == 0x27c`, read off the allocators rather than inferred from a
+struct guess. Six caste creators allocate a plain man with `new(0x27c)`
+(`0x08246280`, `0x08249530`, `0x0824a740`, …); every `cHero` subclass creator and
+`cMan_Comm1`'s allocate **`new(0x280)`** — `0x27c` plus one byte, padded to four.
+
+So `cHero` and `cMan_Comm1` are not sharing a field, they are two classes each
+declaring a first member. `cMan_Comm1`'s is a different thing entirely: its
+constructor seeds it with the constant `26`, and it is read and written through a
+getter/setter pair of vtable slots — getter `+0xe0` (`cMan_Comm1_GetSubtype`,
+`0x082461b0`), setter `+0xe8` (`cMan_Comm1_SetSubtypeFromMan`, `0x08246150`,
+which copies *another* man's man type from `+0xb3`). In the base `cMan` vtable
+those same two slots are a flat `return 25` and an empty body, so nothing
+inherited ever touches the byte.
+
+### The scan that settles it
+
+Done over the **instruction stream**, not over decompiles, because the earlier
+"sole writer" claim was wrong exactly where a decompile sweep is weak (the stream
+constructor takes the field's *address*, so there is no store to find). Scanning
+`.text` for the four bytes of the displacement `0x27c` gives 43 occurrences; 10
+are `jcc`/`call` rel32 and `push 0x27c` immediates, and classifying the remaining
+33 by the opcode in front of them gives:
+
+| where | accesses |
+|---|---|
+| the `cHero` translation unit, `0x080b22a2`–`0x080b2de2` | 2 writes, 2 address-takes, 21 reads |
+| the `cMan_Comm1` translation unit, `0x08245944`–`0x082461b8` | 2 writes, 2 address-takes, 1 read |
+| `cMan_Archer_Hero_GetRange` (`0x08255900`) | 1 read |
+| two unrelated classes | 2 **32-bit** writes — a different field at the same offset in a non-`cMan` object |
+
+**Nothing generic reads or writes it.** Every read in the `cHero` block is a
+per-hero ability hook of the form "if my id is *N*, apply `HEROn_…`" — e.g.
+`FUN_080b2730` gives hero 13 (Vatlar) a resource payout.
+
+And the developers name the field themselves twice over. Base `cMan` vtable slot
+`+0x58` is a one-line `Fatal("cMan::SetHeroId : I'm not a hero")` — `cHero`
+overrides that slot with `cHero_SetHeroId`. And the one reader outside `cHero`'s
+own translation unit is fed by a config key that spells out the id it is testing.
+
+So this doc's headline claim stands as written, and the class-scoping caveat can
+be dropped — with the sharper statement that it was never a `cMan` byte to scope.
+
+### `HERO12_RANGE_MOD`, and where hero abilities really live
+
+That last reader closes the doc's other open thread. `cMan_Archer_Hero`
+(RTTI-confirmed, vtable `0x083f7640`) overrides vtable slot `+0x38` — which
+returns `0` in the base `cMan` — with:
+
+```c
+char range = RANGE_BASE;
+if (this->heroId == 12) range = RANGE_BASE + HERO12_RANGE_MOD;
+return range;
+```
+
+Hero 12 is **Turmoth, the archer**, whose two listed modifiers are `VIS_MOD` and
+`RANGE_MOD`. So hero abilities live in **two** places, not one:
+
+- **Baked into the object** by `cHero_SetHeroId` — the four stat modifiers, the
+  magic-school immunities, and `HERO12_VIS_MOD`, which is added to `+0x86` there.
+- **Applied live in a per-class getter** — `HERO12_RANGE_MOD`, which is not
+  stored anywhere and is recomputed on every call, and only by the archer class.
+
+The split matters for anyone chasing a hero ability: `SetHeroId` is not the whole
+story, and a key absent from it is not therefore dead.
+
 ## Open threads
 
 - **Who reads `+0x88..0x90`.** The offset→school mapping rests on description
   text. Reading the spell-application path would confirm it from the consumer
   side and pin the school enum order.
-- **Is `+0x27c` really *the* hero-id field, or a general subtype byte?**
-  `cMan_Comm1`'s constructor (`0x08245920`) writes `26` to it and `FUN_08246150`
-  copies a man *type* (`+0xb3`) into it. Nothing above depends on the answer —
-  every hero id goes through `cHero_SetHeroId` — but read this doc's claim as
-  class-scoped until it is settled.
-- **`HERO12_RANGE_MOD` and the regen keys** are registered and therefore live,
-  but their consumers have not been read — only `VIS_MOD` was traced into
-  `SetHeroId`.
+- **The regen keys** (`HEROn_REG_FRAME`/`REG_HP`/`REG_ST`) and the various
+  `*_HIT_PERCENT` keys have registered consumers somewhere in the ~21 per-hero
+  hooks in the `cHero` translation unit, now enumerated by address above but not
+  read one by one.
+- **What `cMan_Comm1`'s subtype byte is for.** Read and written through vtable
+  `+0xe0`/`+0xe8`, seeded to `26`, set from another man's man type — but the
+  setter is only ever reached by virtual dispatch, so its caller was not chased.
 
 ## Cross-references
 
@@ -314,5 +388,7 @@ A sixth site places a hero-type man and never assigns an id
   experience model that heroes sit on top of.
 - [phls-format.md](../reference/phls-format.md) — the `.sdb` locale database
   format, cracked in the course of this work.
-- [simulation-step.md](simulation-step.md) — the units manager, still the
-  unmapped mass around all of this.
+- [simulation-step.md](simulation-step.md) — the unit AI/movement core, still the
+  unmapped mass around all of this. (Its "units manager at `g_World+0x1f394`" was
+  withdrawn 2026-08-10 — that address is the mission handler; the units
+  *container* is `+0x1f398`.)
