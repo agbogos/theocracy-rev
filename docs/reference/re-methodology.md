@@ -568,6 +568,36 @@ Cost: about ten lines of Python against the ELF, no Ghidra. The same scan works
 for any offset whose value exceeds `0x7f` — smaller offsets use disp8 and need
 the ModRM byte matched instead, which is more work but the same idea.
 
+### The false negative it will hand you, on the same day
+
+Run against `+0x8a` — a hero's Moon magic-resistance slot — the scan found a
+write in `cHero_SetHeroId` and **no read anywhere in the image**, twice, the
+second time with a deliberately wide opcode net. The conclusion sitting there for
+the taking was "a hero's Moon immunity is never consulted", which is the kind of
+dead-content finding this project has published before and would have published
+again.
+
+It is false. The slot *is* read, by `cMan_GetMagicResistance` — as
+`[reg + school*2 + 0x88]`. **An array field is addressed from its base**, so the
+displacement in the instruction is `0x88` and the other four offsets never appear
+in the instruction stream at all.
+
+Two rules follow, and the second is the general one:
+
+- **Match SIB forms too.** A scan keyed on `opcode + modrm + disp32` silently
+  skips every `[base + index*scale + disp32]`, because the SIB byte sits between
+  the ModRM and the displacement. In this binary that is the difference between
+  "no reader" and "the reader".
+- **Before believing a negative, ask how else the address could be formed.**
+  Indexing off a smaller offset, a pointer computed once into a register, a
+  `memcpy` over the whole struct — none leaves the offset as a literal. The scan
+  is exhaustive over *one addressing form*, not over uses. That is enough for a
+  positive claim and never enough for a negative one on its own.
+
+The tell that saved it was cheap and worth reusing: the field was one of five
+consecutive slots that a *loop* in `SetHeroId` writes with a scaled index. **If
+something writes it as an array, something reads it as an array.**
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -610,7 +640,9 @@ Before a finding lands in `docs/` or in host code:
     were the *bodies* compared, or only the addresses? (§14)
 13. Is the claim about a **struct field** — who writes it, who reads it, "nothing
     else touches it"? Xrefs cannot answer that and decompiles hide address-takes.
-    Scan `.text` for the displacement and classify each hit. (§17)
+    Scan `.text` for the displacement and classify each hit — including SIB
+    forms, and never resting a *negative* on the scan alone, because an array
+    field is addressed from its base and its other offsets never appear. (§17)
 14. Is the claim about **who constructs an object**, and is it resting on a
     factory or on one construction path? Check the constructors, and remember
     that a stream loader reached through a registered function pointer appears in

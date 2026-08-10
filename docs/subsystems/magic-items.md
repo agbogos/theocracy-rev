@@ -152,11 +152,40 @@ correction under it.
 
 The `type` values group by item family: `1` melee weapons (axes and swords), `2`
 spears, `4` bows, `8` shields, `16` masks, `32` rings and earrings, `64` and
-`128` the oddments. Given three warning strings in the locale — "Your man cannot
-use this magic item", "Your man is using **another magic item of this type**",
-"No more room for another magic item" — this is the equip-restriction field. The
-checker itself has not been read, so treat the exact semantics (bitmask of
-allowed carriers vs. category id) as unsettled.
+`128` the oddments. Three warning strings in the locale go with it — "Your man
+cannot use this magic item", "Your man is using **another magic item of this
+type**", "No more room for another magic item".
+
+**The checker was read 2026-08-10** — `cMan_TryEquipItemSlot` (`0x080a81f0`),
+called by `cMan_GiveItem` once the item is in a slot — and it settles
+bitmask-vs-category: **it is a bitmask**, and the ambiguity was real because the
+field is used *both* ways in the same function.
+
+```c
+u32 allowed = item->type;                        // +0x04
+u32 canUse  = man->vtable[0x24](man) & 0xffff;   // per-man-class capability mask
+if ((canUse & allowed) == 0)
+    refuse("Your man cannot use this magic item");
+else {
+    other = man->items[1 - slot];
+    if (other && other->equipped && other->type != 0x80 && other->type != 0x20
+        && other->type == item->type)
+        refuse("Your man is using another magic item of this type");
+    else
+        item->vtable[0x0c](item, man);           // equip
+}
+```
+
+So the **carry** test is a genuine bitwise AND against a mask the man's class
+supplies, while the **duplicate** test compares the field for equality — which
+is what makes it read like a category id. Both work because every shipped value
+is a single bit.
+
+The duplicate rule has an exemption nothing else records: **types `0x80` and
+`0x20` are excluded from it**, so a man may hold two rings/earrings (`0x20`) or
+two of the `0x80` oddments, but not two shields. The third warning string is
+`cMan_GiveItem`'s own, for the two-slot limit, and is checked before either of
+these.
 
 ## The thirteen without flavour text
 
@@ -295,14 +324,28 @@ a player actually finds on the map, read the census in
 
 ## Open threads
 
-- **The `+0x04` type field's exact semantics** — the equip checker is unread.
-- **The `+0x18` field on ids 2, 8 and 50** — **partly answered.** The three
-  28-byte items are exactly the three that need to remember something between
-  calls. Moon Shield (8) is now read: its slot-7 override is
-  `*(byte*)(this+0x18) ^= 1`, returning zero damage when the bit is set — it
-  blocks literally **every other** sword blow, which is what its description
-  claims. Bone Horn (50) uses a counter capped by `MBH_TIME`. Id 2's use
-  (`MH_TIME_MIN`/`MAX`) is still unread.
+- ~~**The `+0x04` type field's exact semantics**~~ — **closed 2026-08-10**, above:
+  a bitmask for the carry test and an equality key for the duplicate test, with
+  `0x80` and `0x20` exempt from the latter.
+- **The `+0x18` field on ids 2, 8 and 50** — **mechanism answered, initialisation
+  is a defect.** (Note the collision: this is the *object* field at `+0x18`, not
+  the *vtable* slot at `+0x18` in the table above.) The three 28-byte items are
+  exactly the three that need to remember something between calls. Moon Shield
+  (8): its slot-7 override is `*(byte*)(this+0x18) ^= 1`, returning zero damage
+  when the bit is set — it blocks literally **every other** sword blow, which is
+  what its description claims. Bone Horn (50) uses a counter capped by `MBH_TIME`.
+  Id 2's use (`MH_TIME_MIN`/`MAX`) is still unread.
+
+  **But only id 2 initialises it.** Its constructor (`0x081fd3c0`) writes
+  `*(byte*)(this+0x18) = 0`; ids 8 (`0x081fd920`) and 50 (`0x081ff6d0`) write
+  nothing there, the base constructor (`0x081fcfb0`) stops at `+0x12` because the
+  base object is only `0x18` bytes, and all three use the **default** equip and
+  unequip (`0x081fd1c0`/`0x081fd230`, confirmed from their vtables) which never
+  touch it. So Moon Shield and Bone Horn read a byte `operator new` left as heap
+  garbage. For Moon Shield the effect is bounded — the XOR still alternates, so
+  only the *phase* is random (whether it blocks the 1st or the 2nd blow). For
+  Bone Horn a garbage starting counter against `MBH_TIME` is potentially visible,
+  and pinning that needs its slot-5 body read.
 - **Slots 5–7 roles** are read from a sample of overriding bodies, not from all
   90. A full pass would firm up the slot table.
 - **Items 30 and 40** are placed by `mitem.cfg` and are in no world file — see

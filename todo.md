@@ -77,18 +77,32 @@ abilities are now known to live in two places — baked in by `SetHeroId`, or
 applied live in a per-class getter. See
 [`heroes.md`](docs/subsystems/heroes.md), "What `+0x27c` actually is".
 
-### 4. Smaller leftovers, worth doing only alongside something else
+### ~~4. Smaller leftovers~~ — done 2026-08-10
 
-- The `+0x04` equip-restriction field on items: the checker is unread, so
-  bitmask-of-carriers vs. category id is unsettled
-  ([magic-items.md](docs/subsystems/magic-items.md)).
-- Who reads a man's `+0x88..0x90` magic-school slots. The offset→school mapping
-  (Sun/Moon/Star/Nature/Soul) currently rests on hero description text agreeing
-  across nine heroes, not on the consuming code
-  ([heroes.md](docs/subsystems/heroes.md)).
-- The `+0x18` field on items 2, 8 and 50 — three items allocate four extra bytes
-  and only id 2's initialisation was observed.
+- ~~The `+0x04` equip-restriction field on items~~ — a **bitmask** for the carry
+  test (AND-ed against a per-man-class capability mask from man vtable `+0x24`)
+  and an equality key for the duplicate test, with types `0x80` and `0x20` exempt
+  from the latter. `cMan_TryEquipItemSlot` (`0x080a81f0`).
+- ~~Who reads a man's `+0x88..0x90` magic-school slots~~ — `cMan_GetMagicResistance`
+  (`0x080aded0`) and `cMan_ApplyMagicDamage` (`0x08098180`). It is one five-element
+  `u16` array and a **percentage damage reduction**, not five flags. Four schools
+  named from the spell classes that read their own slot; Moon by elimination.
+- ~~The `+0x18` field on items 2, 8 and 50~~ — mechanism was already known;
+  what is new is that **only id 2 initialises it**, so Moon Shield and Bone Horn
+  read uninitialised heap. See [magic-items.md](docs/subsystems/magic-items.md),
+  "Open threads".
 - ~~`hero.cfg` columns 3 and 4 / province virtual `+0xe4`~~ — **done
   2026-08-09.** `+0xe4` is `(prov, pos, manType, tribe) -> cMan*`, and columns 3
   and 4 are the first eight bytes of the record, passed as that `pos`. See
   [missions.md](docs/subsystems/missions.md).
+
+### 4. What this pass opened
+
+- **Bone Horn (50)'s slot-5 body** — needed to say whether its uninitialised
+  `+0x18` counter is observable in play, or harmlessly reset on first use.
+- **Man vtable `+0x24`**, the per-class "which item types can I carry" mask. Read
+  from its use in the equip checker, body unread; reading it would give the
+  carrier table for all 50 items.
+- **Spell `+0x350`** is the school id. Only its use is read; where a spell's
+  school is set was not chased, and doing so would turn the Moon slot from
+  elimination into a direct reading.

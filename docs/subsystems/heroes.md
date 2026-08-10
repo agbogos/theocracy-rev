@@ -70,28 +70,63 @@ table below: "no immunity" is not the same as "no ability".
 ## The five magic schools
 
 `SetHeroId` writes `100` into exactly one of five 16-bit slots at `+0x88..0x90`,
-and for hero 6 loops a config value into all five. The slots are per-school
-magic resistance, and the schools are named by the heroes' own descriptions —
-which agree across independent heroes:
+and for hero 6 loops a config value into all five.
 
-| offset | school | confirmed by |
+**Read from the consumer side 2026-08-10**, which was this doc's last open
+thread. It is not five fields but **one five-element `u16` array**, and the
+accessor says so in one line — `cMan_GetMagicResistance` (`0x080aded0`):
+
+```c
+short v = *(short *)(man + school*2 + 0x88);
+return v < 0 ? 0 : v < 101 ? v : 100;      // clamped to 0..100
+```
+
+And the consumer is `cMan_ApplyMagicDamage` (`0x08098180`):
+
+```c
+if (spell->school != 5)                                  // 5 = no school
+    damage = damage * (100 - resist[spell->school]) / 100;
+```
+
+So the slot is a **percentage damage reduction**, and `100` is immunity as an
+*endpoint* rather than as a flag — a hero at 90 takes a tenth of the damage. The
+spell carries its own school at `spell+0x350`.
+
+The school enum is pinned by four spell classes that inline their own slot
+instead of calling the accessor, each naming itself in RTTI:
+
+| index | offset | school | read directly by |
+|---|---|---|---|
+| 0 | `+0x88` | Sun | `cSpell_Sun5` (`0x08260ae0`) |
+| 1 | `+0x8a` | Moon | — by elimination |
+| 2 | `+0x8c` | **Stars** | `cSpell_Stars5` (`0x0826b250`) |
+| 3 | `+0x8e` | Nature | `cSpell_Nature4` (`0x0826f170`) |
+| 4 | `+0x90` | Soul | `cSpell_Soul6` (`0x08279340`) |
+
+Four are read off code. Moon is elimination over a **closed** set — the array is
+exactly five wide (the Chimoki loop runs `while (i < 5)`), four indices are named,
+so the fifth is determined — and it independently matches both the description
+evidence below and the RTTI ordering of the spell roster, which is
+`cSpell_Sun/Moon/Stars/Nature/Soul`, six spells each, plus `cSpell_ChPriest` and
+`cSpell_Vampire1/2`.
+
+**One name changes**: the third school is `Stars`, not `Star`, per its own RTTI.
+
+The descriptions, which were the previous basis and are now corroboration:
+
+| offset | school | heroes whose description says so |
 |---|---|---|
 | `+0x88` | Sun | Morhamum (18) |
 | `+0x8a` | Moon | Toomoo (3) |
-| `+0x8c` | Star | Vatlar (13) |
+| `+0x8c` | Stars | Vatlar (13) |
 | `+0x8e` | Nature | Kukurbuki (5), Garkuna (10), Pocotli (14) |
 | `+0x90` | Soul | Shibiri (1), Akrisi (8) |
 
-`100` means immune. Chimoki (6) is the only hero who gets all five, and gets
-them at **`HERO6_MAGICRESISTANCE=90`** rather than 100 — which is exactly what
-his description claims: "*partial* immunity to any form of magic". A config
-value and a sentence written by different people, agreeing.
-
-This is the one claim in this doc resting partly on description text: the
-offset→school mapping is read from code, but *which* school each offset is comes
-from the descriptions. Nine heroes and five slots agree with no contradiction,
-so it is solid, but the consumer side (the spell code that reads `+0x88..0x90`)
-has not been read — see Open threads.
+Chimoki (6) is the only hero who gets all five, at **`HERO6_MAGICRESISTANCE=90`**
+rather than 100 — exactly what his description claims, "*partial* immunity to any
+form of magic". Read as a percentage that is now literally true: he takes 10% of
+all magic damage. A config value, a sentence and a formula written by different
+people, agreeing.
 
 ## The nineteen
 
@@ -114,7 +149,7 @@ directly; see the correction below.
 | 10 | Garkuna | — | 50 | 2000 | 25 | 0 | Nature | — | — / mission VillageOfJaguar |
 | 11 | Jarakhi | — | 0 | 3000 | 10 | 6 | — | `KATHAPI_HIT_PERCENT` | **player character — ships in `campaign/init.dat`** |
 | 12 | Turmoth | arch | 50 | 2000 | 10 | 5 | — | `VIS_MOD`, `RANGE_MOD` | 6 / 35,0 |
-| 13 | Vatlar | sword | 50 | -4000 | 25 | 12 | Star | — | 36 / 39,22 |
+| 13 | Vatlar | sword | 50 | -4000 | 25 | 12 | Stars | — | 36 / 39,22 |
 | 14 | Pocotli | sword | -25 | 4000 | 25 | 8 | Nature | `JAGUAR_`/`NATUREPRIEST_HIT_PERCENT` | 16 / 0,0 |
 | 15 | Fakhuma | sword | 50 | 2000 | 25 | 0 | — | `REG_FRAME`, `REG_ST`, `SWORDSMAN_ATT_PERCENT` | 7 / 42,0 |
 | 16 | HuorMuah | sword | 50 | -4000 | 40 | 0 | — | — | 35 / 16,4 |
@@ -371,9 +406,10 @@ story, and a key absent from it is not therefore dead.
 
 ## Open threads
 
-- **Who reads `+0x88..0x90`.** The offset→school mapping rests on description
-  text. Reading the spell-application path would confirm it from the consumer
-  side and pin the school enum order.
+- ~~**Who reads `+0x88..0x90`.**~~ **Closed 2026-08-10** — `cMan_GetMagicResistance`
+  and `cMan_ApplyMagicDamage`, above. The mapping is now read from the consuming
+  code for four of five schools and determined by elimination for the fifth, and
+  the slots turn out to be a percentage reduction rather than a flag.
 - **The regen keys** (`HEROn_REG_FRAME`/`REG_HP`/`REG_ST`) and the various
   `*_HIT_PERCENT` keys have registered consumers somewhere in the ~21 per-hero
   hooks in the `cHero` translation unit, now enumerated by address above but not
