@@ -128,6 +128,24 @@ form of magic". Read as a percentage that is now literally true: he takes 10% of
 all magic damage. A config value, a sentence and a formula written by different
 people, agreeing.
 
+### It is not a hero field — every man has one
+
+**Added 2026-08-10.** The array is part of the base `cMan`, and heroes only
+*overwrite* entries in it. Two more paths write it, and both walk it as an array
+of five, which is now the third and fourth independent confirmation of the shape:
+
+- **The plain `cMan` constructor** (`0x08093df0`) fills all five from the man's
+  **caste properties** — bytes `+0x35..+0x39` of the caste struct, which
+  `cMan::cCasteProperties`'s own constructor (`0x080ae470`, named by its
+  `Fatal("cMan::cCasteProperties : man speed shouldn't be greater than 250")`)
+  sets to **one value repeated across all five schools**. So a man type has a
+  flat magic resistance, and per-*school* variation is a hero-only thing.
+- **The save stream**: `cMan_CombatAttribs_Load` (`0x080b7fc0`) restores the
+  sub-object at `man+0x80` and reads the five slots back in a loop of five. They
+  survive save/load — which is worth stating because the stream constructor
+  zeroes them first, and a reader who stopped there would conclude that a loaded
+  hero silently loses his immunity.
+
 ## The nineteen
 
 `type` is from `hero.cfg` where the hero is placed there. `prov / items` is the

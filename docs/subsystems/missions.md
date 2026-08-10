@@ -655,9 +655,61 @@ spawns is appended to the caller's list as one of these 16-bit id handles, wrapp
 in a `cNode`. So **missions refer to men by id, not by pointer**, which is what
 lets mission state be serialised straight into the world file.
 
+### Where the flags come from: nowhere in code
+
+**Read 2026-08-10.** `man+0x28` has exactly two writers in the image, and they are
+the two constructors:
+
+| path | what it does to `man+0x28` |
+|---|---|
+| `cMan` ctor (`0x08093df0`) | `= 0` |
+| `cMan` **stream** ctor (`0x08094730`) | reads **four bytes** straight from the world file |
+
+Nothing else touches it — established with the [§17](../reference/re-methodology.md)
+displacement scan over `.text`, then by checking every candidate write in the man
+code, all of which turned out to be `+0x28` on unrelated classes (`cVObject`'s
+ctor, `cMan::cCasteProperties`).
+
+So the mission flags are **pure data**: authored in the map editor, shipped inside
+`init.dat`, never computed. Which has a consequence worth stating plainly, because
+it constrains how the campaign missions can possibly work:
+
+- Any man the **code** creates has flags `0` — including every man
+  `MissionCfg_PlaceMen` spawns, since the five-column `.man` format has no flag
+  column and the spawn goes through province virtual `+0xe4`, i.e. the ordinary
+  constructor.
+- Therefore a man can only be *found* by `Mission_FindManByFlag` if he **shipped
+  in the world file**. The campaign missions that look their commander and hero
+  up instead of spawning them are reading designer-placed men, and cannot be made
+  to work any other way.
+
+This is the same channel as the hero id — [starting-world.md](starting-world.md)'s
+"fourth channel" — and the same reason it stayed invisible: a code audit sees the
+consumer and no producer, because the producer is a map editor nobody has.
+
+### The bits actually used
+
+Decoded from the constants at all ten call sites rather than from any table —
+the argument order is `(prov, flagMask, tribe, manType)`:
+
+| mask | sites | tribe / man type |
+|---|---|---|
+| `2` | nine | a specific tribe, and man types 10, 22, 26, 30, 31, 32, 33, 34 |
+| `3` | one, in `cMission_Vampire` (`0x0821a7f9`) | any tribe, any man type |
+
+**Only bits 0 and 1 exist in the shipped game.** Bit 1 is the general
+"this is a mission man" marker — every scenario site uses it alone; Vampire is the
+only caller that also accepts bit 0.
+
+The man types name the roles: **26 is `cMan_Comm1`**, the command unit (its own
+constructor seeds its subtype byte with 26 — see [heroes.md](heroes.md)), and
+**33/34 are the swordsman and spearman hero man types**. So the two lookups in
+`cMission_S4_0_Start` (`0x0822f28b`, `0x0822f2bd`) are exactly "find my commander"
+and "find my hero", which is what the previous pass suspected and could not show.
+
 So the campaign missions are content-driven the same way the named ones are: the
-men are already in the province — from `init.dat` or from a `.man` file — and the
-mission finds the ones the designer flagged.
+men are already in the province — from `init.dat` — and the mission finds the ones
+the designer flagged.
 
 ## Province virtual `+0xe0`
 
@@ -677,8 +729,10 @@ Who writes `prov+0x400fb` is unread.
 ## Open threads
 
 - **The eight campaign missions (`cMission_S*_*`)** still have unread bodies.
-  Their lookup helper is now read (`Mission_FindManByFlag`, above), so what is
-  left is per-mission specifics and **which flag bits mean what** in `man+0x28`.
+  Both their lookup helper and its flag argument are now read, so what is left is
+  per-mission specifics. The one thing code cannot answer is **which men in each
+  `init.dat` carry which bit** — that is data, and reading it needs
+  `THEOC_DUMP_WORLD` extended to dump `man+0x28`, not another Ghidra session.
 - **The other eight `iMissionHandler` subclasses.** Only the campaign's six
   virtuals were read. The scenario handlers are at the eight remaining callers of
   `iMissionHandler_ctor`; two of them (`0x0822ed30`, `0x08233210`) extend `Load`

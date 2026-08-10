@@ -35,17 +35,21 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 Nothing here gates anything. Ghidra: `theocracy.real` for all of it.
 
-### 1. The mission-flag mask on `man+0x28`
+### 1. Which men in `init.dat` carry a mission flag
 
-The way into the eight campaign missions (`cMission_S*_*`), whose bodies are
-still unread. `Mission_FindManByFlag` (`0x08211e10`) selects men by
-`man[0x28] & mask`, and the `flag:%d` diagnostics all over the mission layer are
-printing it — but which bit means what is unknown. The `.man` files and the
-`init.dat` men are where the bits are set, so
-[`starting-world.md`](docs/subsystems/starting-world.md)'s `THEOC_DUMP_WORLD`
-hooks are one way to read them off a live load rather than out of the code.
+**The code half is done** (2026-08-10): `man+0x28` is written by nothing except
+the two `cMan` constructors — zero, or four bytes straight from the world file —
+so the flags are pure map-editor data, and only bits 0 and 1 are ever queried.
+See [`missions.md`](docs/subsystems/missions.md), "Where the flags come from".
 
-See [`missions.md`](docs/subsystems/missions.md), "How missions hold on to men".
+What is left is not a Ghidra task. Extend `THEOC_DUMP_WORLD` to print `man+0x28`
+alongside the caste and run it over the nine world files, the same way
+[`starting-world.md`](docs/subsystems/starting-world.md) read the hero and item
+census. That answers which designer-placed men each campaign mission is looking
+for, and it is the last piece the `cMission_S*_*` bodies need.
+
+Needs a headless run, so it is a **YOU**-adjacent task in practice — the port
+change is mine, the run is yours.
 
 ### 2. Man vtable `+0x24` — the item-carrier mask
 
