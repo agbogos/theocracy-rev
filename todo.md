@@ -51,15 +51,7 @@ for, and it is the last piece the `cMission_S*_*` bodies need.
 Needs a headless run, so it is a **YOU**-adjacent task in practice — the port
 change is mine, the run is yours.
 
-### 2. Man vtable `+0x24` — the item-carrier mask
-
-The per-man-class "which item types can I carry" mask. Read only from its *use*
-in `cMan_TryEquipItemSlot` (`0x080a81f0`); the bodies are unread. Reading them
-across the man classes would give the carrier table for all 50 items, which is
-the one thing [`magic-items.md`](docs/subsystems/magic-items.md)'s type column
-still cannot say in player-facing terms.
-
-### 3. The eight scenario `iMissionHandler` subclasses
+### 2. The eight scenario `iMissionHandler` subclasses
 
 Only the campaign's six virtuals were read. The scenario ones are the eight
 remaining callers of `iMissionHandler_ctor` (`0x0820f420`); two of them
@@ -68,7 +60,7 @@ Cheap, and it would settle whether the scenarios script anything or just hold
 missions. See [`missions.md`](docs/subsystems/missions.md), "What starts a
 mission".
 
-### 4. Smaller leftovers, worth doing only alongside something else
+### 3. Smaller leftovers, worth doing only alongside something else
 
 - **Bone Horn (50)'s slot-5 body** — whether its uninitialised `+0x18` counter
   is observable in play or harmlessly reset on first use

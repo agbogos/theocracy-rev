@@ -187,6 +187,46 @@ two of the `0x80` oddments, but not two shields. The third warning string is
 `cMan_GiveItem`'s own, for the two-slot limit, and is checked before either of
 these.
 
+### Who can carry what
+
+**Read 2026-08-10.** The other half of that AND — man vtable slot `+0x24` — is
+`cMan::GetItemCarryMask`, and every implementation in the image is a single
+`return <constant>`. So the entire carrier table is sixteen numbers, recovered by
+reading slot `+0x24` out of each man-class vtable and the constant out of each
+function it points at:
+
+| mask | classes | can carry |
+|---|---|---|
+| `0xf9` | `cMan_Swordsman`, `cMan_Swordsman_Hero` | melee, shield, mask, ring, oddments |
+| `0xfa` | `cMan_Spearman`, `cMan_Spearman_Hero` | spear, shield, mask, ring, oddments |
+| `0xfc` | `cMan_Archer_Hero`, `cMan_BigVampire` | bow, shield, mask, ring, oddments |
+| `0xf4` | `cMan_Archer` | bow, mask, ring, oddments — **no shield** |
+| `0xf8` | `cMan_Comm1` | shield, mask, ring, oddments — no weapon |
+| `0xf0` | `cMan_JudasPriest` 1–5, `cMan_Governor` | mask, ring, oddments |
+| `0xe0` | `cMan_MoJaguar` | ring, oddments |
+| `0xb0` | `cMan_Spy` | mask, ring, `0x80` oddments — **not `0x40`** |
+| `0x00` | the other 27 | nothing |
+
+**The default is zero**, so carrying is opt-in and most of the roster is excluded:
+every civilian (farmer, miner, woodcutter, builder, trader, slave, lama driver,
+`cMan_Kezmuves`), and also `cMan_Vampire`, `cMan_Jaguar`, `cMan_Lama`,
+`cMan_Shadow`, `cMan_Stonewarrior`, `cMan_Cortes` and `cMan_Dragonkiller`.
+
+Three things fall out that the item table alone could not say:
+
+- **No man carries two weapon families.** Swordsman gets `1`, spearman `2`,
+  archer `4`, and nobody gets a second — the exclusivity is in the carrier, not
+  in the item.
+- **The archer is the only class whose hero variant differs.** Swordsman and
+  spearman have identical masks to their hero versions; `cMan_Archer` is `0xf4`
+  and `cMan_Archer_Hero` is `0xfc`, so **only a hero archer may carry a shield**.
+- **Every item type has at least one carrier**, so no item is unequippable by
+  construction — which, with the `+0x18` finding above, means the inert items are
+  inert for authoring reasons and never for lack of a hand to hold them.
+
+`cMan_BigVampire` sharing the hero-archer mask is the one entry that reads as a
+design oddity rather than a rule; recorded as observed.
+
 ## The thirteen without flavour text
 
 Thirteen items have a description equal to their own name: **1, 2, 7, 12, 17, 18,

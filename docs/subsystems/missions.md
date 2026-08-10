@@ -181,9 +181,16 @@ positioned by the province rather than by the file.
 ## Missions place heroes
 
 `cHero_SetHeroId` (`0x080b23d0`) is a virtual at slot `+0x58` of the hero
-vtable (`0x0831af20`, installed at `0x080b229b`). The base `cMan` vtable
-(`0x0831ae00`) has a different function in that slot, so the slot alone is not
-enough — every candidate was checked for a two-argument call.
+vtable (`0x0831af20`, installed at `0x080b229b`). A non-hero man class has a
+different function in that slot, so the slot alone is not enough — every
+candidate was checked for a two-argument call. The inherited default is
+`Fatal("cMan::SetHeroId : I'm not a hero")` (`0x080ad270`), which is the
+developers' own name for the slot.
+
+> **Small correction, 2026-08-10.** This paragraph called `0x0831ae00` "the base
+> `cMan` vtable". Its RTTI getter says `7cWorker` — it is **`cWorker`'s** vtable,
+> which merely carries `cMan`'s inherited defaults. Nothing above depended on the
+> name, but "the base `cMan` vtable" is not a thing this project has located.
 
 It is **not** the only writer of the hero id, though this doc first said so:
 `cHero`'s stream constructor writes `+0x27c` directly from save data. See "The
