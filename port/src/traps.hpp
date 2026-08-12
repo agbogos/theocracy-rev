@@ -34,13 +34,23 @@ public:
     // Print the tally of which imports were hit (implemented vs. TODO).
     void report() const;
 
-    // Collapse the duplicate per-province groups in a .tsg save, in place.
+    // Collapse the duplicate per-province groups in a .tsg save, in place, and
+    // normalise the save's uninitialised 72-byte header.
     // Called after the game closes a save it wrote; also reachable standalone
     // via THEOC_FIX_SAVE=<path> so it can be tested and used without a display.
     // Refuses to write anything it does not fully recognise. See the definition
     // for the format and why it is anchored on the counter byte.
     // THEOC_NO_SAVE_FIX=1 disables it on the save path.
     static void collapse_save_file(const std::string& path);
+
+    // Build identity written into save headers: `stamp_date` is YYMMdd and
+    // `commit` is the 7-char hash plus its dirty flag. See the definition for
+    // the field layout and why it is 22 bytes wide.
+    // Handed over from main() rather than compiled in, so that changing the
+    // version does not rebuild this (very large) translation unit — see the
+    // stamping block in CMakeLists.txt. Call before any save is closed.
+    static void set_build_identity(const std::string& stamp_date,
+                                   const std::string& commit);
 
     // Disarm the stall watchdog before the run winds down (see definition).
     void stop_watchdog();

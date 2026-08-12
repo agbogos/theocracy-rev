@@ -40,7 +40,65 @@ endif()
 if(NOT THEOC_VERSION)
   set(THEOC_VERSION "unknown")
 endif()
-message(STATUS "theoc build identity: ${THEOC_VERSION}")
+
+# The same commit again, in the two fixed-width fields the save-header stamp
+# needs: YYMMdd, and a 7-char hash plus one flag char (`+` dirty, `0` clean).
+# See normalise_save_header in traps.cpp for the field layout and its budget.
+#
+# Not derived by parsing THEOC_VERSION: `git describe` output varies (a tagged
+# commit has no -g<sha> suffix at all), so both are asked for directly.
+#
+# Deliberately the COMMIT date and not the build date. The build date would make
+# two builds of the same source produce different bytes, which is the property
+# the header normalisation exists to remove. It also means the date and the hash
+# check each other — the date is a fact about the commit, not about the machine.
+set(THEOC_STAMP_DATE "" CACHE STRING "Commit date as YYMMdd; defaults to git")
+set(THEOC_COMMIT "" CACHE STRING "7-char commit hash + dirty flag; defaults to git")
+if(NOT THEOC_STAMP_DATE OR NOT THEOC_COMMIT)
+  find_package(Git QUIET)
+  if(GIT_FOUND)
+    if(NOT THEOC_STAMP_DATE)
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" log -1 --format=%cd --date=format:%y%m%d
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE THEOC_STAMP_DATE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    endif()
+    if(NOT THEOC_COMMIT)
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short=7 HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE THEOC_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+      # Tracked files only, matching what `git describe --dirty` counts.
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" status --porcelain --untracked-files=no
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE _theoc_dirty
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+      if(THEOC_COMMIT)
+        # rev-parse --short=7 is a *minimum*: it lengthens on collision. The
+        # field is fixed-width, so clamp rather than let it shift everything.
+        string(SUBSTRING "${THEOC_COMMIT}" 0 7 THEOC_COMMIT)
+        if(_theoc_dirty)
+          set(THEOC_COMMIT "${THEOC_COMMIT}+")
+        else()
+          set(THEOC_COMMIT "${THEOC_COMMIT}0")
+        endif()
+      endif()
+    endif()
+  endif()
+endif()
+if(NOT THEOC_STAMP_DATE)
+  set(THEOC_STAMP_DATE "000000")
+endif()
+if(NOT THEOC_COMMIT)
+  set(THEOC_COMMIT "00000000")
+endif()
+message(STATUS "theoc build identity: ${THEOC_VERSION} (stamp ${THEOC_STAMP_DATE}${THEOC_COMMIT})")
 
 # ---- Dependency discovery ----------------------------------------------------
 #
@@ -153,8 +211,11 @@ target_link_libraries(theoc PRIVATE
 target_compile_options(theoc PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # Only main.cpp is stamped, so editing the version does not rebuild the world.
+# traps.cpp needs the identity too (it stamps it into save headers) and is the
+# largest unit here — so it is handed the strings at startup through
+# TrapLayer::set_build_identity rather than compiled against them.
 set_source_files_properties(src/main.cpp PROPERTIES
-  COMPILE_DEFINITIONS "THEOC_VERSION=\"${THEOC_VERSION}\"")
+  COMPILE_DEFINITIONS "THEOC_VERSION=\"${THEOC_VERSION}\";THEOC_STAMP_DATE=\"${THEOC_STAMP_DATE}\";THEOC_COMMIT=\"${THEOC_COMMIT}\"")
 
 # ---- Windows host ------------------------------------------------------------
 # Two things, both of which fail confusingly if missed:

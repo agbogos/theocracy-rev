@@ -31,19 +31,160 @@ An already-corrupted save fails (2) because its counter has wrapped — that is
 detected and reported separately, and repaired by recomputing the count from
 the repetition rather than trusting the stored byte.
 
+The uninitialised header
+------------------------
+Separately, the 72-byte header every save starts with is mostly stack the game
+never initialised. Only the NUL-terminated save name at the front and the
+8-byte "theosg42" magic at +0x40 are real; in between are live guest pointers,
+which is why two saves of an identical game state never compare equal. That is
+a nuisance when triaging a save a playtester sent, so the window is zeroed and
+stamped with the identity of the build that wrote it.
+
+The stamp is 22 fixed-width bytes, no separators, so every field parses by
+offset:
+
+    8f4b 260812 9245c7e + ma 03
+    └id┘ └date┘ └sha7─┘ │ └┘ └┘
+      │      │      │   │  │  └─ knob mask, 2 hex — see KNOB_BITS
+      │      │      │   │  └──── host + arch: ma / l6 / la / w6
+      │      │      │   └─────── `+` dirty tree, `0` clean
+      │      │      └─────────── commit hash
+      │      └────────────────── commit date, YYMMdd
+      └───────────────────────── format id, fixed
+
+The window is not a fixed size — it is 64 - len(save name) - 1, and the game's
+save dialog caps the name at 40 characters, so it runs from 55 bytes down to 23.
+22 fits the floor with a byte to spare. It is never truncated: below its full
+width the window is zeroed, a partial stamp being neither parseable nor
+recognisably absent.
+
+The date is redundant against the hash and kept anyway, precisely because it is:
+the two have to agree, and making them agree needs the repository they came
+from, so an edited stamp does not survive inspection.
+
+The stamp must match what port/src/traps.cpp writes byte-for-byte, or the two
+implementations stop being checkable against each other — so `--stamp` takes the
+literal string the binary emits. It defaults to reading git the same way CMake
+does, which is right whenever this repo is the one that built it. The knob mask
+is read from the environment, so cross-checking wants the same environment on
+both sides.
+
 Usage
 -----
     tools/fix_save.py check  save0.tsg [more...]     # report only (default)
     tools/fix_save.py fix    save0.tsg [more...]     # rewrite, keeps a .bak
+    tools/fix_save.py header save0.tsg [more...]     # decode the header stamp
+
+    --stamp "8f4b2608129245c7e+ma03"   # match a specific binary exactly
+    --no-stamp                         # zero the window, write no stamp
 """
 
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 UNIT = 17                 # one record: four LE u32 + one trailing byte
 GROUPS = (4, 5)           # units appended per save; 5 is map23's
 MIN_REPEATS = 2           # nothing to collapse below this
+
+HEADER_LEN = 0x48         # the game's single Write(file, local_ac, 0x48)
+MAGIC_OFF = 0x40          # "theosg42" — initialised, never touched
+MAGIC = b"theosg42"
+STAMP_ID = "8f4b"         # format id; see normalise_save_header in traps.cpp
+STAMP_LEN = 22            # id4 + date6 + sha7 + flag1 + host2 + knobs2
+
+# Bit -> knob, mirroring kKnobBits in traps.cpp. Order is load-bearing: it is
+# what makes a mask read the same on both sides.
+KNOB_BITS = ("THEOC_EDIT", "THEOC_NEW_WORLD", "THEOC_CONSOLE", "THEOC_SERVER",
+             "THEOC_PROVINCE_MS", "THEOC_FRAME_MS", "THEOC_WORLD_FILE",
+             "THEOC_LONGRUN")
+
+
+def _host_arch() -> str:
+    """Mirror the two #if ladders in traps.cpp."""
+    import platform
+    host = {"darwin": "m", "win32": "w", "linux": "l"}.get(sys.platform, "o")
+    arch = {"arm64": "a", "aarch64": "a", "x86_64": "6", "amd64": "6",
+            "i386": "3", "i686": "3"}.get(platform.machine().lower(), "?")
+    return host + arch
+
+
+def knob_mask() -> int:
+    import os
+    return sum(1 << i for i, k in enumerate(KNOB_BITS) if os.getenv(k) is not None)
+
+
+def default_stamp() -> str:
+    """The 22-byte stamp, resolved exactly as port/CMakeLists.txt does."""
+    root = Path(__file__).resolve().parent.parent / "port"
+
+    def git(*args, fallback):
+        try:
+            out = subprocess.run(["git", *args], cwd=root, capture_output=True,
+                                 text=True, check=True).stdout.strip()
+            return out or fallback
+        except (OSError, subprocess.CalledProcessError):
+            return fallback
+
+    date = git("log", "-1", "--format=%cd", "--date=format:%y%m%d", fallback="000000")
+    sha = git("rev-parse", "--short=7", "HEAD", fallback="0000000")
+    if sha == "0000000":
+        flag = "0"
+    else:
+        sha = sha[:7]     # --short=7 is a minimum; the field is fixed-width
+        flag = "+" if git("status", "--porcelain", "--untracked-files=no",
+                          fallback="") else "0"
+    return f"{STAMP_ID}{date[:6]:0<6}{sha}{flag}{_host_arch()}{knob_mask():02x}"
+
+
+def normalise_header(data: bytes, stamp) -> bytes:
+    """Zero the uninitialised window and stamp it. Returns data unchanged if the
+    header is not one we recognise — same principle as the collapse below.
+
+    stamp: the 22-byte string, or None to zero-fill without one. It is never
+    truncated: below its full width the window is zeroed instead, a partial
+    stamp being neither parseable nor recognisably absent.
+    """
+    if len(data) < HEADER_LEN or data[MAGIC_OFF:MAGIC_OFF + 8] != MAGIC:
+        return data
+    nul = data.find(b"\0", 0, MAGIC_OFF)
+    if nul < 0 or nul + 1 >= MAGIC_OFF:
+        return data                       # unterminated, or no room left
+    room = MAGIC_OFF - nul - 1
+    tag = b""
+    if stamp and len(stamp) <= room:
+        tag = stamp.encode()
+    return data[:nul + 1] + tag.ljust(room, b"\0") + data[MAGIC_OFF:]
+
+
+def parse_stamp(text: str):
+    """-> dict of the fields, or None if this is not one of ours.
+
+    Fixed offsets, which is the point of the fixed width:
+        [0:4] id  [4:10] date  [10:17] sha  [17] dirty  [18:20] host  [20:22] knobs
+    """
+    if len(text) != STAMP_LEN or not text.startswith(STAMP_ID):
+        return None
+    try:
+        knobs = int(text[20:22], 16)
+    except ValueError:
+        return None
+    return {"id": text[0:4], "date": text[4:10], "sha": text[10:17],
+            "dirty": text[17] == "+", "host": text[18:20], "knobs": knobs,
+            "knobs_set": [k for i, k in enumerate(KNOB_BITS) if knobs & (1 << i)]}
+
+
+def read_header(data: bytes):
+    """-> (save_name, stamp) for display. stamp is '' on an unstamped save."""
+    if len(data) < HEADER_LEN or data[MAGIC_OFF:MAGIC_OFF + 8] != MAGIC:
+        return None, None
+    nul = data.find(b"\0", 0, MAGIC_OFF)
+    if nul < 0:
+        return None, None
+    window = data[nul + 1:MAGIC_OFF].rstrip(b"\0")
+    text = window.decode("ascii", "replace") if window else ""
+    return data[:nul].decode("ascii", "replace"), text
 
 
 def _interesting(block: bytes) -> bool:
@@ -153,8 +294,19 @@ def validate(runs, suspects):
     return problems
 
 
-def repair(data: bytes):
-    """-> (new_bytes, runs, suspects). Keeps one group per run, resets counters."""
+def repair(data: bytes, stamp="auto"):
+    """-> (new_bytes, runs, suspects). Keeps one group per run, resets counters.
+
+    stamp: "auto" resolves it from git, None writes none, else the literal
+    22-byte string.
+
+    The header is normalised *before* the run scan, matching traps.cpp — the
+    scanner reads from byte 0, so normalising after would let the junk header
+    influence which runs are found and the two implementations could disagree.
+    """
+    if stamp == "auto":
+        stamp = default_stamp()
+    data = normalise_header(data, stamp)
     runs = find_runs(data)
     out, prev = bytearray(), 0
     for off, g, r in runs:
@@ -191,16 +343,52 @@ def report(path: Path, runs, suspects, before: int, after: int) -> None:
 
 def main(argv) -> int:
     mode = "check"
-    if argv and argv[0] in ("check", "fix"):
+    if argv and argv[0] in ("check", "fix", "header"):
         mode, argv = argv[0], argv[1:]
+
+    stamp = "auto"                         # "auto" = from git, None = no stamp
+    rest = []
+    it = iter(argv)
+    for a in it:
+        if a == "--no-stamp":
+            stamp = None
+        elif a == "--stamp":
+            stamp = next(it, "")
+        else:
+            rest.append(a)
+    argv = rest
+
     if not argv:
         print(__doc__.strip().split("Usage")[-1])
         return 2
+
+    if mode == "header":
+        for name in argv:
+            p = Path(name)
+            save_name, text = read_header(p.read_bytes())
+            if save_name is None:
+                print(f"{p.name}: not a theosg42 save")
+                continue
+            print(f"{p.name}: name {save_name!r}")
+            f = parse_stamp(text) if text else None
+            if f:
+                d = f["date"]
+                print(f"  built   20{d[0:2]}-{d[2:4]}-{d[4:6]} from {f['sha']}"
+                      f"{' (dirty tree)' if f['dirty'] else ''}")
+                print(f"  host    {f['host']}")
+                print(f"  knobs   {f['knobs']:#04x}"
+                      f"{'  ' + ' '.join(f['knobs_set']) if f['knobs_set'] else '  (all default)'}")
+            elif text:
+                print(f"  stamp   {text!r}  (unrecognised — not one of ours)")
+            else:
+                print("  stamp   (none — written before normalisation existed)")
+        return 0
+
     rc = 0
     for name in argv:
         p = Path(name)
         data = p.read_bytes()
-        new, runs, suspects = repair(data)
+        new, runs, suspects = repair(data, stamp)
         report(p, runs, suspects, len(data), len(new))
         problems = validate(runs, suspects)
         if problems:
@@ -208,12 +396,19 @@ def main(argv) -> int:
             print("  REFUSING to modify this file:")
             for why in problems:
                 print(f"    - {why}")
-        elif mode == "fix" and runs and new != data:
+            # The header is independent of the structure, so a file we decline
+            # to restructure can still have its header cleaned. Only offered,
+            # never done silently: a file this suspect should be touched once.
+            if mode == "fix" and normalise_header(data, stamp) != data:
+                print("    (header alone could be normalised: --no-stamp aside,"
+                      " rerun on a copy if you want it)")
+        elif mode == "fix" and new != data:
             shutil.copyfile(p, p.with_suffix(p.suffix + ".bak"))
             p.write_bytes(new)
-            print(f"  written; original kept as {p.name}.bak")
+            what = "collapsed and header normalised" if runs else "header normalised"
+            print(f"  {what}; original kept as {p.name}.bak")
         elif mode == "fix":
-            print("  already collapsed — nothing to write")
+            print("  already collapsed, header already current — nothing to write")
 
     return rc
 

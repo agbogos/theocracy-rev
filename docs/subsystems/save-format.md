@@ -23,34 +23,122 @@ FUN_081a0a10   SaveGame(path)          puts("Saving Game")
 `FUN_08196ba0` is the shared string writer — `[u32 len][bytes + NUL]`, which is
 what puts `cProvince` and the map path into the file.
 
-## The header is 54 bytes of uninitialised stack
+## The header is a name, a window of uninitialised stack, and a magic
 
 ```c
 char local_ac[64];  undefined1 local_6c[8];   // contiguous on the stack
-strcpy(local_ac, local_64);                   // the save name, e.g. "1429/06/18"
+strcpy(local_ac, local_64);                   // the save name, e.g. "1429/6/18"
 Write__5cFilePCvUl(&file, local_ac, 0x48);    // writes all 72
 ```
 
-`local_ac` only ever receives the save name; the remaining 54 bytes are never
-initialised and are written to disk anyway.
+Three regions, and an earlier version of this section got the third wrong by
+implying the junk ran to the end of the 72:
 
-The name is 10 characters because it **defaults to the in-game date**: the slot
-dialog seeds the filename box with `cDate_ToString`'s `"%04d/%02d/%02d"`, and
-the player can type over it ([calendar.md](calendar.md)). Two consequences worth
-knowing when reading a header. A save named by hand carries that name here
-instead, so the leading bytes are not reliably a date. And `local_64` is only
-filled on the interactive path — `SaveGame(path)` called with an explicit path,
-as the console's `save` command does for `init.dat`, never writes it, so **all
-72 header bytes are uninitialised stack** in that case, not just 54. Every save leaks stack. In real
-files those bytes are **live guest pointers** — measured across three saves of
-the same state, the differing header fields were heap addresses at `+0x10`,
-`+0x14`, `+0x2c`, `+0x38` and a stack fragment at `+0x08`, alongside stable
-libmvos pointers at `+0x0c`/`+0x34` (stable only because that image loads at a
-fixed base).
+| Offset | Bytes | What |
+|---|---|---|
+| `0x00` | 8–10 + NUL | the save name, NUL-terminated |
+| ~`0x0a` | **53–55** | `local_ac`'s tail — **never initialised**, written anyway |
+| `0x40` | 8 | `local_6c` = **`"theosg42"`**, the format magic. Real data |
 
-Harmless in practice — the loader does not read them — but it is why two saves
-of an identical game state never compare equal, and it would be a privacy leak
-in any program that mattered. A `memset(local_ac, 0, 64)` would fix it.
+The magic at `+0x40` is the same one every `init.dat` carries
+([starting-world.md](starting-world.md)). It is inside the 72-byte write but it
+is *initialised*, and anything editing this header must preserve it. So the
+uninitialised region is bounded on both sides — not the tail of the header, a
+hole in the middle of it.
+
+The name **defaults to the in-game date**: the slot dialog seeds the filename
+box from `cDate_ToString` and the player can type over it
+([calendar.md](calendar.md)). Measured on real saves it renders **unpadded** —
+`1429/6/18`, `1419/7/4`, `1330/14/4` — so 8 to 10 characters, not the fixed 10
+an earlier reading of the format string claimed.
+
+**The dialog caps a typed name at 40 characters** (measured: two 40-char saves
+were made through the game and both stop exactly there). That number decides two
+things. It puts the window between **23 and 55 bytes** rather than at a fixed
+54 — the low end being what a stamp has to survive. And it means
+`strcpy(local_ac, local_64)`, which has no bound check and would run a 64-byte
+name straight into `local_6c` and destroy the magic, **cannot be reached from
+the dialog**: 40 is comfortably clear of the 63 that would be needed. The
+overflow exists in the code and is not reachable by a player.
+
+Note also that the on-disk filename is *not* this string — saves are slot-named
+(`save0.tsg` … `save9.tsg`) and this field is the player's label.
+
+`local_64` is only filled on the interactive path — `SaveGame(path)` called with
+an explicit path, as the console's `save` command does for `init.dat`, never
+writes it, so **the whole 64-byte region is uninitialised** in that case.
+
+In real files those bytes are **live guest pointers**. Across the same five
+saves the window differs at `+0x0a`, `+0x10`, `+0x14`, `+0x2c`, `+0x30` and
+`+0x38` — heap addresses in the `0x61xxxxxx` range — alongside libmvos pointers
+at `+0x0c`/`+0x34` that look stable only because that image loads at a fixed
+base.
+
+The loader does not read the window, so this breaks nothing. It is still worth
+fixing for a reason that costs real time: **two saves of an identical game state
+never compare equal**, which is exactly the property you want when triaging a
+save someone sent you. Before normalisation `save0` and `save1` — the same
+state, saved twice — differed in **14 of 72 header bytes**; after, in none.
+
+### What is written there instead
+
+Having to choose the replacement bytes, the host writes the build identity
+rather than zeros:
+
+```
+1429/6/18\08f4b26081263531dd+ma00\0\0…\0theosg42
+└─ name ──┘└──── stamp, 22 ─────┘└ 0 ┘└─ magic ┘
+
+1234567890123456789012345678901234567890\08f4b26081263531dd+ma00\0theosg42
+└──────────── name, at the 40-char cap ─┘└──── stamp, 22 ─────┘└─ magic ┘
+```
+
+**22 fixed-width bytes, no separators**, so every field parses by offset:
+
+| Field | Bytes | What |
+|---|---|---|
+| id | 4 | format id, a fixed constant |
+| date | 6 | commit date, `YYMMdd` |
+| sha | 7 | commit hash |
+| flag | 1 | `+` dirty tree, `0` clean |
+| host | 2 | host + arch: `ma` / `l6` / `la` / `w6` |
+| knobs | 2 | which `THEOC_*` were in effect, as a hex bitmask |
+
+Same reasoning as the startup banner
+([../porting/diagnostics.md](../porting/diagnostics.md), "The first line names
+the build"), applied to the other artefact a bug report arrives with: a
+playtester sends a broken *save* far more often than a log, and a save that
+names the build which wrote it answers "is this an old release?", "which host?"
+and "what were they running with?" without an exchange of emails. The bytes were
+being written regardless, so it costs nothing. `tools/fix_save.py header <file>`
+decodes it.
+
+**Sized against the floor, not the common case.** The window is 23–55 bytes, so
+22 fits everywhere with a byte in hand — deliberately not 23, which would sit
+exactly on a cap measured from two samples. **The stamp is never truncated:**
+below its full width the window is zeroed, a fragment being neither parseable
+nor recognisably absent. Swept across every reachable name length (0–40), the
+output is always the complete stamp or nothing.
+
+Three details that are choices rather than consequences:
+
+- **The date is redundant against the hash, and kept anyway — precisely because
+  it is.** The two fields have to agree, and making them agree requires the
+  repository they came from, so an edited stamp does not survive inspection.
+- **It is the *commit* date**, never the build date or the save's wall clock:
+  either would make two saves of one state differ again, which is the whole
+  point of the change.
+- **The knob mask is read at stamp time, not at startup**, because `theoc.cfg`
+  is loaded into the environment *after* `main()` hands the identity over — a
+  knob set from the file has to count exactly as an exported one does. Eight
+  bits, chosen for "could this explain a save that looks wrong?", so display and
+  audio settings are absent: they cannot reach the file.
+  `THEOC_NO_SAVE_FIX` is absent too, and could not be observed if it were — with
+  it set, nothing is stamped at all.
+
+The identity reaches `traps.cpp` through `TrapLayer::set_build_identity` rather
+than a compile definition, so bumping the version does not rebuild the largest
+translation unit in the port.
 
 ## The corruption bug
 
@@ -109,6 +197,17 @@ host already owns. `TrapLayer::collapse_save_file` runs when the game closes a
 `.tsg` it wrote; `tools/fix_save.py` is the same algorithm offline, and is what
 it was developed and cross-checked against.
 
+The same hook normalises the header, because it is the same file at the same
+moment — but the two are kept **independent**. The header pass runs before the
+run scan and on every save, including the ones with nothing to collapse and the
+ones the collapser *refuses*: the two defects are unrelated and share only a
+file boundary, so a save too damaged to restructure still gets a clean header.
+It runs before the scan rather than after because the scanner reads from byte 0,
+and normalising afterwards would let junk in the header change which runs are
+found — enough for the C++ and Python implementations to disagree.
+`THEOC_NO_SAVE_FIX=1` disables both, one knob for the whole hook, so that
+"leave my saves alone" means it.
+
 **Why not patch the game.** The write site sits behind two layers of virtual
 dispatch (`vtable+8`, `vtable+0x28`) and was not pinned; byte-patching logic
 that is not fully understood is the riskier change. The file boundary is a
@@ -160,12 +259,45 @@ Also:
   makes the in-game path trustworthy — it is exercised by
   `THEOC_FIX_SAVE=<path>`, which needs no display and no data tree.
 
+**The header pass, on the seven saves in `data/game/save` (2026-08-12).** Both
+implementations run to the same bytes, which is the invariant that keeps the
+in-game path checkable:
+
+- **C++ and Python byte-identical on all seven**, across all three paths — three
+  files collapsed *and* re-headered, four already-collapsed files that took the
+  header-only path (`save3`, `save6`, `save7`, `save9`).
+- **Both window extremes exercised by real saves.** `save6` and `save7` were
+  made through the game with 40-character names — the dialog's cap — so their
+  windows are 23 bytes against the other five's 53–55. All seven carry the same
+  22-byte stamp.
+- **No fragment is producible**: swept across every reachable name length
+  (0–40), the window holds the complete stamp or nothing, magic intact in all 41.
+- **The knob mask agrees across implementations**, which is the field most able
+  to drift since it is read from the environment rather than baked in: with
+  `THEOC_EDIT`, `THEOC_CONSOLE` and `THEOC_LONGRUN` exported, both sides write
+  `0x85` and the decoder names all three back.
+- **Idempotent**: a second pass over a normalised save writes nothing.
+- **Reproducibility, which is the point**: `save0` and `save1` are the same game
+  state saved twice. Their headers differed in **14 of 72 bytes** before and **0
+  of 72** after.
+- **The refusal path still refuses.** A file with one counter edited so its lists
+  disagree (44 lists, 2 distinct group counts) is reported and its structure left
+  alone — the only body byte that differs is the one deliberately corrupted —
+  while the header is still normalised. That split is the behaviour the two
+  passes are kept independent for.
+- The magic at `+0x40` survives every path; `fix_save.py` and `traps.cpp` both
+  refuse a file that does not carry it.
+
 ## Knobs
 
 | Variable | Effect |
 |---|---|
-| `THEOC_FIX_SAVE=<path>` | repair one `.tsg` and exit, without booting |
-| `THEOC_NO_SAVE_FIX=1` | leave saves alone on the in-game save path |
+| `THEOC_FIX_SAVE=<path>` | repair one `.tsg` and exit, without booting — collapse *and* header |
+| `THEOC_NO_SAVE_FIX=1` | leave saves alone on the in-game save path, both passes |
+
+`tools/fix_save.py` additionally takes `header` (decode a save's name and
+stamp), `--stamp` (match a specific binary exactly, for the cross-check) and
+`--no-stamp` (zero the window without writing one).
 
 ## Open
 

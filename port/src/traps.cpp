@@ -5368,6 +5368,178 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
 // print target, so input, echo and output all land in one visible box.
 //
 // Closing chord is the object's own: SetExitKey(0x0e, mask 2) = Alt+C.
+// ---- Save header normalisation ---------------------------------------------
+//
+// A .tsg begins with a 72-byte header the game writes in one call:
+//
+//     char local_ac[64];  undefined1 local_6c[8];   // contiguous on the stack
+//     strcpy(local_ac, local_64);                   // save name, "1429/6/18"
+//     Write__5cFilePCvUl(&file, local_ac, 0x48);    // writes all 72
+//
+// Only two parts of that are initialised: the NUL-terminated save name at the
+// start, and the 8-byte format magic "theosg42" at +0x40 (which is local_6c,
+// not part of the junk — it is real data and is never touched here). Everything
+// between them is stack the game never wrote, and it goes to disk as-is.
+//
+// In real saves those bytes are live guest pointers. Measured across the five
+// saves in data/game/save, the window differs at +0x0a, +0x10, +0x14, +0x2c,
+// +0x30 and +0x38 — heap addresses in the 0x61xxxxxx range — while +0x0c and
+// +0x34 look stable only because libmvos loads at a fixed base.
+//
+// Two reasons to normalise it, and the second is the one that pays:
+//
+//   1. It is an address-space leak. Harmless in this game, wrong anywhere.
+//   2. It makes two saves of an identical game state compare unequal, which is
+//      exactly the property that makes save bugs hard to triage. The 2026-08-02
+//      round-trip check had to account for 4,893 bytes of "ordinary save-to-save
+//      variance" before it could claim the collapse was lossless; a stable
+//      header is how that stops being a caveat.
+//
+// Having to choose the replacement bytes, we write the build identity rather
+// than zeros. The reasoning is the banner's, applied to the other artefact a
+// report arrives with: a playtester sends a broken save far more often than a
+// log, and a save that names the build which wrote it answers "is this an old
+// release?" without an exchange of emails. Same argument as main()'s banner —
+// the only version-reporting scheme that works is the one nobody has to
+// remember to use. Free, too: the bytes were being written anyway.
+//
+// The loader does not read this window (nothing in the load chain touches the
+// header past the magic), so the content is behaviour-neutral.
+// Host and architecture, two characters. Both matter: the Linux bundle ships
+// amd64 *and* arm64, and a save is otherwise the one artefact that cannot say
+// which of them wrote it.
+#if defined(_WIN32)
+static const char kHostChar = 'w';
+#elif defined(__APPLE__)
+static const char kHostChar = 'm';
+#elif defined(__linux__)
+static const char kHostChar = 'l';
+#else
+static const char kHostChar = 'o';
+#endif
+#if defined(__aarch64__) || defined(_M_ARM64)
+static const char kArchChar = 'a';
+#elif defined(__x86_64__) || defined(_M_X64)
+static const char kArchChar = '6';
+#elif defined(__i386__) || defined(_M_IX86)
+static const char kArchChar = '3';
+#else
+static const char kArchChar = '?';
+#endif
+
+// Which THEOC_* knobs were in effect, as one byte rendered to two hex chars.
+//
+// Eight of them, chosen for "could this explain a save that looks wrong?" —
+// not the display or audio settings, which cannot reach the file. Read at stamp
+// time rather than at startup, because theoc.cfg is loaded into the environment
+// after main() hands the build identity over, and a knob set from the file must
+// count exactly as an exported one does.
+//
+// THEOC_NO_SAVE_FIX is deliberately absent: with it set nothing is stamped at
+// all, so a bit for it could never be observed. THEOC_FIX_SAVE likewise — it is
+// a property of the repair invocation, not of the session that wrote the save.
+static const char* const kKnobBits[8] = {
+    "THEOC_EDIT",        // 0x01  sim frozen; console `save` legal
+    "THEOC_NEW_WORLD",   // 0x02  world generated, not the shipped campaign
+    "THEOC_CONSOLE",     // 0x04  dev console armed; commands may have run
+    "THEOC_SERVER",      // 0x08  dedicated server, not the game
+    "THEOC_PROVINCE_MS", // 0x10  non-stock pacing
+    "THEOC_FRAME_MS",    // 0x20  frame cap changed
+    "THEOC_WORLD_FILE",  // 0x40  world overridden
+    "THEOC_LONGRUN",     // 0x80  soak-harness session
+};
+
+static uint8_t knob_mask() {
+    uint8_t m = 0;
+    for (int i = 0; i < 8; ++i)
+        if (std::getenv(kKnobBits[i])) m |= (uint8_t)(1u << i);
+    return m;
+}
+
+// The stamp: 22 fixed-width bytes, no separators.
+//
+//     8f4b 260812 9245c7e + ma 03
+//     └id┘ └date┘ └sha7─┘ │ └┘ └┘
+//       │      │      │   │  │  └─ knob mask, 2 hex — see kKnobBits
+//       │      │      │   │  └──── host + arch: ma / l6 / la / w6
+//       │      │      │   └─────── `+` dirty tree, `0` clean
+//       │      │      └─────────── commit hash
+//       │      └────────────────── commit date, YYMMdd
+//       └───────────────────────── format id, fixed
+//
+// Sized against the floor. The window is 64 - strlen(name) - 1, and the save
+// name is player-typed: **the game's dialog caps it at 40 characters**
+// (measured — two 40-char saves in data/game/save). So the window runs from 55
+// bytes for an auto-named "1419/7/4" save down to 23 at the cap, and 22 leaves
+// a byte in hand rather than sitting exactly on a number measured from two
+// samples. That same cap is what stops `strcpy(local_ac, local_64)` — which has
+// no bound check — from ever reaching local_6c and destroying the theosg42
+// magic: 40 is clear of the 63 it would take.
+//
+// One form, always the same width, so the fields parse by offset. Below 22
+// bytes the window is zeroed instead: a truncated stamp is worse than none,
+// being neither parseable nor recognisably absent.
+//
+// Empty until main() calls set_build_identity, in which case the window is
+// simply zero-filled — still repaired, just unstamped.
+static const char kStampId[] = "8f4b";
+static std::string g_stamp_build;       // id + date + sha + flag, fixed at start
+static const std::string kNoTag;        // bound by reference when nothing fits
+
+void TrapLayer::set_build_identity(const std::string& stamp_date,
+                                   const std::string& commit) {
+    auto fixed = [](const std::string& s, size_t n, char pad) {
+        std::string v = s;
+        v.resize(n, pad);               // truncates or pads — width is the point
+        return v;
+    };
+    g_stamp_build = std::string(kStampId) + fixed(stamp_date, 6, '0') +
+                    fixed(commit, 8, '0');
+}
+
+// Zero the uninitialised window and stamp the build tag into it.
+// -> true if the header changed. Leaves the file alone on anything it does not
+// recognise, on the same principle as the collapse below.
+static bool normalise_save_header(std::vector<uint8_t>& d) {
+    constexpr size_t kHeaderLen = 0x48;      // the game's single 72-byte write
+    constexpr size_t kMagicOff  = 0x40;      // "theosg42" — initialised, keep
+    static const char kMagic[8] = {'t','h','e','o','s','g','4','2'};
+
+    if (d.size() < kHeaderLen) return false;
+    if (!std::equal(kMagic, kMagic + 8, d.begin() + kMagicOff)) return false;
+
+    // The window runs from the save name's terminator to the magic. The name is
+    // player-typable, so its length is not a constant and must be measured: a
+    // long enough name leaves no room, and then there is nothing to do.
+    size_t nul = 0;
+    while (nul < kMagicOff && d[nul] != 0) ++nul;
+    if (nul == kMagicOff) return false;      // unterminated — not a header we know
+    const size_t begin = nul + 1;
+    if (begin >= kMagicOff) return false;
+
+    // The knob half is appended here, not in set_build_identity: theoc.cfg is
+    // loaded into the environment *after* main() hands the identity over, so a
+    // knob set from the file would otherwise read as unset.
+    std::string stamp;
+    if (!g_stamp_build.empty()) {
+        char tail[5];
+        std::snprintf(tail, sizeof tail, "%c%c%02x", kHostChar, kArchChar, knob_mask());
+        stamp = g_stamp_build + tail;
+    }
+
+    // Never truncate: a partial stamp is not parseable and not recognisably
+    // absent either, so below its full width the window is simply zeroed.
+    const size_t room = kMagicOff - begin;
+    const std::string& tag = (!stamp.empty() && room >= stamp.size()) ? stamp : kNoTag;
+
+    std::vector<uint8_t> want(room, 0);
+    std::memcpy(want.data(), tag.data(), tag.size());
+
+    if (std::equal(want.begin(), want.end(), d.begin() + begin)) return false;
+    std::copy(want.begin(), want.end(), d.begin() + begin);
+    return true;
+}
+
 // Collapse the duplicate per-province groups in a .tsg save, right after the
 // game closes it.
 //
@@ -5419,6 +5591,21 @@ void TrapLayer::collapse_save_file(const std::string& path) {
         if (got != d.size()) return;
     }
 
+    // Before the run scan, and independent of it: the header is normalised on
+    // every save, including the ones with nothing to collapse. Kept separate so
+    // that a file this function declines to restructure still gets a clean
+    // header — the two defects are unrelated and only share a file boundary.
+    const bool hdr = normalise_save_header(d);
+    auto write_header_only = [&]() {
+        if (!hdr) return;
+        FILE* f = std::fopen(path.c_str(), "wb");
+        if (!f) return;
+        bool ok = std::fwrite(d.data(), 1, d.size(), f) == d.size();
+        std::fclose(f);
+        std::fprintf(stderr, "  [save] %s: header normalised%s\n",
+                     path.c_str(), ok ? "" : "  (WRITE FAILED)");
+    };
+
     struct Run { size_t off, group, reps; };
     std::vector<Run> runs;
     for (size_t i = 0; i + 1 < d.size();) {
@@ -5439,18 +5626,22 @@ void TrapLayer::collapse_save_file(const std::string& path) {
         if (hit_g) { runs.push_back({i, hit_g, hit_r}); i += 1 + hit_g * hit_r * kUnit; }
         else       { ++i; }
     }
-    if (runs.empty()) return;
+    if (runs.empty()) { write_header_only(); return; }
 
     std::set<size_t> reps;
     size_t worst = 0;
     for (const Run& r : runs) { reps.insert(r.reps); worst = std::max(worst, r.group * r.reps); }
     if (reps.size() != 1 || runs.size() < 30 || runs.size() > 60) {
         std::fprintf(stderr, "  [save] %s: not collapsing — %zu lists, %zu distinct "
-                     "group counts (expected ~44 and 1). Left untouched.\n",
+                     "group counts (expected ~44 and 1). Structure left untouched.\n",
                      path.c_str(), runs.size(), reps.size());
+        write_header_only();
         return;
     }
-    if (*reps.begin() < 2) return;          // already one group each
+    if (*reps.begin() < 2) {                // already one group each
+        write_header_only();
+        return;
+    }
 
     std::vector<uint8_t> out;
     out.reserve(d.size());
@@ -5469,9 +5660,10 @@ void TrapLayer::collapse_save_file(const std::string& path) {
     bool ok = std::fwrite(out.data(), 1, out.size(), f) == out.size();
     std::fclose(f);
     std::fprintf(stderr, "  [save] collapsed %zu province lists in %s: "
-                 "%zu -> %zu bytes, counter %zu -> %zu of 255%s\n",
+                 "%zu -> %zu bytes, counter %zu -> %zu of 255%s%s\n",
                  runs.size(), path.c_str(), d.size(), out.size(),
-                 worst, *kGroups, ok ? "" : "  (WRITE FAILED)");
+                 worst, *kGroups, hdr ? ", header normalised" : "",
+                 ok ? "" : "  (WRITE FAILED)");
 }
 
 void TrapLayer::enable_dev_console() {

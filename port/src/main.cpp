@@ -122,6 +122,12 @@ int main(int argc, char** argv) {
     // game. Same code the save path runs, so this is both the offline repair
     // tool and the way the fix is tested — it needs no display and no data
     // tree, which is what makes it verifiable at all (cf. THEOC_HEAP_TEST).
+    // Before the THEOC_FIX_SAVE branch below, because that path closes a save
+    // without ever reaching the banner: the repair tool must stamp the same
+    // identity the game path does, or the two produce different bytes for the
+    // same file and tools/fix_save.py has nothing to be checked against.
+    TrapLayer::set_build_identity(THEOC_STAMP_DATE, THEOC_COMMIT);
+
     if (const char* fix = std::getenv("THEOC_FIX_SAVE")) {
         std::fprintf(stderr, "=== save repair: %s ===\n", fix);
         TrapLayer::collapse_save_file(fix);
