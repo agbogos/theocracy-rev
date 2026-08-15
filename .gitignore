@@ -18,6 +18,13 @@
 # installed by inst.linux; the libmvos cfg loader reads it as data/game/mvos.cfg).
 /data/game/*
 !/data/game/mvos.cfg
+# Philos' post-release `reconf` tool and its tarball — not on the CD, found on a
+# holarse.de mirror of the dead dlh.net download. Copyrighted the same as the
+# rest, so same rule. Both the root drop and a tidier home under data/ are
+# covered; see docs/reference/reconf-tool.md.
+/reconf
+/*reconf*.tgz
+/data/patches/
 
 # Regenerable from git history itself — `python3 tools/dump_commit_log.py`.
 /data/commit-log.md
