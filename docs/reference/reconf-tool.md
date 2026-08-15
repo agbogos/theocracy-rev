@@ -246,6 +246,39 @@ statements above are from exhaustive byte searches of the file on disk, since
 the MCP shows one program at a time and that one was not loaded. No
 `theocracy.real` addresses are quoted here for that reason.
 
+## What it does *not* do
+
+It is a configuration editor and nothing more — no patching, no file
+installation, no data migration. That is exhaustive rather than impressionistic:
+the binary has **34 dynamic imports and zero `int 0x80` in `.text`**, so those
+imports are the complete OS boundary. Absent from them: `unlink`/`remove`/
+`rename` (it cannot delete or move anything), `mkdir`/`chmod`/`chown`,
+`system`/`exec*`/`fork`/`popen` (it cannot launch anything, including the
+installer), `open`/`read`/`write`/`ioctl`, `stat`/`access`, sockets, `dlopen`.
+The `pthread_*` entries are libgcc's exception machinery detecting a threaded
+libc — `pthread_create` never even reaches the PLT.
+
+There are exactly **three `fopen` sites** in the whole binary:
+
+| Site | Mode | Target |
+|---|---|---|
+| `SearchInSysTab` | `rt` | `/etc/fstab`, `/etc/mtab` |
+| `LoadConfig` | `r` | `mvos.cfg` |
+| `CreateConfig` | `w+` | **the only write** |
+
+and the write takes `main`'s `HomeDir + "/mvos.cfg"`, so it only ever writes
+`~/.theocracy/mvos.cfg`. The system-wide copy is read as a fallback template and
+never written — unlike `inst.linux`, `reconf` needs no root and cannot damage
+the installed config.
+
+The signal handlers are nothing: `SIGINT`/`SIGTERM` prints `Setup interrupted.`
+and `exit(0)`, and `signal_handler_null` is a literal no-op used to ignore
+`SIGINT` while the banner prints.
+
+So whatever Philos shipped this to fix in September 2000 was fixable by editing
+five config values — most plausibly the CD mount-point detection, which is the
+only part of the tool doing real work.
+
 ## A free cross-check on the container classes
 
 `reconf` statically links `cString`, `cConfig`, `cConfigEntry`, `cList` and
@@ -275,7 +308,8 @@ checks it, not a transfer.
 
 ## Open threads
 
-- `LoadConfig` (`0x0804a708`) was not read line by line — its behaviour is
+- `LoadConfig` (`0x0804a708`) was not read line by line, though it is now
+  bounded: one `fopen(path, "r")` and no other file access. Its behaviour is
   inferred from its two callers and its two error strings
   (`Invalid section in line %lu`, `Entry without section in line %lu`). It
   parses the same INI shape the writer emits.
