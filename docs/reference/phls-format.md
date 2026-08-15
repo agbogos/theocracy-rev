@@ -112,12 +112,29 @@ Two independent layers sit *inside* extracted files:
 The `theocracy` launcher runs the game with CWD `~/.theocracy`, containing a
 `data` symlink (→ the extracted tree) and a copied `mvos.cfg`. So our HLE
 filesystem root should expose `./data/…` (→ `data/game/data`) and `./mvos.cfg`.
-**`mvos.cfg` is not in the packs** — `inst.linux` installs it. **Resolved**
-: rather than reversing the installer, we ship a hand-authored
-minimal `data/game/mvos.cfg`, reconstructed from the `EnvSystem` keys the boot
+**`mvos.cfg` is not in the packs** — `inst.linux` installs it. We ship our own
+`data/game/mvos.cfg`, tracked in git via a `.gitignore` carve-out since the rest
+of `data/game` is extracted content.
+
+**Rewritten 2026-08-15, and the previous version of this paragraph was wrong.**
+It claimed the file was "reconstructed from the `EnvSystem` keys the boot
 actually reads — `[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`,
-`[sound] card`, `[network] enable`. It is tracked in git via a `.gitignore`
-carve-out, since the rest of `data/game` is extracted content. Note `[vmachine]
-fullscreen` is **inert** under the current port: the engine's fullscreen path ran
-through the X11 plugin's `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which the
-SDL backend replaced wholesale — use `THEOC_FULLSCREEN=1` instead.
+`[sound] card`, `[network] enable`". Four of those six are read by nothing:
+the engine's video key is `video`, not `device`; its sound key is `[vmachine]
+soundcard`, not `[sound] card`; and the strings `fullscreen` and `network` do
+not occur anywhere in `libmvos.so` or `theocracy.real`. Only `fillobjmem` and
+`cdrom_mountpoint` were real, and both were set to values equal to their
+built-in defaults — so the file we shipped for a year was, functionally, empty.
+It worked for exactly that reason.
+
+The file now contains **what `inst.linux` actually writes**, which was recovered
+from the installer's own `printf` format strings once `reconf` sent us looking
+([reconf-tool.md](reconf-tool.md)): `[vmachine]` `soundcard` / `cdrom_device` /
+`cdrom_mountpoint` / `fullscreen`, then `[game] language`. Every value is the
+installer's default, so the change is behaviour-neutral by construction.
+
+`fullscreen` is written by the installer and read by neither binary — it is
+inert in the original game, not merely under this port. For fullscreen here, use
+`THEOC_FULLSCREEN=1`; the engine's own path ran through the X11 plugin's
+`_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which the SDL backend replaced
+wholesale.

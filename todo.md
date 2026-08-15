@@ -33,9 +33,14 @@ resolution to 1 ms (the VM's was already raised before the probe ran).
 
 ## CLAUDE
 
-**Empty, deliberately — 2026-08-10.**
+**Empty again — 2026-08-15.** It was emptied deliberately on 2026-08-10, took
+one task on 2026-08-15 when `reconf` turned up, and that task is done: the
+engine's config vocabulary is read, `data/game/mvos.cfg` is corrected, and two
+docs that had it wrong are fixed. What is left needs your machine, not mine.
 
-The port has been a release candidate since 2026-08-04 and nothing below the line
+The note below is why the bar is set where it is.
+
+The port has been a release candidate since 2026-08-04 and nothing here
 changes it. The RE side reached the point where every remaining question was
 archaeology with no consumer: four sessions on 2026-08-10 closed four tasks and
 opened four more, leaving the list exactly the size it started. That is what

@@ -28,7 +28,7 @@ Confirmed. This is the function our native HLE runtime replaces verbatim (steps 
 
 ### `OpenSubsystems()` construction order (`0xa4fae`)
 Each gated by its flag (read after `Init()`):
-1. **Video device** — `GetVideoDeviceName()` reads `mvos.cfg` `vmachine/device`; name → loader. **Default (unset) = `"xf86"`** → `LoadDevicePlugins` (`0xa4990`), which dlopens the whole `libmvos_*_x.so` family and creates globals **`VVC`, `VKeyboard`, `VMouse`, `SystemPointer`** (so keyboard/mouse/pointer come from *here*, not separate steps). Alt names → `glide` (`0xa4ce0`) / a third (`0xa4910`); unknown → `Fatal("Unknown video device")`. Prints `"Useing default video device xf86."` (sic).
+1. **Video device** — `GetVideoDeviceName()` reads `mvos.cfg` `vmachine/video` (**not** `device` — corrected 2026-08-15 from the decompiled body, which passes the literal `"video"` to `cEnvClass::FindVariable`); name → loader. **Default (unset) = `"xf86"`** → `LoadDevicePlugins` (`0xa4990`), which dlopens the whole `libmvos_*_x.so` family and creates globals **`VVC`, `VKeyboard`, `VMouse`, `SystemPointer`** (so keyboard/mouse/pointer come from *here*, not separate steps). Alt names → `glide` (`0xa4ce0`) / a third (`0xa4910`); unknown → `Fatal("Unknown video device")`. Prints `"Useing default video device xf86."` (sic).
 2. **Redbook** flag → `new(0x14)` → `VCD` (CD audio).
 3. **Timer** flag → `new(0x20)` → `TimerSystem`.
 4. **Network** flag → `new(4)` → IPC/network holder.
@@ -36,7 +36,25 @@ Each gated by its flag (read after `Init()`):
 
 `CloseSubsystems()` (`0xa50e0`) tears down in fixed order: `TimerSystem`, `VVC`, `VKeyboard`, `VMouse`, `SystemPointer`, `VCD`, `SoundCard`.
 
-**Config vocabulary harvested** (for the native `mvos.cfg` parser): class `vmachine` with vars `device` (`xf86`/`glide`), `fullscreen` (`true`), `fillobjmem` (`n`); plus sound-device name and `cdrom_device`.
+**Config vocabulary — corrected and closed 2026-08-15.** The earlier version of
+this line listed vars `device` and `fullscreen`, and both were wrong. libmvos
+reads **exactly five** keys, all in class `vmachine`, each via
+`FindClass("vmachine")` → `FindVariable(<key>)` with a hardcoded fallback:
+
+| Key | Reader | Default when absent |
+|---|---|---|
+| `soundcard` | `GetSoundDeviceName` (`0xa4880`) | `"/dev/dsp"` (value `"no"` → dummy card) |
+| `video` | `GetVideoDeviceName` (`0xa48c0`) | returns 0 → `"xf86"` |
+| `cdrom_device` | `GetCDRomDeviceName` (`0xa4840`) | `"/dev/cdrom"` |
+| `cdrom_mountpoint` | `VM_GetCDRomName` (`0xa52e0`) | `"/mnt/cdrom"` |
+| `fillobjmem` | boot step 5 (`0xa5210`) | fill on; **only a leading `'n'` clears it** |
+
+There is no `device` key and **no `fullscreen` key**: the literal string
+`fullscreen` does not occur anywhere in `libmvos.so` *or* `theocracy.real`,
+though the installer writes the line. The only other key in a shipped
+`mvos.cfg` is `[game] language`, which the **game** reads (to build
+`data/locale/<language>.sdb`), not the engine. Established from
+[reconf-tool.md](../reference/reconf-tool.md).
 
 ### Requirement flags (`cApplication`, ~`0x579e0`–`0x57b00`)
 Static globals (`Video`, `Sound`, `Mouse`, `Pointer`, `Keyboard`, `Redbook`, `Timer`, `Network`, `Intuition`), each with:
