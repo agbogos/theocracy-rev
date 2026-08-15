@@ -34,6 +34,8 @@ Game **data is not in this folder** — installed from CD by `inst.linux` into `
 
 The API recreates AmigaOS concepts on Linux: `cIntuition`+`cScreen`/`ActivateScreen` (Intuition screens), Exec-style lists (see [memory-and-containers.md](subsystems/memory-and-containers.md)), message ports (`MVOSMessagePort`), `cTask` vs `cThread` (Task/Process split), `CopyMem`, rawkey codes/`KeyMatrix`/qualifiers (keyboard.device vocabulary), `WaitVBlank`. But the pixel pipeline is PC-native chunky linear-framebuffer (`cGD_LFB*`, 15/16bpp first-class) — no planar heritage — so this is Amiga-fluent devs (Hungarian scene) rebuilding their preferred idiom for PC, not a converted Amiga codebase. Useful practically: AmigaOS docs are a design map for unfamiliar MVOS corners.
 
+**The "Amiga-fluent devs" half of that was a surmise from the idioms, and the studio history supplies the mechanism** ([history.md](history.md)): in **1997 Philos hired several developers off *Perihelion: The Prophecy*, a 1993 Amiga RPG**, and that team became Theocracy's core. So the executive model here is the habit of people who had just spent years writing for AmigaOS. Note this *strengthens* the conclusion already drawn rather than changing it — it is still not a converted Amiga codebase, and the chunky-LFB pixel pipeline is still the evidence for that.
+
 ## Architecture — class map by subsystem
 
 ~200 classes. Naming conventions: `c…` = class, `s…` = struct/POD (mostly on-disk/wire formats), `t…<T>` = template instantiations (containers). `_Linux` suffix = platform backend behind a portable interface.

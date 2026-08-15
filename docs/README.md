@@ -60,6 +60,7 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 
 | If you want to… | Read |
 |---|---|
+| Know who made this and what happened to them | [history.md](history.md) |
 | Understand the approach and how it got here | [porting/guest-libmvos.md](porting/guest-libmvos.md) |
 | Find your way around the emulator source | [porting/host-architecture.md](porting/host-architecture.md) |
 | Debug something that is broken right now | [porting/diagnostics.md](porting/diagnostics.md) |
@@ -102,6 +103,7 @@ of how a host port is done in this project, not a plan.
 - [reference/original-os-setup.md](reference/original-os-setup.md) — **running the shipped binaries on their intended OS**, in a VM: why Debian Woody and not Windows XP, the 16-bit-or-nothing colour depth, the fullscreen-and-CD launch ritual, and OSS audio via AC97 + `i810_audio`. The configuration in which the game is *entirely* original code, and therefore the reference the port is judged against — with each workaround tied to the finding that later explained it, or marked as still unexplained.
 - [reference/reconf-tool.md](reference/reconf-tool.md) — **`reconf`, Philos' post-release reconfiguration tool — read 2026-08-15.** Not on the CD; recovered from a holarse.de mirror of the dead dlh.net download, and the only surviving Philos code that writes `mvos.cfg`. Unstripped, 78 KB, ~10 original functions. **Dated to 2000-09-21 by the tarball's stored mtimes — seven months after the CD master.** The doc keeps the case built *before* the archive arrived (the shipped installer says "To reconfigure please **edit** %s", this says "please **run reconf**"; nothing on the CD mentions it; its compiler package is two months newer than `inst.linux`'s), because that reasoning is all that will be available for the next artifact that turns up without its container — and because the `.comment` stamp, the piece that looked most like a date, was the weakest of the four. The five keys it manages (`[vmachine]` soundcard / cdrom_device / fullscreen / cdrom_mountpoint, `[game]` language), and the fstab → mtab → symlink-chase mount-point detection behind the launch ritual. **Then what it exposed:** our hand-authored `data/game/mvos.cfg` had **five of its seven lines read by no code in either binary** — the engine's video key is `video` not `device`, its sound key is `[vmachine] soundcard` not `[sound] card`, and the strings `fullscreen` and `network` occur nowhere in `libmvos.so` or `theocracy.real`. The two live keys were already at their defaults, so the file was functionally empty and worked for that reason. Replaced with what `inst.linux` demonstrably writes, recovered from the installer's own `printf` formats. `fullscreen` turns out to be **inert in the original game**, not just under this port. Also a free cross-check on `cString` (12 bytes) and `cConfigEntry` (`0x24`, is-section flag at `+0x20`), which it links **statically and with a `.symtab`**.
 - [overview.md](overview.md) — libmvos technical report: binary facts, the CD distribution inventory, the **AmigaOS-heritage argument**, and the ~200-class map by subsystem.
+- [history.md](history.md) — **Philos Laboratories, and how the game came to exist.** Not read off the binaries, and explicitly held to a lower standard of evidence than the rest of `docs/` so the two can never be confused. The studio; the publishing chain (Interactive Magic → **bought back by Philos** → Ubi Soft) and the materially different 1999 build it produced; the July 2000 raid and the 2003 custodial sentence; why the seized drives are **not** a lost source cache; the sequel that was being considered. And **the one place the history explains the code**: `overview.md` argues AmigaOS heritage from the idioms alone, and the 1997 hire of the *Perihelion: The Prophecy* team — an Amiga title — supplies the mechanism.
 
 ## Game internals (`theocracy.real`)
 
@@ -196,7 +198,51 @@ accurate and still cited; the *approach* is not current.
 
 Reverse-engineering a copy of the game you own, for personal use, is fine.
 *Distributing* a reconstructed port sits in the same grey zone devilutionX lives
-in — Philos Laboratories is defunct and the rights, via Ubisoft, are in limbo.
+in — Philos Laboratories is defunct and the rights are in limbo.
+
+**"In limbo" is more specific than it used to be here.** This file previously
+said the rights sit "via Ubisoft" in limbo, which assumed the answer. The
+publishing chain ([history.md](history.md)) does not support that assumption:
+Interactive Magic held the publishing rights during development, dropped boxed
+releases in March 1999, **Philos bought those rights back**, and then handed
+them to Ubi Soft. A studio that can buy publication rights back from one
+publisher and grant them to another is behaving like the copyright holder
+licensing publication — not like a party that has sold its IP. The phrase used
+consistently in the primary accounts is *publishing rights*, never the IP.
+
+**Settled 2026-08-15, off the retail box.** The packaging carries the copyright
+in **Philos Laboratories**, with the game *"licensed exclusively to Ubi Soft"*.
+That is the licence branch, stated by the rights-holder on the article itself:
+**Ubi Soft was the licensee, not the owner.** Ubisoft never acquired the IP.
+
+This is direct observation of the physical release rather than a secondary
+account, which makes it better-evidenced than most of
+[history.md](history.md) — and it decides a question that has apparently been
+open in public for twenty-five years.
+
+What it settles:
+
+- **Ubisoft does not own Theocracy**, so the reason it has never reached a
+  storefront under them is most likely that they *cannot* license it, not that
+  nobody got round to it.
+- **The copyright was Philos', and Philos dissolved in 2004.** So it now sits
+  wherever a dissolved Hungarian company's residual assets went — creditors, a
+  founder, or unadministered. That is the orphan-work branch.
+
+What it does **not** settle, and this is the part worth not overreading:
+
+- **The licence's term and scope are not printed on a box**, and "exclusively"
+  is doing real work. An exclusive publishing licence can outlive the publisher's
+  interest in exercising it; if it has no expiry, Ubi Soft's successor may still
+  hold exclusive publication rights over a game it does not own and will not
+  publish. A re-release could therefore need *two* signatures, not one.
+- It does not make distributing a reconstructed port lawful, and none of this is
+  legal advice.
+
+The practical effect on this repository is small but real: the honest
+description is now **orphan work, owner unlocated** rather than *unknown, maybe
+Ubisoft's*, and the party this project would once have worried about turns out
+not to be the rights-holder at all.
 
 **Nothing copyrighted by the rights-holder is in this repository**, and that is
 maintained deliberately rather than incidentally. Audited 2026-08-03:
@@ -209,8 +255,10 @@ maintained deliberately rather than incidentally. Audited 2026-08-03:
   `include/mvos_api.hpp`) hold **symbol names, addresses and signatures** — the
   interface facts needed for interoperability, not expressive content, and not
   usable to reconstruct the game.
-- **`data/game/mvos.cfg` is ours** — 11 lines, hand-authored, normally written by
-  the installer.
+- **`data/game/mvos.cfg` is 7 lines of config** normally written by the
+  installer, and since 2026-08-15 it reproduces what `inst.linux` writes — five
+  key-value pairs and two section headers, every value the engine's own default.
+  Facts about an interface, with no expressive content to own.
 - **Every tool here is our own implementation.** Nothing third-party is vendored.
 - **The port never decrypts anything.** The engine's real `cTextFile` runs as
   guest code and decrypts on read exactly as it did in 2000; the host only serves

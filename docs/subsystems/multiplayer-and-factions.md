@@ -107,7 +107,7 @@ original, so the format above is for *diagnosis*, not for reimplementation.
 
 Archaeology, not blockers — multiplayer works end to end on all three hosts.
 
-- The faction roster template `DAT_08645240` (11 × 0x10) — decode fields (name/color/type/AI).
+- The faction roster template `DAT_08645240` (11 × 0x10) — decode fields (name/color/type/AI). The printed manual names eight tribes with their colours and army compositions (red aggressive, green never attacks first, and so on), which would be a ready-made key for the decode — but the yield is gameplay trivia, and the native rewrite would produce the same table from code and supersede it. Noted so nobody re-derives the idea; not worth doing on its own.
 - Whether multiplayer is battle-only (tactical) vs. full strategic — the
   `scenarioID=-1` + battle-map load suggests **standalone tactical battles**.
   Note this is now answerable by *playing* rather than by reading: if a netgame
