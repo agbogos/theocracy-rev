@@ -1119,6 +1119,29 @@ Two smaller things this dragged out:
   linking the old one and ships it silently. One extra minute of compiling
   against a failure that looks like the prefix not working at all.
 
+## Re-cutting the bundles found the same bug a second time — 2026-08-19
+
+`v1.0.0` was re-pointed at the tip and all three bundles rebuilt. **Linux amd64
+did not compile**: `cdaudio.cpp` uses `std::vector` and never included
+`<vector>`. One line to fix, and the same defect as `std::floor` in `video.cpp`
+above — code that only ever met libc++, which supplies the header transitively
+where libstdc++ does not.
+
+What is worth recording is not the bug but *why it was sitting there*. The
+bundles were cut 2026-08-04; `cdaudio.cpp` first landed 2026-08-08 in `f5b899c`,
+with the Redbook work. Between those dates `port/src` gained about 1800 lines —
+`cdaudio.cpp` (386), `config.cpp` (194, an entirely new translation unit) and
+`traps.cpp` (+866) — **none of which any toolchain but AppleClang had ever
+seen.** The port compiles on three hosts, but only one of them was being asked.
+
+So the interval between a release and the next bundle re-cut is a window in
+which a single compiler is the only checker, and it is the most permissive of
+the three. The cheap correction is to run `tools/package-linux.sh amd64` when
+`port/src` changes rather than only when something is being released; it is one
+container build, and it is the only one of the three that reads the code with a
+different standard library. Cross-compiling has now caught a real macOS defect
+twice, which makes it a habit rather than a coincidence.
+
 ## Sequencing
 
 1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces
