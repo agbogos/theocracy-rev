@@ -1142,6 +1142,24 @@ container build, and it is the only one of the three that reads the code with a
 different standard library. Cross-compiling has now caught a real macOS defect
 twice, which makes it a habit rather than a coincidence.
 
+**And a second one from the same re-cut, this time Windows-only.** mingw warned
+four times at one line — a narrowing `uint32_t`→`u_char` plus three uninitialised
+members — on `inet_ntoa(in_addr{ip})` in the `gethostbyname` trap. POSIX's
+`in_addr` is a bare `{ in_addr_t s_addr; }`, so brace-init is right there and
+wrong on Windows, where it is a **union whose first member is four `u_char`s**:
+the initialiser lands in `s_b1` and the other three octets are zero. The log line
+printed `192.0.0.0` where Linux printed `192.168.1.10`.
+
+The bug is confined to the diagnostic — the address the guest actually receives
+comes from the `m.w32` two lines above and was never affected — but it is a
+netgame log line on the platform whose bare-metal session is still outstanding,
+and the point of stamping and logging is that a tester's report can be read at
+face value. `s_addr` is the one member name both platforms spell identically.
+
+Both defects came from the *same* re-cut, which is the argument for the habit
+above stated more cheaply: two compilers, one afternoon, two real findings, and
+neither was visible to the toolchain the port is developed on.
+
 ## Sequencing
 
 1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces

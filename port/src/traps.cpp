@@ -2258,8 +2258,15 @@ void TrapLayer::register_builtins() {
         m.w32(he + 0x08, kGuestAfInet);   // h_addrtype = AF_INET
         m.w32(he + 0x0c, 4);              // h_length
         m.w32(he + 0x10, addrlst);
+        // Not `in_addr{ip}`: on Windows in_addr is a union whose first member is
+        // four u_chars, so brace-init assigns the low octet to s_b1 and zeroes the
+        // rest — the log line printed 192.0.0.0 for 192.168.1.10. s_addr is the
+        // one member name both platforms spell the same. Diagnostic only; the
+        // address the guest receives is the m.w32 above, which was always right.
+        in_addr shown{};
+        shown.s_addr = (uint32_t)ip;
         std::fprintf(stderr, "  [net] gethostbyname('%s') -> %s\n", host.c_str(),
-                    inet_ntoa(in_addr{ip}));
+                    inet_ntoa(shown));
         return he;
     };
     for (const char* nm : {"sem_init", "sem_destroy", "sem_post", "sem_wait",
