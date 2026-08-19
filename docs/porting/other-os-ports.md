@@ -1160,6 +1160,44 @@ Both defects came from the *same* re-cut, which is the argument for the habit
 above stated more cheaply: two compilers, one afternoon, two real findings, and
 neither was visible to the toolchain the port is developed on.
 
+### The arm64 bundle shipped with no build stamp
+
+Checked after the re-cut, per binary rather than per build log — and the arm64
+bundle carried `000000`/`00000000`, the CMakeLists' fallback, where macOS, amd64
+and Windows all carried the real `260819`/`1ee0ebb0`.
+
+`tools/package-linux.sh` resolves `THEOC_VERSION` **on the host** and passes it
+in, and its comment says why: the bind-mounted `.git` is owned by another uid, so
+git inside the container fails `detected dubious ownership`. That is confirmed —
+`rev-parse`, `log` and `status` all fail that way in both images. But the script
+passed only the *version*, leaving `THEOC_STAMP_DATE` and `THEOC_COMMIT` to the
+`execute_process` calls in `port/CMakeLists.txt`, which run **inside** the
+container and hit exactly the failure the comment describes.
+
+Why amd64 got real values anyway is unexplained. Re-running that same configure
+in that same image afterwards produced a *half* stamp — `000000` plus the correct
+commit — and arm64 produced all zeros: three outcomes from one commit. The point
+is not to find out which condition tips it, but that the stamp exists to make two
+builds of one source produce identical bytes, and a value that varies by
+architecture and by run cannot do that job. So the fix is the one the script had
+already made for the version: resolve on the host, pass `-DTHEOC_STAMP_DATE` and
+`-DTHEOC_COMMIT` alongside `-DTHEOC_VERSION`. The dirty flag and the 7-character
+clamp are duplicated from the CMakeLists and noted there as needing to move
+together.
+
+Windows was never affected — it cross-builds on the host, where git works. Its
+stamp is simply harder to *see*: mingw embeds the two short literals as
+instruction immediates, so `strings` finds `1ee0ebb0` inside a function prologue
+and the date only as the fragments `2608` and `19`. Confirm a PE's stamp by
+disassembling around the literal, not by grepping for it — a grep that finds
+nothing there is not evidence of a missing stamp.
+
+**The general lesson, and the third of the day.** All three of this session's
+findings were invisible in a green build log: the bundle built, the exit code was
+0, and the defect was in what the artefact *contained*. `docs/porting/diagnostics.md`
+says the first log line names the build; that is only true if something checks
+that the name is there. Verify the artefact, not the build.
+
 ## Sequencing
 
 1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces

@@ -50,6 +50,28 @@ VERSION=$(git -C "$REPO" describe --tags --always --dirty 2>/dev/null || echo un
 case "$VERSION" in
   *-dirty) echo "==> WARNING: building $VERSION — uncommitted changes are in this bundle" >&2 ;;
 esac
+
+# The save-header stamp, resolved here for the same reason and passed in the same
+# way. It used to be left to the CMakeLists to ask git for, which happens to run
+# INSIDE the container, where git fails the dubious-ownership check — so the
+# 2026-08-19 re-cut shipped an arm64 bundle stamped 000000/00000000 while amd64
+# got real values from the same tree. Whatever decides which way it falls, the
+# answer is not to depend on it: two builds of one commit must produce identical
+# bytes, and that is the whole point of the stamp.
+#
+# The dirty flag and the 7-char clamp mirror port/CMakeLists.txt exactly; if one
+# changes the other must. `--untracked-files=no` matches what describe --dirty
+# counts, so VERSION and COMMIT never disagree about the same tree.
+STAMP_DATE=$(git -C "$REPO" log -1 --format=%cd --date=format:%y%m%d 2>/dev/null || echo "")
+COMMIT=$(git -C "$REPO" rev-parse --short=7 HEAD 2>/dev/null || echo "")
+if [ -n "$COMMIT" ]; then
+  COMMIT=$(printf %.7s "$COMMIT")
+  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    COMMIT="$COMMIT+"
+  else
+    COMMIT="${COMMIT}0"
+  fi
+fi
 OUT="dist/theoc-linux-$ARCH-$VERSION"
 
 : "${CONTAINER:=nerdctl}"   # Rancher Desktop on macOS; set CONTAINER=docker elsewhere
@@ -63,6 +85,8 @@ set -eu
 ARCH="'"$ARCH"'"
 OUT="'"$OUT"'"
 VERSION="'"$VERSION"'"
+STAMP_DATE="'"$STAMP_DATE"'"
+COMMIT="'"$COMMIT"'"
 BUILD="port/build-linux-$ARCH"
 
 # A minimal ffmpeg, if tools/build-ffmpeg-min.sh has produced one, replaces the
@@ -82,7 +106,8 @@ fi
 # Configure from scratch: find_library caches, so a tree left from a run with a
 # different ffmpeg prefix would keep linking the old one and ship it silently.
 rm -rf "$BUILD"
-cmake -S port -B "$BUILD" $FFMPEG_ARG -DTHEOC_VERSION="$VERSION" >/dev/null
+cmake -S port -B "$BUILD" $FFMPEG_ARG -DTHEOC_VERSION="$VERSION" \
+      -DTHEOC_STAMP_DATE="$STAMP_DATE" -DTHEOC_COMMIT="$COMMIT" >/dev/null
 cmake --build "$BUILD" -j"$(nproc)" >/dev/null
 echo "    built $BUILD/theoc"
 
