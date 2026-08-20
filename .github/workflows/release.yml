@@ -74,8 +74,12 @@ jobs:
       - name: Smoke test
         run: |
           set -eu
-          bundle=$(ls -d dist/theoc-linux-${{ matrix.arch }}-*)
+          # Named, not globbed: package-linux.sh builds the path from the same
+          # `git describe`, so deriving it the same way cannot match two bundles.
+          version=$(git describe --tags --always --dirty)
+          bundle="dist/theoc-linux-${{ matrix.arch }}-$version"
           echo "bundle: $bundle"
+          [ -d "$bundle" ] || { echo "no bundle at $bundle" >&2; ls -la dist >&2; exit 1; }
           LD_LIBRARY_PATH="$PWD/$bundle/lib" tools/smoke-test.sh "$bundle/bin/theoc"
           size=$(du -sm "$bundle" | cut -f1)
           echo "bundle size: ${size} MB"
@@ -88,8 +92,8 @@ jobs:
         id: tar
         run: |
           set -eu
-          bundle=$(ls -d dist/theoc-linux-${{ matrix.arch }}-*)
-          name=$(basename "$bundle")
+          version=$(git describe --tags --always --dirty)
+          name="theoc-linux-${{ matrix.arch }}-$version"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 

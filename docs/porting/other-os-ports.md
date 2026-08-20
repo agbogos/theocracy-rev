@@ -1318,6 +1318,23 @@ gracefully when the minimal ffmpeg is missing, using the distro one instead, so 
 cache miss that also failed to build would otherwise ship a ~190 MB bundle
 quietly rather than failing.
 
+**The first container run of it found a defect in the commit before.** Adding
+the SPDX headers rewrote each file through a temp file and `mv`, which handed
+four scripts the temp file's `644` — `package-linux.sh` and `build-ffmpeg-min.sh`
+among them, both invoked directly by the workflow. Nothing on macOS noticed,
+because nothing had run them since; the failure would have been the first CI
+run's packaging step. Worth recording as a pattern rather than an incident: a
+mechanical pass over many files preserves content and quietly drops mode, and
+`git ls-tree -r <ref> --format='%(objectmode) %(path)'` is how you see it,
+because `git diff` shows the mode change only in `--summary`.
+
+Verified end to end on 2026-08-20: `package-linux.sh arm64` at a clean HEAD
+produced a 37 MB bundle, and `smoke-test.sh` run against it *inside* the
+`debian:bookworm-slim` build image — the closest local stand-in for an
+`ubuntu-24.04-arm` runner — reported `8f4b26082048239070la00`, matching the
+commit. The image already carries `git` and `python3`, which is what the test
+needs beyond the bundle.
+
 **Still hand-cut:** Windows and macOS. Windows needs `tools/stage-win-deps.sh`
 before it can run anywhere but Adam's machine — `port/deps-win/` is untracked and
 was staged by hand — and the cross-built `.exe` cannot run its own smoke test on
