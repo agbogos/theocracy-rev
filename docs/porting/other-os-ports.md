@@ -1335,6 +1335,15 @@ produced a 37 MB bundle, and `smoke-test.sh` run against it *inside* the
 commit. The image already carries `git` and `python3`, which is what the test
 needs beyond the bundle.
 
+**The first real run found the one thing macOS structurally cannot show.** The
+packaging container runs as root against a bind-mounted repo, so `dist/` comes
+back owned by root; the runner user then cannot write the tarball into it. On
+macOS this never happens, because Rancher/lima translates uids across the mount
+— the local container run reproduced the *architecture* faithfully and the
+*ownership semantics* not at all. `sudo chown -R` on the output directory after
+packaging is the fix. Worth generalising: a containerised build verified on
+macOS has not been verified for file ownership anywhere.
+
 **Still hand-cut:** Windows and macOS. Windows needs `tools/stage-win-deps.sh`
 before it can run anywhere but Adam's machine — `port/deps-win/` is untracked and
 was staged by hand — and the cross-built `.exe` cannot run its own smoke test on

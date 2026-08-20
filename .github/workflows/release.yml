@@ -68,6 +68,13 @@ jobs:
       - name: Package
         run: CONTAINER=docker tools/package-linux.sh ${{ matrix.arch }}
 
+      # The packaging container runs as root against a bind mount, so on a real
+      # Linux runner dist/ comes back owned by root and the runner cannot write
+      # into it. macOS hides this: Rancher/lima translates uids, so it passes
+      # locally and fails here.
+      - name: Take ownership of the build output
+        run: sudo chown -R "$(id -u):$(id -g)" dist
+
       # Check the artefact, not the build log. All three defects in the 2026-08-19
       # re-cut passed a green build. bin/theoc is invoked directly rather than
       # through the launcher, which refuses to start without the game data.
