@@ -118,12 +118,21 @@ SYSTEM_RE='^(kernel32|kernelbase|user32|advapi32|ws2_32|gdi32|gdiplus|ole32|olea
 
 # Where a non-system DLL might live: the staged prefix, then the toolchain
 # (libwinpthread-1.dll and friends).
+#
+# The last entry is not a duplicate of the one above it. Homebrew's mingw-w64
+# puts the runtime DLLs in the toolchain's bin/; Debian and Ubuntu put them in
+# `/usr/x86_64-w64-mingw32/lib/` (package mingw-w64-x86-64-dev) and leave bin/
+# without them. Only the macOS layout was here, so the first CI run resolved
+# every other DLL and failed on libwinpthread-1.dll alone. Order matters: the
+# i686 tree carries a same-named DLL of the wrong architecture, so no path that
+# could reach it belongs in this list.
 SEARCH="${FFMPEG_MIN:+$FFMPEG_MIN/bin}
 $DEPS/bin
 $DEPS/lib
 /opt/homebrew/Cellar/mingw-w64/*/toolchain-x86_64/x86_64-w64-mingw32/bin
 /usr/lib/gcc/x86_64-w64-mingw32
-/usr/x86_64-w64-mingw32/bin"
+/usr/x86_64-w64-mingw32/bin
+/usr/x86_64-w64-mingw32/lib"
 
 find_dll() {
   _name=$1

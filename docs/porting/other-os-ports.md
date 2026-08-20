@@ -1379,6 +1379,28 @@ inlines the six characters as immediates, so `strings` never sees `260820`. A
 static check could therefore assert the commit and not the date. Wine asserts
 both, which is why it is what the job runs.
 
+**The first CI run of the Windows job failed on one DLL**, and the cause is a
+packaging assumption that had never been portable. `package-windows.sh` resolves
+the import closure against a fixed list of directories, and that list carried
+Homebrew's layout — where the toolchain runtime DLLs sit in the toolchain's
+`bin/` — plus `/usr/x86_64-w64-mingw32/bin` for Linux, which is the wrong half of
+the Debian layout. Debian and Ubuntu ship `libwinpthread-1.dll` in
+`/usr/x86_64-w64-mingw32/**lib**/` (package `mingw-w64-x86-64-dev`), so every
+other DLL resolved and that one did not. The script was right to fail rather
+than ship: a bundle missing it does not start on a clean Windows machine.
+
+Adding the `lib/` path fixes it, with one ordering constraint worth stating —
+the i686 tree carries a same-named DLL of the wrong architecture, so no path
+that could reach it belongs in the list. Verified by reproducing the runner
+rather than reasoning about it: staging and packaging inside `ubuntu:24.04`
+bundles all seven DLLs, `file` reports every one as PE32+ x86-64, and the
+resulting bundle passes the wine smoke test at `8f4b260820d6a5c59+w600`.
+
+One local-only trap met on the way, recorded so it is not re-met: **wine in an
+arm64 container cannot run an x86-64 `.exe`** and hangs rather than failing. The
+verification runs must pass `--platform linux/amd64`, which is what the runner
+is anyway.
+
 **Still hand-cut:** macOS. It needs `tools/package-macos.sh`
 — it has never had a packaging script at all, having only ever been a dev
 build. It is in `todo.md`.
