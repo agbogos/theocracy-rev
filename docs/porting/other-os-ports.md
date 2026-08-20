@@ -1344,8 +1344,41 @@ macOS this never happens, because Rancher/lima translates uids across the mount
 packaging is the fix. Worth generalising: a containerised build verified on
 macOS has not been verified for file ownership anywhere.
 
-**Still hand-cut:** Windows and macOS. Windows needs `tools/stage-win-deps.sh`
-before it can run anywhere but Adam's machine — `port/deps-win/` is untracked and
-was staged by hand — and the cross-built `.exe` cannot run its own smoke test on
-a Linux runner without wine. macOS has never had a packaging script at all. Both
-are in `todo.md`.
+### Windows joins CI — 2026-08-20
+
+`tools/stage-win-deps.sh` is the missing half of `package-windows.sh`: it
+downloads the SDL2 mingw development tarball (2.32.10), cross-builds Unicorn
+(2.1.3) at `-DUNICORN_ARCH=x86 -DBUILD_SHARED_LIBS=OFF`, and delegates ffmpeg to
+`build-ffmpeg-min.sh`. Verified by staging into a scratch prefix and packaging
+against it — 7.4 MB, the same seven DLLs as the hand-staged tree.
+
+**It deliberately does not stage ffmpeg into `deps-win/`, and that is a licence
+fix.** The hand-staged tree carried `ffmpeg-n7.1-latest-win64-gpl-shared`, a
+prebuilt binary configured with `--enable-gpl`. Nothing GPL ever shipped —
+`package-windows.sh` prefers `deps-ffmpeg-win/`, and the bundle's `avcodec-61.dll`
+measures 612 KB against the GPL build's 94 MB — but the preference is a
+*fallback*, not a guard: if the minimal build ever failed, the packaging script
+would quietly link the GPL one instead, and the port ships GPL-2.0-**or-later**
+precisely because Unicorn 2.x forbids anything later. Staging no ffmpeg into
+`deps-win` turns that silent substitution into a build failure, which is the
+behaviour worth having. The hand-staged copy on the development machine is
+untouched and still holds it.
+
+**The `.exe` can be smoke-tested after all, and does not have to ship
+unverified.** The open question was that a cross-built Windows binary cannot run
+on a Linux runner. Wine answers it: `THEOC_SMOKE_RUNNER=wine` prefixes the
+invocation, and `THEOC_FIX_SAVE` needs no display, so the same test that checks
+the Linux bundles checks this one. Confirmed in a container against a
+cross-built bundle — `8f4b26082009339110w600`, the `w6` being the host+arch pair
+the stamp format documents.
+
+A static fallback was measured and is worth knowing about, because it is weaker
+than it looks: `THEOC_COMMIT` survives in the stripped `.exe` as a contiguous
+literal and can be grepped, but `THEOC_STAMP_DATE` does **not** — the compiler
+inlines the six characters as immediates, so `strings` never sees `260820`. A
+static check could therefore assert the commit and not the date. Wine asserts
+both, which is why it is what the job runs.
+
+**Still hand-cut:** macOS. It needs `tools/package-macos.sh`
+— it has never had a packaging script at all, having only ever been a dev
+build. It is in `todo.md`.

@@ -110,8 +110,82 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  windows:
+    name: windows-x64
+    runs-on: ubuntu-24.04     # cross-built with mingw-w64; no Windows machine involved
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # pkg-config is not incidental: Unicorn's qemu/configure runs under CMake's
+      # execute_process with no error checking, so without it the build fails
+      # ~200 source files later as a missing config-target.h. wine is here to run
+      # the smoke test on the cross-built .exe.
+      - name: Toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            mingw-w64 cmake pkg-config nasm wine wine64
+
+      # Both prefixes together: stage-win-deps.sh produces deps-win and drives
+      # build-ffmpeg-min.sh into deps-ffmpeg-win, and neither is much use alone.
+      - name: Cache staged Windows deps
+        id: windeps
+        uses: actions/cache@v4
+        with:
+          path: |
+            port/deps-win
+            port/deps-ffmpeg-win
+          key: windeps-${{ hashFiles('tools/stage-win-deps.sh', 'tools/build-ffmpeg-min.sh') }}
+
+      # Idempotent, so running it on a cache hit is cheap and proves the cache
+      # actually holds what package-windows.sh needs rather than assuming it.
+      - name: Stage dependencies
+        run: tools/stage-win-deps.sh
+
+      - name: Package
+        run: tools/package-windows.sh
+
+      # The same smoke test as Linux, with wine as the runner. Verified locally
+      # against a cross-built bundle: 8f4b...w600, host+arch w6.
+      - name: Smoke test
+        env:
+          WINEDEBUG: -all
+          WINEPREFIX: /tmp/wineprefix
+        run: |
+          set -eu
+          version=$(git describe --tags --always --dirty)
+          bundle="dist/theoc-windows-x64-$version"
+          [ -d "$bundle" ] || { echo "no bundle at $bundle" >&2; ls -la dist >&2; exit 1; }
+          cd "$bundle"
+          THEOC_SMOKE_RUNNER=wine "$GITHUB_WORKSPACE/tools/smoke-test.sh" bin/theoc.exe
+          cd "$GITHUB_WORKSPACE"
+          size=$(du -sm "$bundle" | cut -f1)
+          echo "bundle size: ${size} MB"
+          # ~7.4 MB with the minimal ffmpeg, ~119 MB with a stock one.
+          if [ "$size" -gt 40 ]; then
+            echo "FAIL: ${size} MB — the minimal ffmpeg did not make it in" >&2
+            exit 1
+          fi
+
+      - name: Tarball
+        id: tar
+        run: |
+          set -eu
+          version=$(git describe --tags --always --dirty)
+          name="theoc-windows-x64-$version"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.tar.outputs.name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   release:
-    needs: [linux]
+    needs: [linux, windows]
     # workflow_dispatch runs the builds and stops here.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04

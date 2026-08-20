@@ -51,27 +51,14 @@ whether the mirrored tag push triggers at all, and the cache keys.
 [`other-os-ports.md`](docs/porting/other-os-ports.md), "CI: building the bundles
 on GitHub".
 
-### 1. `tools/stage-win-deps.sh`
-
-Phase 2 blocker. `port/deps-win/` is untracked and was staged by hand, so no
-machine but Adam's can cross-build Windows. Needs: SDL2 mingw dev tarball,
-`tools/build-ffmpeg-min.sh windows`, and Unicorn cross-built at
-`-DUNICORN_ARCH=x86 -DBUILD_SHARED_LIBS=OFF`. **`pkg-config` must be present** or
-`qemu/configure` fails silently under `execute_process` and surfaces ~200 files
-later as a missing `config-target.h`.
-
-Open question to settle while writing it: the cross-built `.exe` cannot run its
-own smoke test on a Linux runner. Either add wine to the job or accept that
-Windows ships unverified by the check that caught the other three defects.
-
-### 2. `tools/package-macos.sh`
+### 1. `tools/package-macos.sh`
 
 Phase 3 blocker — macOS has only ever been a dev build. Collect the Homebrew
 dylibs, `install_name_tool` to `@rpath`, lay out `bin/` + `lib/` + launcher +
 README the way the Linux bundle does. Signing and notarization need Adam's
 secrets and come after.
 
-### 3. `THIRD-PARTY.md`
+### 2. `THIRD-PARTY.md`
 
 Decision 5: generated in CI where possible so it cannot drift from what shipped.
 The Linux bundle ships **Debian's** `libunicorn.so.2`, so the

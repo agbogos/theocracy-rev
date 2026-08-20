@@ -8,6 +8,11 @@
 #
 #   tools/smoke-test.sh <path-to-theoc> [expected-date] [expected-commit]
 #
+# THEOC_SMOKE_RUNNER prefixes the invocation, so a cross-built Windows binary can
+# be tested on a Linux runner:
+#
+#   THEOC_SMOKE_RUNNER=wine tools/smoke-test.sh bin/theoc.exe
+#
 # Why this exists: three defects shipped in v1.0.0 bundles that all passed a
 # green build (see docs/porting/other-os-ports.md). A build log says the compiler
 # was happy; it does not say the artefact is the one you think it is. The
@@ -23,7 +28,16 @@
 set -e
 
 BIN=${1:?usage: tools/smoke-test.sh <path-to-theoc> [date] [commit]}
-[ -x "$BIN" ] || { echo "smoke: not executable: $BIN" >&2; exit 1; }
+RUNNER=${THEOC_SMOKE_RUNNER:-}
+if [ -n "$RUNNER" ]; then
+  # A .exe need not carry the execute bit, and would not be runnable natively
+  # anyway — the runner is what executes it.
+  [ -f "$BIN" ] || { echo "smoke: no such file: $BIN" >&2; exit 1; }
+  command -v "${RUNNER%% *}" >/dev/null 2>&1 || {
+    echo "smoke: runner not found: ${RUNNER%% *}" >&2; exit 1; }
+else
+  [ -x "$BIN" ] || { echo "smoke: not executable: $BIN" >&2; exit 1; }
+fi
 
 # Default expectations come from git the same way port/CMakeLists.txt derives
 # them, so a mismatch means the binary disagrees with the tree it was built
@@ -54,7 +68,8 @@ h += bytes(16)                   # flat body: nothing for the collapser to touch
 open(sys.argv[1], "wb").write(bytes(h))
 PY
 
-THEOC_FIX_SAVE="$SAVE" "$BIN" >"$WORK/out" 2>&1 || {
+# shellcheck disable=SC2086  # RUNNER is intentionally word-split
+THEOC_FIX_SAVE="$SAVE" $RUNNER "$BIN" >"$WORK/out" 2>&1 || {
   echo "smoke: binary exited $? — output follows" >&2; cat "$WORK/out" >&2; exit 1; }
 
 python3 - "$SAVE" "$DATE" "$COMMIT" <<'PY'
