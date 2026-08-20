@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
+#
+# Build the bundles and draft a release. One workflow, not two: the release job
+# hangs off the build jobs with `needs:`, so the artefacts never have to be
+# found again across workflow runs.
+#
+# Tag-only by design. `origin` is Gitea with Actions disabled; it push-mirrors
+# here, tags included, and force-pushed tags re-trigger. Nothing runs on an
+# ordinary commit push. Note the consequence: a broken build surfaces when you
+# cut a release, so use workflow_dispatch to exercise the pipeline first — it
+# builds everything and skips the release job.
+#
+# The workflow file is read from the ref that was pushed, so a tag only builds
+# if it points at a commit that already contains this file.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write        # the release job creates a draft release
+
+jobs:
+  linux:
+    name: linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false   # one arch failing should not hide the other's result
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          # Native arm64. If the label turns out to be unavailable on a private
+          # repo, fall back to qemu on ubuntu-24.04 — correct, ~5x slower.
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs the history AND the tags, or
+                           # every bundle ships stamped "unknown"
+
+      # The packaging scripts bind-mount .git into a container that runs as
+      # another uid, and git refuses a repository it thinks is someone else's.
+      # That is exactly the bug that shipped 06e44ee: an arm64 bundle stamped
+      # 000000/00000000 out of a green build.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Without a minimal ffmpeg the bundle is ~190 MB instead of ~37 MB. The
+      # packaging script degrades gracefully rather than failing, so a cache
+      # miss that also fails to build would ship a fat bundle quietly — hence
+      # the size check further down.
+      - name: Cache minimal ffmpeg
+        id: ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: port/deps-ffmpeg-linux-${{ matrix.arch }}
+          key: ffmpeg-linux-${{ matrix.arch }}-${{ hashFiles('tools/build-ffmpeg-min.sh') }}
+
+      - name: Build minimal ffmpeg
+        if: steps.ffmpeg.outputs.cache-hit != 'true'
+        run: CONTAINER=docker tools/build-ffmpeg-min.sh linux ${{ matrix.arch }}
+
+      # The script is the single source of truth for what a bundle is; the
+      # workflow only chooses the container runtime. CONTAINER exists for this.
+      - name: Package
+        run: CONTAINER=docker tools/package-linux.sh ${{ matrix.arch }}
+
+      # Check the artefact, not the build log. All three defects in the 2026-08-19
+      # re-cut passed a green build. bin/theoc is invoked directly rather than
+      # through the launcher, which refuses to start without the game data.
+      - name: Smoke test
+        run: |
+          set -eu
+          bundle=$(ls -d dist/theoc-linux-${{ matrix.arch }}-*)
+          echo "bundle: $bundle"
+          LD_LIBRARY_PATH="$PWD/$bundle/lib" tools/smoke-test.sh "$bundle/bin/theoc"
+          size=$(du -sm "$bundle" | cut -f1)
+          echo "bundle size: ${size} MB"
+          if [ "$size" -gt 80 ]; then
+            echo "FAIL: ${size} MB — the minimal ffmpeg did not make it in" >&2
+            exit 1
+          fi
+
+      - name: Tarball
+        id: tar
+        run: |
+          set -eu
+          bundle=$(ls -d dist/theoc-linux-${{ matrix.arch }}-*)
+          name=$(basename "$bundle")
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.tar.outputs.name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [linux]
+    # workflow_dispatch runs the builds and stops here.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Draft, never published. This is the gate: the tag builds and uploads,
+      # and a human decides whether it becomes a release. GitHub attaches the
+      # source archives to the tag automatically, so decision 3 is covered
+      # without doing anything here.
+      #
+      # Deleting an existing draft first is not tidiness — force-pushing a tag
+      # is the normal fix in this repo, and `gh release create` fails outright
+      # on a tag that already has a release.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "==> replacing existing release for $tag"
+            gh release delete "$tag" --yes
+          fi
+          gh release create "$tag" \
+            --draft \
+            --title "$tag" \
+            --notes "Automated draft for \`$tag\` (${GITHUB_SHA}). Bundles below were built from this tag and each one asserted its own build stamp against the commit before upload." \
+            artifacts/*/*.tar.gz

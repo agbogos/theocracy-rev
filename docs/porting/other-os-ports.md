@@ -1248,3 +1248,78 @@ played, and nothing surfaced — so the skip is a closed decision, not a deferre
 item. See [host-architecture.md](host-architecture.md), "Why teardown skips
 `CloseSubsystems`", for what would reopen it (the host ceasing to be one-shot —
 not a fourth host).
+
+## CI: building the bundles on GitHub — 2026-08-20
+
+The bundles were cut by hand until now, which is how the 2026-08-19 re-cut
+shipped three defects out of three green builds. `.github/workflows/release.yml`
+moves the cutting onto GitHub Actions. Four decisions in it are load-bearing.
+
+**One workflow, not two.** The obvious split — build on tag, publish on a
+GitHub Release event — does not survive contact with this repo's topology.
+`origin` is Gitea with Actions disabled; it push-mirrors to GitHub, tags
+included. A mirror pushes *git objects*, and a Release is an API object, so
+`on: release` could only ever be fired by hand in the web UI. Worse, the split
+puts the build in one workflow run and the publish in another, and artefacts do
+not cross runs without a token, an explicit `run-id`, and a race against the
+retention window. Hanging the release job off the build jobs with `needs:` keeps
+the artefacts inside one run, and **`--draft`** supplies the human gate the
+two-trigger design was reaching for: the tag builds and uploads, a person
+decides whether it becomes a release.
+
+**Tag-only, with a dispatch escape hatch.** Nothing runs on an ordinary commit
+push — deliberate, and cheap given the 2000-minute budget. The cost is real and
+worth stating: a broken build now surfaces when you cut a release rather than
+when you break it. `workflow_dispatch` is the mitigation (it builds everything
+and skips the release job), and force-pushing a tag re-triggers the run, which
+is already how this repo fixes a bad tag. One trap: **the workflow file is read
+from the ref that was pushed**, so a tag only builds if it points at a commit
+that already contains it.
+
+**The workflow is a wrapper, not a build system.** It chooses the container
+runtime (`CONTAINER=docker`, which `package-linux.sh` and `build-ffmpeg-min.sh`
+already parameterise for exactly this) and otherwise calls the scripts. This is
+not tidiness: everything expressed in YAML can only be tested by pushing to
+GitHub, and everything expressed in shell can be tested on the machine in front
+of you. Keeping the YAML thin shrinks the surface that only CI can prove to
+runner labels, cache keys and secrets.
+
+**The smoke test asserts on bytes, not on an exit code.** `tools/smoke-test.sh`
+synthesises a `.tsg`-shaped fixture, runs the binary under `THEOC_FIX_SAVE`, and
+compares the stamp the binary wrote into the header against what `git` says.
+`THEOC_FIX_SAVE` is the only path that needs neither a display nor the game
+tree, which is what makes it runnable in CI at all — and it calls
+`set_build_identity()` before it returns, so the repaired file carries the
+identity.
+
+Two details that decide whether the test is worth anything:
+
+- **`collapse_save_file()` returns `void` and swallows every error** — an
+  unreadable file, a short file, a header it does not recognise. So the process
+  exits 0 whatever happens, and asserting on the exit code would assert nothing.
+  The check has to read the file back.
+- **The fixture has to clear the header guard**: at least `0x48` bytes, the
+  `theosg42` magic at `0x40`, and a NUL-terminated name leaving at least the
+  22 bytes the stamp needs. The body is zeroed so the run scanner rejects it as
+  flat fill and leaves the structure alone — only the header path is under test.
+  Nothing copyrighted is involved; the layout is documented in
+  `tools/fix_save.py`.
+
+The test was checked in both directions before being trusted, which matters more
+than it sounds: a smoke test that cannot fail is worse than none. Against a build
+tree configured before the current commit it reports the stale stamp and exits 1
+(`binary says 8f4b26081906e44ee+ma00 / git says 8f4b260820b3bd06e0`); against a
+freshly configured build it passes. That stale-configure case is not contrived —
+build identity resolves at *configure* time, so a build directory that survives a
+commit produces exactly this, and it is why both packaging scripts `rm -rf` theirs.
+
+The job also fails if the bundle exceeds 80 MB. `package-linux.sh` degrades
+gracefully when the minimal ffmpeg is missing, using the distro one instead, so a
+cache miss that also failed to build would otherwise ship a ~190 MB bundle
+quietly rather than failing.
+
+**Still hand-cut:** Windows and macOS. Windows needs `tools/stage-win-deps.sh`
+before it can run anywhere but Adam's machine — `port/deps-win/` is untracked and
+was staged by hand — and the cross-built `.exe` cannot run its own smoke test on
+a Linux runner without wine. macOS has never had a packaging script at all. Both
+are in `todo.md`.

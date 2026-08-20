@@ -29,9 +29,58 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
+### 2. Start Rancher Desktop for a container check — small
+
+`nerdctl` needs it running. Blocks one verification: running
+`tools/smoke-test.sh` against a real *Linux* bundle inside a container, which is
+the one step of `.github/workflows/release.yml` that cannot be exercised on
+macOS. Everything else in that workflow is either YAML-valid or proven locally.
+
+### 3. First CI run
+
+Push a throwaway tag, or use the Actions "Run workflow" button
+(`workflow_dispatch`), and send back the log if it fails. Unknowns that only a
+real run settles: whether `ubuntu-24.04-arm` is available on a private repo,
+whether the mirrored tag push triggers at all, and the cache keys.
+
 ---
 
 ## CLAUDE
+
+**Refilled 2026-08-20** — CI/CD work, with reasons. Reasoning lives in
+[`other-os-ports.md`](docs/porting/other-os-ports.md), "CI: building the bundles
+on GitHub".
+
+### 1. `tools/stage-win-deps.sh`
+
+Phase 2 blocker. `port/deps-win/` is untracked and was staged by hand, so no
+machine but Adam's can cross-build Windows. Needs: SDL2 mingw dev tarball,
+`tools/build-ffmpeg-min.sh windows`, and Unicorn cross-built at
+`-DUNICORN_ARCH=x86 -DBUILD_SHARED_LIBS=OFF`. **`pkg-config` must be present** or
+`qemu/configure` fails silently under `execute_process` and surfaces ~200 files
+later as a missing `config-target.h`.
+
+Open question to settle while writing it: the cross-built `.exe` cannot run its
+own smoke test on a Linux runner. Either add wine to the job or accept that
+Windows ships unverified by the check that caught the other three defects.
+
+### 2. `tools/package-macos.sh`
+
+Phase 3 blocker — macOS has only ever been a dev build. Collect the Homebrew
+dylibs, `install_name_tool` to `@rpath`, lay out `bin/` + `lib/` + launcher +
+README the way the Linux bundle does. Signing and notarization need Adam's
+secrets and come after.
+
+### 3. `THIRD-PARTY.md`
+
+Decision 5: generated in CI where possible so it cannot drift from what shipped.
+The Linux bundle ships **Debian's** `libunicorn.so.2`, so the
+corresponding-source obligation attaches to that binary and the exact package
+versions need recording at package time, not guessing afterwards.
+
+---
+
+### Historical note — why the bar was set high
 
 **Empty again — 2026-08-15.** It was emptied deliberately on 2026-08-10, took
 one task on 2026-08-15 when `reconf` turned up, and that task is done: the
