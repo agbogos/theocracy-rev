@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Dump every commit message into one markdown file.
 
 The commit log is where a lot of this project's reverse-engineering findings

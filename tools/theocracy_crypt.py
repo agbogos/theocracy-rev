@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Theocracy text/config cipher — decrypt/encrypt the `RSA4096`-marked files.
 
 The `RSA4096` header is a joke: the actual cipher is a symmetric XOR against two

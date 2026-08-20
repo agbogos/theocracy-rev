@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 cmake_minimum_required(VERSION 3.20)
 project(theoc CXX)
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """GNU v2 (g++ 2.x) C++ symbol demangler.
 
 Targeted at libmvos.so (Theocracy). Modern c++filt dropped v2 support, so this

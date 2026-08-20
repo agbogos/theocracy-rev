@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Native overrides for the hot libmvos software rasterizer (cGD_LFB16).
 //
 // Profiling province view (THEOC_PROFILE=1) showed ~80% of guest CPU inside

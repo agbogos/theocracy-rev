@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Minimal ELF32 (i386) reader — dependency-free.
 // Supports ET_EXEC (theocracy.real) and ET_DYN (libmvos.so): PT_LOAD,
 // .dynsym/.dynstr, and all SHT_REL sections. Bounds-checked against the file.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Guest-libmvos host: theocracy.real + libmvos.so under Unicorn; HLE the OS
 // boundary (libc, FS, synthetic device plugins, SDL OpenDisplay).
 #include <algorithm>

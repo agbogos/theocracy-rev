@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // VirtualCD — a host stand-in for the CD-ROM drive's *audio transport*.
 //
 // Theocracy's music is Redbook CD audio: the game never reads a single byte of

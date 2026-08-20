@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // theoc.cfg — permanent settings for release bundles.
 //
 // Every runtime knob is a THEOC_* environment variable (the canonical list is

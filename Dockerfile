@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 # Linux build + headless-test environment for the Theocracy port.
 #
 # This is the Linux-port workspace: it builds `theoc` and runs the *headless*

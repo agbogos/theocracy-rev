@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Unicorn i386 wrapper: guest memory, the HLE trap layer, and the
 // native->guest "call a guest function" primitive.
 #pragma once

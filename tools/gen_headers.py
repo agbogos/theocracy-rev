@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Generate C++ declaration stubs (the HLE compile-time contract) from the API
 inventory.  Inputs:
   data/mvos_api.json      (from build_api_inventory.py)

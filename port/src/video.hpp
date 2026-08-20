@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Native SDL2 video backend — the host side of the libmvos VVC/GD boundary.
 // The game (guest, under Unicorn) drives us through trapped cVVC/cGD methods;
 // we own an RGB565 framebuffer and present it in an SDL window. This replaces

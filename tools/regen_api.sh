@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 # Regenerate the MVOS API inventory artifacts in data/ from the binaries in linux/.
 # Usage: sh tools/regen_api.sh   (run from repo root)
 set -e

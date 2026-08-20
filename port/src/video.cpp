@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 #include "video.hpp"
 #include <cmath>     // std::floor — pulled in transitively by libc++/libstdc++
 #include <cstdio>    // on macOS and Linux, but not by mingw's headers

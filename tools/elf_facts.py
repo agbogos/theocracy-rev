@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Throwaway M1 fact-check: confirm the docs' ELF claims for theocracy.real
 before writing the C++ loader. Prints the ground truth the loader needs."""
 import sys

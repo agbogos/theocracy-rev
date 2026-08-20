@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Chart the [health] samples from a THEOC_LONGRUN session log.
 
 A multi-hour session produces one three-line `[health]` block per interval

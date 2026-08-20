@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Minimal MPEG-1 decode for SMPEG HLE (intro/logo cutscenes).
 // Decodes to RGB565 frames; host-owned, keyed by guest SMPEG* handle.
 #pragma once

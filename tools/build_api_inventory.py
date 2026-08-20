@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Aggregate demangled GNU-v2 symbols into a structured API inventory.
 
 Input : TSV lines `addr<TAB>rawsymbol<TAB>demangled` (from gnuv2_demangle.py).

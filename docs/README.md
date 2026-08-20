@@ -264,9 +264,28 @@ maintained deliberately rather than incidentally. Audited 2026-08-03:
   guest code and decrypts on read exactly as it did in 2000; the host only serves
   bytes, and the canonical data tree stays as-shipped.
 
-Two things a reader should decide for themselves rather than infer from this
-file: the repository carries **no `LICENSE`** (so default "all rights reserved"
-applies to our own code), and `tools/theocracy_crypt.py` implements the game's
-own trivial config obfuscation for reading data you already own — documented in
-[reference/phls-format.md](reference/phls-format.md), and a judgement call worth
-making explicitly if this is ever distributed.
+## Licence
+
+**Our own code is `GPL-2.0-or-later`** (`LICENSE`, verbatim GPL-2.0 text; every
+file we wrote carries an SPDX header). The choice is forced rather than
+preferred: Unicorn 2.x declares `GPL-2.0-only AND GPL-2.0-or-later` — it carries
+QEMU-derived v2-only files — which makes AGPLv3 binaries undistributable. "or
+later" rather than v2-only keeps an AGPL move open if
+[porting/native-rewrite.md](porting/native-rewrite.md) ever retires Unicorn.
+The rest of the bundle is compatible: ffmpeg is LGPL-2.1+ built **without**
+`--enable-gpl`/`--enable-nonfree`, SDL2 is zlib, libwinpthread is the permissive
+mingw-w64 runtime.
+
+**What deliberately carries no header**, and the omission is the point:
+`include/mvos_api.hpp`, `data/*.tsv` and `data/mvos_api.json` are *generated
+from the game binary* — symbol names, addresses and signatures. The audit above
+calls those interface facts rather than expressive content, and stamping our
+copyright on them would quietly contradict it. The **generators** are ours and
+are headed; their output is not.
+
+One thing a reader should still decide rather than infer:
+`tools/theocracy_crypt.py` implements the game's own trivial config obfuscation
+for reading data you already own — documented in
+[reference/phls-format.md](reference/phls-format.md). That was filed as "a
+judgement call worth making explicitly if this is ever distributed"; with
+releases now planned it has stopped being hypothetical, and it is **open**.

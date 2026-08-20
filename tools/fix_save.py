@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 """Repair Theocracy .tsg saves — collapse the per-province duplicate groups.
 
 The bug

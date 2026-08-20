@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // HLE trap layer: maps each imported symbol (by slot) to a native handler.
 // Unimplemented imports log once and return 0 — that log IS the worklist.
 // Guest-libmvos path: also hosts FS (fopen/open/…) against $THEOC_DATA and

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Native MVOS layer (M2): turns the R_386_COPY framework data the game
 // references directly into working guest state —
 //   * __vt_* vtables  -> synthesized tables whose every slot is a trap, so a

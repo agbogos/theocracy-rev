@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 // Dual-image guest linker: theocracy.real (ET_EXEC) + libmvos.so (ET_DYN).
 // Maps both into Unicorn, applies i386 relocs, resolves game↔engine symbols,
 // and routes remaining UND (libc / SMPEG / dl) to the trap HLE layer.

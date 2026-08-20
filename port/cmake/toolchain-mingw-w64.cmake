@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Adam Bogos
 # CMake toolchain: cross-compile the port for Windows x86-64 from macOS or Linux.
 #
 #   brew install mingw-w64          # or: apt install mingw-w64

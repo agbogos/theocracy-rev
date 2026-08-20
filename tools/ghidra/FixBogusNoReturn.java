@@ -16,6 +16,8 @@
 //on the functions you care about, so their bodies are re-walked.
 //
 //@category Repair
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Adam Bogos
 
 import java.util.Arrays;
 import java.util.HashSet;
