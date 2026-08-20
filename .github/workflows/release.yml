@@ -152,7 +152,11 @@ jobs:
       - name: Smoke test
         env:
           WINEDEBUG: -all
-          WINEPREFIX: /tmp/wineprefix
+          # Not /tmp: the runner user does not own it, and wine refuses to create
+          # a configuration directory somewhere it does not own. Containers run
+          # as root, so every local verification of this step passed on a path
+          # that cannot work here. runner.temp is owned by the runner.
+          WINEPREFIX: ${{ runner.temp }}/wineprefix
         run: |
           set -eu
           version=$(git describe --tags --always --dirty)

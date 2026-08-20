@@ -1401,6 +1401,19 @@ arm64 container cannot run an x86-64 `.exe`** and hangs rather than failing. The
 verification runs must pass `--platform linux/amd64`, which is what the runner
 is anyway.
 
+**Then wine refused to start at all on the runner**, for the second instance of
+the same root cause as the root-owned `dist/`: `WINEPREFIX=/tmp/wineprefix` is
+fine in a container, where everything runs as root, and refused on a real runner
+— *"'/tmp' is not owned by you"*. `${{ runner.temp }}` is owned by the runner
+user and is the right home for it.
+
+That is twice now that a containerised local verification passed on ownership
+semantics that do not hold on the runner, and it is worth stating as a rule
+rather than as two incidents: **running as root locally verifies behaviour and
+not permissions.** Everything a container proves about architecture, linking and
+output stays true; everything it appears to prove about who may write where does
+not.
+
 **Still hand-cut:** macOS. It needs `tools/package-macos.sh`
 — it has never had a packaging script at all, having only ever been a dev
 build. It is in `todo.md`.
