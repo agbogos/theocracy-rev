@@ -50,7 +50,23 @@ cd theoc-macos-arm64-<version>
 If it dies with `Could not allocate dynamic translator buffer`, the entitlements
 did not survive signing. Anything else is an ordinary bug.
 
-### 3. Exercise the release job with three artefacts
+### 3. Confirm notarisation before publishing any draft release
+
+CI submits to Apple and does **not** wait — a 30-minute wait timed out once,
+burning a runner and discarding the answer. So the build cannot tell you whether
+Apple accepted the bundle, and nothing else will either. The submission id is in
+the job summary and in the draft release's notes as an unticked checkbox:
+
+```
+xcrun notarytool info <id> \
+  --key AuthKey_XXXXXXXXXX.p8 --key-id <KEY ID> --issuer <ISSUER UUID>
+```
+
+`Accepted` and the draft can go out. Anything else, swap `info` for `log` to get
+the reasons. No rebuild is needed if it is accepted late — nothing is stapled,
+so the ticket is fetched from Apple at first launch.
+
+### 4. Exercise the release job with four artefacts
 
 It has only ever run with two. Push a throwaway `v*-rcN` tag and check the draft
 release carries all four tarballs — Linux amd64, Linux arm64, macOS arm64,

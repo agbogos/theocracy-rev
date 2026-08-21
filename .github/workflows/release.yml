@@ -115,6 +115,10 @@ jobs:
     runs-on: macos-15      # Apple Silicon. arm64 only, by decision: the Homebrew
                            # dependencies are per-architecture, so an Intel bundle
                            # is a second native build rather than a universal one.
+    outputs:
+      # The notarisation submission id, so the draft release can carry it. Empty
+      # when the job built unsigned, which only a workflow_dispatch can do.
+      notarization_id: ${{ steps.notarize.outputs.id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -237,6 +241,7 @@ jobs:
       # and this bundle is a plain directory on purpose, so first launch checks
       # with Apple online. The README says so and gives the offline escape.
       - name: Notarize
+        id: notarize
         if: steps.signing.outputs.identity != ''
         env:
           NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
@@ -327,27 +332,55 @@ jobs:
             exit 1
           }
 
-          echo "==> submitting"
+          # Submit and do NOT wait. Apple's queue took over 30 minutes on the
+          # first real submission and the job was killed holding a runner —
+          # with the upload long finished and the result unknowable, which is
+          # the worst of both. The upload is the part CI is good at; waiting is
+          # not, and the release it feeds is a *draft* that a human publishes
+          # anyway. So the submission id goes to the step summary and into the
+          # draft's notes, and the accept/reject check moves to that human.
+          #
+          # What this gives up is real: nothing now fails the build when Apple
+          # rejects the bundle. `notarytool submit --wait` would not have helped
+          # much either — it exits 0 on a rejected submission as readily as an
+          # accepted one, so the status field was always the only thing that
+          # actually said. That check is now a step in todo.md, before publish.
+          echo "==> submitting (not waiting — see the job summary)"
           # shellcheck disable=SC2086
           result=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
                    $AUTH ${NOTARY_ISSUER:+--issuer "$NOTARY_ISSUER"} \
-                   --wait --timeout 30m --output-format json)
-          echo "$result"
-          status=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
-          id=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
-          # --wait exits 0 on a rejected submission as readily as an accepted
-          # one; the status field is the only thing that actually says. Without
-          # this check a tag would happily publish a bundle Apple refused.
-          if [ "$status" != Accepted ]; then
-            echo "error: notarisation returned $status" >&2
-            # shellcheck disable=SC2086
-            xcrun notarytool log "$id" $AUTH \
-              ${NOTARY_ISSUER:+--issuer "$NOTARY_ISSUER"} >&2 || true
-            rm -f "$RUNNER_TEMP/AuthKey.p8"
-            exit 1
-          fi
+                   --output-format json)
           rm -f "$RUNNER_TEMP/AuthKey.p8"
-          echo "==> notarised: $id"
+          echo "$result"
+          id=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+          [ -n "$id" ] || {
+            echo "error: the submission returned no id — nothing was queued" >&2
+            exit 1
+          }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "==> queued: $id"
+
+          # The summary is where this is actually read: the run page shows it
+          # without opening a log, and it carries the one command needed next.
+          {
+            echo "### macOS notarisation"
+            echo
+            echo "Submission \`$id\` was uploaded and **not waited on**."
+            echo "Check it before publishing the draft release:"
+            echo
+            echo '```sh'
+            echo "xcrun notarytool info $id \\"
+            echo "  --key AuthKey_XXXXXXXXXX.p8 --key-id <KEY ID> --issuer <ISSUER UUID>"
+            echo '```'
+            echo
+            echo "\`Accepted\` means the bundle is good and the draft can go out."
+            echo "Anything else — and for the reasons, add \`log $id\` in place of \`info $id\`."
+            echo
+            echo "The ticket is not stapled (this is a .tar.gz, not an .app), so"
+            echo "Gatekeeper verifies online on a user's first launch. Notarisation"
+            echo "takes effect as soon as Apple accepts it; the artefact does not"
+            echo "need rebuilding."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Tarball
         id: tar
@@ -475,6 +508,7 @@ jobs:
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTARIZATION_ID: ${{ needs.macos.outputs.notarization_id }}
         run: |
           set -eu
           tag="${GITHUB_REF_NAME}"
@@ -482,8 +516,29 @@ jobs:
             echo "==> replacing existing release for $tag"
             gh release delete "$tag" --yes
           fi
+          # The notes are written to a file rather than passed inline: the
+          # macOS paragraph is conditional, and the checklist has to survive
+          # newlines that --notes on one line would eat.
+          {
+            printf 'Automated draft for `%s` (%s).\n\n' "$tag" "$GITHUB_SHA"
+            printf 'Bundles below were built from this tag, and each one asserted its own\n'
+            printf 'build stamp against the commit before upload.\n\n'
+            printf '**Before publishing:**\n\n'
+            if [ -n "$NOTARIZATION_ID" ]; then
+              printf -- '- [ ] macOS notarisation is `Accepted` — CI submits without waiting,\n'
+              printf -- '      so this is not checked by the build:\n\n'
+              printf -- '      xcrun notarytool info %s \\\n' "$NOTARIZATION_ID"
+              printf -- '        --key AuthKey_XXXXXXXXXX.p8 --key-id <KEY ID> --issuer <ISSUER UUID>\n\n'
+            else
+              printf -- '- [ ] **The macOS bundle is UNSIGNED** — no certificate was available\n'
+              printf -- '      to this run. Do not publish it.\n'
+            fi
+            printf -- '- [ ] One real macOS session. The smoke test runs `THEOC_FIX_SAVE`,\n'
+            printf -- '      which returns before Unicorn opens, so nothing here proves the\n'
+            printf -- '      guest runs under the hardened runtime.\n'
+          } > "$RUNNER_TEMP/notes.md"
           gh release create "$tag" \
             --draft \
             --title "$tag" \
-            --notes "Automated draft for \`$tag\` (${GITHUB_SHA}). Bundles below were built from this tag and each one asserted its own build stamp against the commit before upload." \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             artifacts/*/*.tar.gz

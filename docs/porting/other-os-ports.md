@@ -1530,6 +1530,26 @@ launch checks with Apple online**. That is the consequence of not shipping an
 `.app`, it is accepted, and the README says so and gives the offline escape
 (`xattr -dr com.apple.quarantine .`).
 
+**CI submits and does not wait — 2026-08-21.** The first real submission sat in
+Apple's queue past `--wait --timeout 30m` and the job was killed at exit 124,
+holding a macOS runner for half an hour and then throwing away the answer. The
+upload had long since finished; only Apple's processing was outstanding. So the
+job now submits, prints the submission id to the step summary and into the draft
+release's notes, and stops.
+
+What that gives up is stated plainly because it is real: **nothing in CI fails
+when Apple rejects a bundle.** The check moved to the human who publishes the
+draft — which is where it already effectively was, since the release is a draft
+precisely so a person decides. `--wait` was never the guard it looked like
+either: `notarytool submit --wait` exits 0 on a rejected submission as readily
+as on an accepted one, so the `status` field was always the only thing that
+actually said so.
+
+The draft's notes carry the `notarytool info <id>` command as an unticked
+checkbox, and stapling was never on the table, so a bundle accepted after the
+artefacts were built needs no rebuild — the ticket lives on Apple's servers and
+Gatekeeper fetches it.
+
 Four traps in the notarisation step, all of which fail quietly rather than
 loudly:
 
