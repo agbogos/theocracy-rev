@@ -12,12 +12,6 @@
   Measured, not assumed. A test program driving uc_emu_start over the bundle's
   own libunicorn, signed with the hardened runtime three ways:
 
-  (Nothing in this comment may contain two consecutive hyphens. XML forbids
-  them inside a comment; `plutil -lint` accepts the file anyway and codesign
-  does not, failing with "AMFIUnserializeXML: syntax error". That cost a CI
-  run. tools/package-macos.sh now passes this file to codesign even on the
-  ad-hoc path, so the parser sees it on every local build.)
-
     no hardened runtime            JIT OK
     hardened, these entitlements   JIT OK
     hardened, these removed        Could not allocate dynamic translator buffer

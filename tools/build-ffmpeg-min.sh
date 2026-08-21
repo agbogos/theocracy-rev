@@ -48,11 +48,6 @@
 # amount of playing the game on the machine that built it could ever have shown
 # this. It was found by diffing a bundle's log against a dev build's.
 #
-# THE RULE THIS ENCODES: the enable list must cover every format the *host*
-# advertises, not every format the *data* happens to contain. `audio_ext()` in
-# cdaudio.cpp is the contract; if a format is added there it must be added here,
-# and the test at the bottom of this comment block is one line of ffprobe.
-#
 # THE ENABLE LIST IS NOT JUST "WHAT THE FILES CONTAIN", and the first version of
 # this script found that out. mpeg1video + mp2 + the mpegps demuxer is exactly
 # what the files are, and it produced

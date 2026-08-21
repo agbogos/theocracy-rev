@@ -60,10 +60,6 @@ esac
 # got real values from the same tree. Whatever decides which way it falls, the
 # answer is not to depend on it: two builds of one commit must produce identical
 # bytes, and that is the whole point of the stamp.
-#
-# The dirty flag and the 7-char clamp mirror port/CMakeLists.txt exactly; if one
-# changes the other must. `--untracked-files=no` matches what describe --dirty
-# counts, so VERSION and COMMIT never disagree about the same tree.
 STAMP_DATE=$(git -C "$REPO" log -1 --format=%cd --date=format:%y%m%d 2>/dev/null || echo "")
 COMMIT=$(git -C "$REPO" rev-parse --short=7 HEAD 2>/dev/null || echo "")
 if [ -n "$COMMIT" ]; then

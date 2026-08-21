@@ -34,8 +34,7 @@ const std::set<std::string> kFileRefused = {
 // Every knob the file may set. This exists ONLY to catch typos — a name that is
 // not here is still applied, with a warning, so adding a knob to the code and
 // forgetting this list degrades to a cosmetic message rather than a setting
-// that silently does nothing. Keep it in step with docs/porting/diagnostics.md;
-// `grep -rhoE 'getenv\("THEOC_[A-Z0-9_]+"\)' port/src/` prints the real set.
+// that silently does nothing.
 const std::set<std::string> kKnown = {
     // player
     "THEOC_FULLSCREEN", "THEOC_SCANLINES", "THEOC_NO_HIDPI", "THEOC_FRAME_MS",

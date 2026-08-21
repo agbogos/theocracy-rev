@@ -171,8 +171,7 @@ macos)
 windows)
   # Nothing to interrogate: every dependency is either built by this repo or
   # unpacked from a pinned tarball, so the versions are the constants the
-  # staging script used. Kept in step with tools/stage-win-deps.sh by the
-  # assertion at the end of this script.
+  # staging script used.
   SDL2_V=$(sed -n 's/^SDL2_VERSION=//p' "$(dirname "$0")/stage-win-deps.sh" | head -1)
   UNICORN_V=$(sed -n 's/^UNICORN_VERSION=//p' "$(dirname "$0")/stage-win-deps.sh" | head -1)
   {
