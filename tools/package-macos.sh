@@ -255,7 +255,19 @@ if [ -n "${THEOC_CODESIGN_IDENTITY:-}" ]; then
 else
   echo ">>> ad-hoc signing (set THEOC_CODESIGN_IDENTITY for a distributable bundle)"
   for f in "$OUT"/lib/*.dylib; do codesign --force --sign - "$f"; done
-  codesign --force --sign - "$OUT/bin/theoc"
+  # --entitlements here too, though an ad-hoc bundle does not need them: it
+  # makes codesign parse the file on every local build. It has to be codesign
+  # that checks — `plutil -lint` calls port/theoc.entitlements valid when it
+  # holds a double hyphen inside an XML comment, which is illegal XML, and
+  # codesign rejects it with "AMFIUnserializeXML: syntax error". Discovered by
+  # a CI run, because this was the one line of the signing path a local build
+  # never exercised.
+  #
+  # No --options runtime, deliberately: the hardened runtime enforces library
+  # validation, ad-hoc signatures carry no Team ID, and the result is a bundle
+  # that cannot load its own dylibs. Distribution builds get it; this is a
+  # development bundle and needs to run.
+  codesign --force --entitlements "$ROOT/port/theoc.entitlements" --sign - "$OUT/bin/theoc"
 fi
 
 echo ">>> verifying the signatures"

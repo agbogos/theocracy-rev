@@ -1492,6 +1492,17 @@ against the bundle's own `libunicorn`:
 That is the first break, and `port/theoc.entitlements` is the fix. It grants
 exactly those two and nothing else.
 
+The first CI run with real credentials then failed on the entitlements file
+itself, for a reason worth recording because the obvious check does not catch
+it: **an XML comment may not contain two consecutive hyphens**, the header
+comment described signing `--options runtime`, and `codesign` rejected the whole
+file with `AMFIUnserializeXML: syntax error near line 13`. `plutil -lint` calls
+that file valid; `xmllint --noout` does not. The fix is not to remember the
+rule — it is that `package-macos.sh` now passes `--entitlements` on the ad-hoc
+path too, so `codesign` parses the file on every local build. That line was the
+one part of the signing path a local run had never exercised, which is exactly
+why it reached CI.
+
 The second break is subtler. **The hardened runtime turns on library
 validation, and a hardened process refuses any dylib whose Team ID differs from
 its own** — including ad-hoc signed ones, which have no Team ID at all. A
