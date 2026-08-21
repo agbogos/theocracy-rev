@@ -1640,12 +1640,61 @@ build on Windows — because each takes it from where that platform gets
 libraries. That is fine, and it is exactly the sort of thing a generated
 manifest records and a written one gets wrong.
 
-#### What CI still cannot prove about the macOS bundle
+#### What CI cannot prove about the macOS bundle, and how it was proved anyway
 
 The smoke test runs `THEOC_FIX_SAVE`, which returns from `main` before Unicorn
 is opened and before SDL is touched. So a green macOS job proves the bundle is
-built, relocatable, signed, notarised and *loadable* — and says nothing about
-whether the guest actually runs under the hardened runtime. The entitlements
-table above is the evidence that it does, and it was gathered by hand. **A
-signed bundle still wants one real play session before a release is published**;
-it is in `todo.md`.
+built, relocatable, signed, notarised and *loadable*, and says nothing about
+whether the guest actually runs under the hardened runtime.
+
+**`THEOC_SERVER=1` closes that gap without a display.** The dedicated server is
+headless by design — it is the shipped `server` binary driven by the same
+emulator — so pointing the released bundle at a data tree and booting it
+exercises the entire risk in one command, on the real signed artefact rather
+than on a test program. Done on v1.0.1-rc3:
+
+    mvos .ctors: 10 constructors @ 0x100c512c
+    mvos .ctors done: 10 ok, 0 aborted, 0 no-return, 0 faulted (of 10)
+    calling OpenSubsystems @ 0x10094f20 ... returned
+    calling Start__12cApplication @ 0x804b210 ...
+    [net] bind(:5042) ok
+
+Ten guest i386 constructors translated and executed by the TCG inside a
+Developer-ID-signed, hardened-runtime, notarised binary. This is worth keeping
+as the standing recipe: **any future question of the form "does the signed
+bundle still run the guest" is one headless server boot away**, and does not
+need a play session to answer.
+
+What a play session is still needed for is everything with a display attached —
+window, input, save/load, cutscenes — and that is in `todo.md`.
+
+### The v1.0.1-rc3 release, verified end to end — 2026-08-21
+
+The first tag to build all four bundles and draft a release from them. All four
+were then re-verified from the downloaded tarballs rather than from the build
+tree, which is the only check that covers the packaging *and* the transport:
+
+| bundle | stamp | verified in |
+|---|---|---|
+| linux-amd64 | `8f4b26082105a95670l600` | stock `debian:bookworm-slim`, qemu |
+| linux-arm64 | `8f4b26082105a95670la00` | stock `debian:bookworm-slim`, native |
+| macos-arm64 | `8f4b26082105a95670ma00` | host, signed + notarised + guest booted |
+| windows-x64 | `8f4b26082105a95670w600` | wine, amd64 container |
+
+Every stamp decodes to the tagged commit at the tagged date with the right
+host/arch pair and the `0` clean-tree suffix, so no dirty build reached the
+release. Two deliberate choices in how that was checked:
+
+- **A stock base image, not the build image.** A bundle tested inside the
+  container that produced it can pass by inheriting the builder's libraries,
+  which is precisely the property being tested. Both Linux bundles report no
+  unmet dependencies on a clean bookworm-slim.
+- **The downloaded tarballs, not `dist/`.** The build tree cannot show a
+  permission bit lost in `tar`, an execute bit dropped in transit, or a
+  signature broken by the round trip. (macOS signatures survive it; that was
+  checked explicitly, since `install_name_tool` had already proved how easily
+  they break.)
+
+The two Linux manifests are byte-identical across architectures — same Debian
+release, same package versions, different machine code — which is the answer
+that says the manifest is reading the system rather than inventing it.

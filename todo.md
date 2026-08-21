@@ -29,26 +29,17 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
-### 2. Play one signed macOS bundle before publishing a release — small
+### 2. Play one signed macOS bundle — interactive only
 
-The macOS CI job proves the bundle builds, relocates, signs, notarises and
-loads. It cannot prove the guest runs: `THEOC_FIX_SAVE` returns from `main`
-before Unicorn is opened, so the hardened runtime's effect on the JIT is
-untested by anything CI does. It was measured by hand
-([`other-os-ports.md`](docs/porting/other-os-ports.md), "The hardened runtime
-versus Unicorn's JIT") and `port/theoc.entitlements` is the fix, but the first
-Developer-ID-signed bundle should get one real session before the draft release
-is published:
+**The headless half is done (2026-08-21, v1.0.1-rc3).** The released bundle
+boots the dedicated server under Unicorn — `mvos .ctors done: 10 ok, 0 faulted`,
+`OpenSubsystems`, socket bound on :5042 — so the hardened runtime does not break
+the JIT on a Developer-ID-signed binary, which was the open risk. Notarisation
+is live too: `codesign --test-requirement="=notarized"` is satisfied.
 
-```
-tar xzf theoc-macos-arm64-<version>.tar.gz
-cd theoc-macos-arm64-<version>
-# put data/cd/linux/ and data/game/ beside ./theoc, then
-./theoc
-```
-
-If it dies with `Could not allocate dynamic translator buffer`, the entitlements
-did not survive signing. Anything else is an ordinary bug.
+What is left is a real session with a display: window, input, save/load,
+cutscenes. Nothing about it is expected to differ from a dev build; it is the
+last thing no automated check can reach.
 
 ### 3. Confirm notarisation before publishing any draft release
 
@@ -65,13 +56,6 @@ xcrun notarytool info <id> \
 `Accepted` and the draft can go out. Anything else, swap `info` for `log` to get
 the reasons. No rebuild is needed if it is accepted late — nothing is stapled,
 so the ticket is fetched from Apple at first launch.
-
-### 4. Exercise the release job with four artefacts
-
-It has only ever run with two. Push a throwaway `v*-rcN` tag and check the draft
-release carries all four tarballs — Linux amd64, Linux arm64, macOS arm64,
-Windows x64 — then delete the draft. The `macos` job also refuses to build
-unsigned on a tag, so this is the first run that proves the secrets work.
 
 ---
 
