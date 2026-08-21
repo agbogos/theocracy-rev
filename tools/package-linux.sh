@@ -115,10 +115,8 @@ cp "$BUILD/theoc" "$OUT/bin/theoc"
 
 # Only the C/C++ runtimes stay on the host. Everything else is bundled.
 #
-# This denylist was arrived at empirically, after a hand-written one failed: it
-# excluded libasound on the theory that SDL dlopens it, and the bundle would not
-# start at all because Debian SDL2 has it as a hard DT_NEEDED. Guessing which
-# dependencies are dlopen-ed does not work; the loader is the oracle.
+# The denylist is not hand-written and must not become so: `ldd` is the source
+# of truth. Guessing which dependencies are dlopen-ed does not work.
 #
 # The libraries that would be genuinely dangerous to bundle are the GL/driver
 # dispatch ones — and they are not in the graph, because SDL2 dlopens GL at

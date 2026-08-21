@@ -252,16 +252,7 @@ jobs:
           # preserves symlinks and the resource forks a signature lives in.
           ditto -c -k --keepParent "$bundle" "$RUNNER_TEMP/notarize.zip"
 
-          # Write the private key out, and check it. The secret is meant to hold
-          # the .p8 base64-encoded, but `base64 --decode` on macOS accepts a raw
-          # PEM body without complaint and emits binary garbage at exit 0 — so
-          # pasting the .p8 in unencoded produces a key file that is wrong in a
-          # way nothing notices until Apple answers "401 Unauthenticated", which
-          # names none of this. Accept both forms and verify the result.
-          # Matching any PEM private-key label, not just "BEGIN PRIVATE KEY":
-          # an EC key in SEC1 form starts "-----BEGIN EC PRIVATE KEY-----" and
-          # would otherwise be rejected as malformed while being perfectly
-          # valid.
+          # Accept cleartext or base64 PEM; verify result
           write_key() {
             if printf '%s' "$NOTARY_KEY" | grep -q 'PRIVATE KEY-----'; then
               printf '%s\n' "$NOTARY_KEY" > "$RUNNER_TEMP/AuthKey.p8"
@@ -278,19 +269,7 @@ jobs:
           }
 
           # Strip whitespace from the two identifiers before anything uses them.
-          # This is not defensive tidying, it is the thing that broke the first
-          # authenticated run: `base64 -i key.p8 | pbcopy` and a copy off the
-          # App Store Connect page both carry a trailing newline, GitHub keeps
-          # it in the secret verbatim, and `--key-id ABCDE12345$(printf '\n')`
-          # is refused with "401 Unauthenticated" — the same answer an
-          # unauthorised key gets. The credentials themselves were fine and
-          # worked from a laptop, which is what made it puzzling.
-          #
-          # Safe for both: an App Store Connect key ID is alphanumeric and an
-          # issuer ID is a UUID, so neither can legitimately contain
-          # whitespace. Not applied to MACOS_CERT_PASSWORD, where whitespace is
-          # a legitimate character, or to the key body, where the newlines are
-          # part of the encoding and base64 ignores them anyway.
+          # Leave MACOS_CERT_PASSWORD as-is, where whitespace is valid.
           NOTARY_KEY_ID=$(printf '%s' "$NOTARY_KEY_ID" | tr -d '[:space:]')
           NOTARY_ISSUER=$(printf '%s' "$NOTARY_ISSUER" | tr -d '[:space:]')
 
@@ -314,19 +293,11 @@ jobs:
             exit 1
           }
 
-          # Submit and do NOT wait. Apple's queue took over 30 minutes on the
-          # first real submission and the job was killed holding a runner —
-          # with the upload long finished and the result unknowable, which is
-          # the worst of both. The upload is the part CI is good at; waiting is
-          # not, and the release it feeds is a *draft* that a human publishes
-          # anyway. So the submission id goes to the step summary and into the
-          # draft's notes, and the accept/reject check moves to that human.
+          # Submit and do NOT wait. Apple's notary queue can be very slow and
+          # we shouldn't be burning runner time on waiting.
           #
-          # What this gives up is real: nothing now fails the build when Apple
-          # rejects the bundle. `notarytool submit --wait` would not have helped
-          # much either — it exits 0 on a rejected submission as readily as an
-          # accepted one, so the status field was always the only thing that
-          # actually said. That check is now a step in todo.md, before publish.
+          # Note: `notarytool submit --wait` exits 0 on a rejected submission,
+          # which makes it useless anyway
           echo "==> submitting (not waiting — see the job summary)"
           # shellcheck disable=SC2086
           result=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \

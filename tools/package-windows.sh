@@ -21,24 +21,6 @@
 # hand-written — it is the transitive import closure of theoc.exe, computed with
 # objdump and filtered against a denylist of things that ship *with Windows*.
 #
-# Two differences from the Linux bundle are worth knowing:
-#
-#   * The closure is SEVEN DLLs and stops, against the Linux bundle's sprawling
-#     ~160-library graph. That is not because it carries less: ffmpeg's codec
-#     dependencies (x264, x265, vpx, theora...) are *statically linked into*
-#     avcodec-61.dll here rather than sitting beside it as separate .so files.
-#     Measured, because the first version of this comment guessed and was wrong:
-#     131 MB total, of which avcodec-61.dll alone was 89.6 MB and avformat-61.dll
-#     21.1 MB. Since 2026-08-04 that is gone: tools/build-ffmpeg-min.sh builds an
-#     ffmpeg holding only the MPEG-1/MP2 path this port decodes, avcodec drops to
-#     613 KB and the bundle to 7.3 MB. See docs/porting/other-os-ports.md,
-#     "Both bundles, minus the ffmpeg nobody uses".
-#   * There is no system-integration hazard. On Linux, bundling libX11/libGL
-#     would have been actively harmful because they must match the host's
-#     display server and drivers. The Windows equivalents (d2d1, DWrite, USP10,
-#     ntdll, msvcrt) are all *system* DLLs we deliberately do not ship, and the
-#     graphics stack is reached through them, so the same rule falls out
-#     naturally rather than needing a judgement call.
 #
 # libwinpthread-1.dll comes from the toolchain, not from Windows, so it IS
 # bundled — the counterpart of the Linux bundle's decision to leave glibc and

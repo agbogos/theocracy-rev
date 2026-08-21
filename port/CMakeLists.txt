@@ -9,21 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ---- Build identity ----------------------------------------------------------
 #
 # Every run prints this in its first line, so a log names the build that
-# produced it. That exists for one reason: a tester's report is only actionable
-# if we know which binary they ran, and this port ships bundles that differ in
-# ways a tester cannot see (the 2026-08-04 minimal-ffmpeg and WSAStartup changes
-# both altered behaviour without altering anything visible in the UI).
-#
-# Resolved at CONFIGURE time, not build time. That means the string goes stale
-# if you commit and rebuild without reconfiguring — accepted, because the two
-# packaging scripts `rm -rf` their build directory and so always reconfigure,
-# and those are the only builds that reach anyone else. A build-time custom
-# command would be correct in general and would also re-link on every single
-# build, which is a poor trade for a developer loop.
-#
-# -dirty is deliberate: a bundle built from an uncommitted tree says so, which
-# is exactly the case where a bug report is otherwise unreproducible.
-# THEOC_VERSION= overrides it for a tarball build with no git present.
+# produced it. Resolved at configure time, not build time and the packaging
+# scripts always reconfigure.
+# -dirty is deliberate to know it wasn't from a release
+# THEOC_VERSION= optionally overrides this
 set(THEOC_VERSION "" CACHE STRING "Build identity; defaults to git describe")
 if(NOT THEOC_VERSION)
   find_package(Git QUIET)

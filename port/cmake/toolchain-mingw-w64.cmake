@@ -8,23 +8,6 @@
 #         -DTHEOC_WIN_DEPS=$PWD/port/deps-win
 #   cmake --build port/build-win
 #
-# WHY CROSS-COMPILING IS RIGHT HERE, HAVING BEEN WRONG FOR LINUX
-# --------------------------------------------------------------
-# docs/porting/other-os-ports.md rejects cross-compiling — but read the actual
-# argument it makes: "the compiler is not the problem; the *sysroot* is", i.e.
-# you would have to assemble Linux headers and shared objects for SDL2, Unicorn
-# and libav plus their transitive dependencies by hand. That premise does not
-# hold for Windows, which inverts it:
-#
-#   SDL2   ships an official MinGW development tarball (SDL2-devel-*-mingw)
-#   ffmpeg has prebuilt Windows dev packages carrying headers + import libs
-#   Unicorn is the only one that must be cross-built, and it is CMake with
-#          upstream MinGW support
-#
-# Two of three are download-and-untar. Linux never developed that culture
-# because distro packages made it unnecessary — which is exactly why the sysroot
-# argument bit there and does not bite here. Same reasoning, opposite
-# conclusion, because the fact it depended on changed.
 #
 # STAGING THE DEPENDENCIES
 # ------------------------
@@ -37,12 +20,6 @@
 # Keep it inside the repo (port/deps-win/ is gitignored territory — it holds
 # third-party binaries and must not be committed, same rule as data/cd/).
 #
-# STATUS: this file is scaffolding, and configuring with it will not produce a
-# working theoc.exe today. port/src/traps.cpp is POSIX throughout — sockets,
-# open/read/close, opendir, gettimeofday, usleep. That is the *point*: the first
-# real deliverable of the Windows work is the error inventory this produces, the
-# same way Linux's was "two compile errors, both BSD-isms". Harvest it before
-# designing anything.
 
 set(CMAKE_SYSTEM_NAME      Windows)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)

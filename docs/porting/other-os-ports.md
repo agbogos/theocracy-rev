@@ -1090,30 +1090,6 @@ container. Enabling only `pcm_s16be` — the classic AIFF encoding, and the
 obvious single guess — would have left the very rip that exposed the bug still
 broken.
 
-### The trap: "what the files contain" is not the enable list
-
-Configuring for exactly that — `--enable-decoder=mpeg1video,mp2
---enable-demuxer=mpegps` — builds cleanly, shrinks the bundle, and **decodes
-nothing**:
-
-```
-[mpeg] probed stream 0 failed
-[mpeg] Could not find codec parameters for stream 0 (Video: none, none)
-[smpeg] decode failed, will skip frames
-```
-
-An MPEG-PS elementary stream whose type the container does not state is
-identified by libavformat *probing* it, and the probe works by asking the **raw**
-demuxers — `mpegvideo`, `mp3` — to recognise their own bitstream. With those
-disabled the codec id stays `NONE` and no decoder is ever looked up, however
-enabled the decoder is. The probe also reports MPEG-2 for MPEG-1 video, so
-`mpeg2video` is enabled alongside `mpeg1video`; it decodes both and shares their
-code, so it is free.
-
-**The reason this is verified rather than reasoned about** is in the third line
-above: the port logs the failure and *carries on to the menu*. A bundle 95%
-smaller with every cutscene silently missing presents as a clean success.
-
 ### How it was verified, with no display
 
 Headless in the container, both architectures, reading the decode log rather than
@@ -1143,85 +1119,46 @@ Two smaller things this dragged out:
   linking the old one and ships it silently. One extra minute of compiling
   against a failure that looks like the prefix not working at all.
 
-## Re-cutting the bundles found the same bug a second time — 2026-08-19
+## Three defects found by re-cutting the bundles — 2026-08-19
 
-`v1.0.0` was re-pointed at the tip and all three bundles rebuilt. **Linux amd64
-did not compile**: `cdaudio.cpp` uses `std::vector` and never included
-`<vector>`. One line to fix, and the same defect as `std::floor` in `video.cpp`
-above — code that only ever met libc++, which supplies the header transitively
-where libstdc++ does not.
+All three were invisible in a green build log: the bundle built, the exit code
+was 0, and the defect was in what the artefact *contained*. **Verify the
+artefact, not the build.** That is what `tools/smoke-test.sh` now exists for.
 
-What is worth recording is not the bug but *why it was sitting there*. The
-bundles were cut 2026-08-04; `cdaudio.cpp` first landed 2026-08-08 in `f5b899c`,
-with the Redbook work. Between those dates `port/src` gained about 1800 lines —
-`cdaudio.cpp` (386), `config.cpp` (194, an entirely new translation unit) and
-`traps.cpp` (+866) — **none of which any toolchain but AppleClang had ever
-seen.** The port compiles on three hosts, but only one of them was being asked.
+**A missing include, Linux only.** `cdaudio.cpp` uses `std::vector` without
+including `<vector>`; libc++ supplies it transitively and libstdc++ does not.
+Same class as `std::floor` without `<cmath>` in `video.cpp` above.
 
-So the interval between a release and the next bundle re-cut is a window in
-which a single compiler is the only checker, and it is the most permissive of
-the three. The cheap correction is to run `tools/package-linux.sh amd64` when
-`port/src` changes rather than only when something is being released; it is one
-container build, and it is the only one of the three that reads the code with a
-different standard library. Cross-compiling has now caught a real macOS defect
-twice, which makes it a habit rather than a coincidence.
+The interesting part is why it survived. Between the 2026-08-04 bundles and this
+re-cut, `port/src` gained ~1800 lines that **only AppleClang had ever seen** —
+`cdaudio.cpp`, the new `config.cpp`, and +866 in `traps.cpp`. The port compiles
+on three hosts but only one was being asked. So run `tools/package-linux.sh
+amd64` whenever `port/src` changes, not only at release: it is one container
+build, and it is the only check that reads the code with a different standard
+library.
 
-**And a second one from the same re-cut, this time Windows-only.** mingw warned
-four times at one line — a narrowing `uint32_t`→`u_char` plus three uninitialised
-members — on `inet_ntoa(in_addr{ip})` in the `gethostbyname` trap. POSIX's
-`in_addr` is a bare `{ in_addr_t s_addr; }`, so brace-init is right there and
-wrong on Windows, where it is a **union whose first member is four `u_char`s**:
-the initialiser lands in `s_b1` and the other three octets are zero. The log line
-printed `192.0.0.0` where Linux printed `192.168.1.10`.
+**A union that is not a struct, Windows only.** `inet_ntoa(in_addr{ip})` is
+correct on POSIX, where `in_addr` is `{ in_addr_t s_addr; }`, and wrong on
+Windows, where it is a **union whose first member is four `u_char`s** — the
+initialiser lands in `s_b1` and the log printed `192.0.0.0` for `192.168.1.10`.
+Confined to the diagnostic; the address the guest receives comes from the `m.w32`
+above it. `s_addr` is the one member name both platforms spell identically.
 
-The bug is confined to the diagnostic — the address the guest actually receives
-comes from the `m.w32` two lines above and was never affected — but it is a
-netgame log line on the platform whose bare-metal session is still outstanding,
-and the point of stamping and logging is that a tester's report can be read at
-face value. `s_addr` is the one member name both platforms spell identically.
+**No build stamp at all, arm64 only.** The bundle carried the CMakeLists
+fallback `000000`/`00000000`. `package-linux.sh` resolved `THEOC_VERSION` on the
+host precisely because git fails `detected dubious ownership` against a
+bind-mounted `.git` owned by another uid — but left `THEOC_STAMP_DATE` and
+`THEOC_COMMIT` to `execute_process` calls that run *inside* the container and hit
+exactly that failure. Why amd64 got real values anyway is unexplained, and
+chasing it is beside the point: a stamp that varies by architecture and by run
+cannot do the job it exists for. All three are now resolved on the host and
+passed in.
 
-Both defects came from the *same* re-cut, which is the argument for the habit
-above stated more cheaply: two compilers, one afternoon, two real findings, and
-neither was visible to the toolchain the port is developed on.
-
-### The arm64 bundle shipped with no build stamp
-
-Checked after the re-cut, per binary rather than per build log — and the arm64
-bundle carried `000000`/`00000000`, the CMakeLists' fallback, where macOS, amd64
-and Windows all carried the real `260819`/`1ee0ebb0`.
-
-`tools/package-linux.sh` resolves `THEOC_VERSION` **on the host** and passes it
-in, and its comment says why: the bind-mounted `.git` is owned by another uid, so
-git inside the container fails `detected dubious ownership`. That is confirmed —
-`rev-parse`, `log` and `status` all fail that way in both images. But the script
-passed only the *version*, leaving `THEOC_STAMP_DATE` and `THEOC_COMMIT` to the
-`execute_process` calls in `port/CMakeLists.txt`, which run **inside** the
-container and hit exactly the failure the comment describes.
-
-Why amd64 got real values anyway is unexplained. Re-running that same configure
-in that same image afterwards produced a *half* stamp — `000000` plus the correct
-commit — and arm64 produced all zeros: three outcomes from one commit. The point
-is not to find out which condition tips it, but that the stamp exists to make two
-builds of one source produce identical bytes, and a value that varies by
-architecture and by run cannot do that job. So the fix is the one the script had
-already made for the version: resolve on the host, pass `-DTHEOC_STAMP_DATE` and
-`-DTHEOC_COMMIT` alongside `-DTHEOC_VERSION`. The dirty flag and the 7-character
-clamp are duplicated from the CMakeLists and noted there as needing to move
-together.
-
-Windows was never affected — it cross-builds on the host, where git works. Its
-stamp is simply harder to *see*: mingw embeds the two short literals as
-instruction immediates, so `strings` finds `1ee0ebb0` inside a function prologue
-and the date only as the fragments `2608` and `19`. Confirm a PE's stamp by
-disassembling around the literal, not by grepping for it — a grep that finds
-nothing there is not evidence of a missing stamp.
-
-**The general lesson, and the third of the day.** All three of this session's
-findings were invisible in a green build log: the bundle built, the exit code was
-0, and the defect was in what the artefact *contained*. `docs/porting/diagnostics.md`
-says the first log line names the build; that is only true if something checks
-that the name is there. Verify the artefact, not the build.
-
+Windows was never affected — it cross-builds on the host. Its stamp is only
+harder to *see*: mingw embeds the short literals as instruction immediates, so
+`strings` finds the commit inside a function prologue and the date only as
+fragments. Confirm a PE's stamp by disassembling around the literal; a grep that
+finds nothing is not evidence of a missing stamp.
 ## Sequencing
 
 1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces
@@ -1373,139 +1310,89 @@ macOS has not been verified for file ownership anywhere.
 `tools/stage-win-deps.sh` is the missing half of `package-windows.sh`: it
 downloads the SDL2 mingw development tarball (2.32.10), cross-builds Unicorn
 (2.1.3) at `-DUNICORN_ARCH=x86 -DBUILD_SHARED_LIBS=OFF`, and delegates ffmpeg to
-`build-ffmpeg-min.sh`. Verified by staging into a scratch prefix and packaging
-against it — 7.4 MB, the same seven DLLs as the hand-staged tree.
+`build-ffmpeg-min.sh`. It stages **no** ffmpeg into `deps-win/` on purpose: with
+nothing there, a failed minimal build is a build failure rather than a silent
+fallback to whatever else is lying around.
 
-**It deliberately does not stage ffmpeg into `deps-win/`, and that is a licence
-fix.** The hand-staged tree carried `ffmpeg-n7.1-latest-win64-gpl-shared`, a
-prebuilt binary configured with `--enable-gpl`. Nothing GPL ever shipped —
-`package-windows.sh` prefers `deps-ffmpeg-win/`, and the bundle's `avcodec-61.dll`
-measures 612 KB against the GPL build's 94 MB — but the preference is a
-*fallback*, not a guard: if the minimal build ever failed, the packaging script
-would quietly link the GPL one instead, and the port ships GPL-2.0-**or-later**
-precisely because Unicorn 2.x forbids anything later. Staging no ffmpeg into
-`deps-win` turns that silent substitution into a build failure, which is the
-behaviour worth having. The hand-staged copy on the development machine is
-untouched and still holds it.
+**The `.exe` is smoke-tested, not shipped unverified.** A cross-built Windows
+binary cannot run on a Linux runner, but wine can run it:
+`THEOC_SMOKE_RUNNER=wine` prefixes the invocation and `THEOC_FIX_SAVE` needs no
+display, so the same test that checks the Linux bundles checks this one.
 
-**The `.exe` can be smoke-tested after all, and does not have to ship
-unverified.** The open question was that a cross-built Windows binary cannot run
-on a Linux runner. Wine answers it: `THEOC_SMOKE_RUNNER=wine` prefixes the
-invocation, and `THEOC_FIX_SAVE` needs no display, so the same test that checks
-the Linux bundles checks this one. Confirmed in a container against a
-cross-built bundle — `8f4b26082009339110w600`, the `w6` being the host+arch pair
-the stamp format documents.
+A static check would have been weaker. `THEOC_COMMIT` survives in the stripped
+`.exe` as a greppable literal, but `THEOC_STAMP_DATE` does not — the compiler
+inlines the six characters as immediates, so `strings` never sees `260820`. Wine
+asserts both.
 
-A static fallback was measured and is worth knowing about, because it is weaker
-than it looks: `THEOC_COMMIT` survives in the stripped `.exe` as a contiguous
-literal and can be grepped, but `THEOC_STAMP_DATE` does **not** — the compiler
-inlines the six characters as immediates, so `strings` never sees `260820`. A
-static check could therefore assert the commit and not the date. Wine asserts
-both, which is why it is what the job runs.
+Two bugs the first runs found, both worth keeping:
 
-**The first CI run of the Windows job failed on one DLL**, and the cause is a
-packaging assumption that had never been portable. `package-windows.sh` resolves
-the import closure against a fixed list of directories, and that list carried
-Homebrew's layout — where the toolchain runtime DLLs sit in the toolchain's
-`bin/` — plus `/usr/x86_64-w64-mingw32/bin` for Linux, which is the wrong half of
-the Debian layout. Debian and Ubuntu ship `libwinpthread-1.dll` in
-`/usr/x86_64-w64-mingw32/**lib**/` (package `mingw-w64-x86-64-dev`), so every
-other DLL resolved and that one did not. The script was right to fail rather
-than ship: a bundle missing it does not start on a clean Windows machine.
+- **`libwinpthread-1.dll` was not found.** `package-windows.sh` resolved the
+  import closure against a fixed directory list that knew Homebrew's layout and
+  `/usr/x86_64-w64-mingw32/bin`; Debian and Ubuntu ship that DLL in
+  `/usr/x86_64-w64-mingw32/**lib**/`. Order matters when adding paths: the i686
+  tree carries a same-named DLL of the wrong architecture, so no path that can
+  reach it belongs in the list.
+- **wine refused `WINEPREFIX=/tmp/wineprefix`** — *"'/tmp' is not owned by
+  you"*. `${{ runner.temp }}` is owned by the runner user.
 
-Adding the `lib/` path fixes it, with one ordering constraint worth stating —
-the i686 tree carries a same-named DLL of the wrong architecture, so no path
-that could reach it belongs in the list. Verified by reproducing the runner
-rather than reasoning about it: staging and packaging inside `ubuntu:24.04`
-bundles all seven DLLs, `file` reports every one as PE32+ x86-64, and the
-resulting bundle passes the wine smoke test at `8f4b260820d6a5c59+w600`.
-
-One local-only trap met on the way, recorded so it is not re-met: **wine in an
-arm64 container cannot run an x86-64 `.exe`** and hangs rather than failing. The
-verification runs must pass `--platform linux/amd64`, which is what the runner
-is anyway.
-
-**Then wine refused to start at all on the runner**, for the second instance of
-the same root cause as the root-owned `dist/`: `WINEPREFIX=/tmp/wineprefix` is
-fine in a container, where everything runs as root, and refused on a real runner
-— *"'/tmp' is not owned by you"*. `${{ runner.temp }}` is owned by the runner
-user and is the right home for it.
-
-That is twice now that a containerised local verification passed on ownership
-semantics that do not hold on the runner, and it is worth stating as a rule
-rather than as two incidents: **running as root locally verifies behaviour and
-not permissions.** Everything a container proves about architecture, linking and
-output stays true; everything it appears to prove about who may write where does
-not.
+That second one, and the root-owned `dist/` before it, are the same root cause:
+**running as root locally verifies behaviour and not permissions.** Everything a
+container proves about architecture, linking and output stays true; everything it
+appears to prove about who may write where does not. A related local-only trap:
+wine in an arm64 container cannot run an x86-64 `.exe` and hangs rather than
+failing, so verification runs need `--platform linux/amd64`.
 
 ### macOS joins CI, signed and notarised — 2026-08-21
 
-macOS had never had a packaging script at all — it was the platform the port was
-*developed* on, so it had only ever been a dev build against Homebrew's
-`/opt/homebrew` prefix. `tools/package-macos.sh` is the third packaging script
-and the last one; the workflow now builds all three platforms and drafts the
-release from them.
+macOS had only ever been a dev build against `/opt/homebrew`.
+`tools/package-macos.sh` is the third and last packaging script; the workflow
+now builds all four bundles and drafts the release from them.
 
-The shape is the Linux bundle's: a plain directory with `bin/`, `lib/`, a
-launcher and a README, shipped as `.tar.gz`. **Not an `.app`**, deliberately —
-the game needs a data tree the user supplies from their own CD sitting beside
-the launcher, and a folder that obviously contains its data beats an app bundle
-that has to be told where the data went. That decision has one consequence,
-described at the end.
+The bundle is a plain directory shipped as `.tar.gz`, the same shape as Linux's
+— **not an `.app`**, because the game needs a user-supplied data tree beside the
+launcher. One consequence, described at the end: the notarisation ticket cannot
+be stapled.
 
-#### The cut is cleaner than Linux's, and one thing is invisible to it
+#### What `otool` cannot tell you
 
-The Linux bundle needs a hand-tuned denylist because bundling libX11 or libGL
-would be actively harmful. macOS has no equivalent hazard: the display, audio
-and GPU are reached through frameworks under `/System/Library`, and libc++ and
-libSystem live in `/usr/lib`. So the rule is the whole rule — *bundle everything
-outside those two prefixes* — and it falls out of the platform rather than
-having to be tuned.
+The Linux bundle needs a hand-tuned denylist; macOS does not. Display, audio and
+GPU are reached through `/System/Library` frameworks and libc++ lives in
+`/usr/lib`, so the rule is simply *bundle everything outside those two prefixes*.
 
-What does not fall out is SDL. **Homebrew's `sdl2` is an alias for
-`sdl2-compat`, a shim over SDL3, and it does not link SDL3 — it dlopens it**,
-first candidate `@loader_path/libSDL3.dylib`. So `libSDL3` appears nowhere in
-the `otool` closure, and a bundle built purely from that closure links, loads,
-launches, and dies at `SDL_Init` with *"Failed loading SDL3 library"*. This is
-the Linux bundle's libasound lesson arriving from the opposite direction: there,
-guessing that SDL dlopened ALSA was wrong because Debian makes it a hard
-`DT_NEEDED`; here, trusting the load commands is wrong because Homebrew makes it
-a dlopen. **The closure is necessary and not sufficient, on both platforms, for
-opposite reasons.**
+What does not fall out is SDL. **Homebrew's `sdl2` is `sdl2-compat`, a shim over
+SDL3, and it dlopens SDL3 rather than linking it** — first candidate
+`@loader_path/libSDL3.dylib`. So `libSDL3` appears nowhere in the `otool`
+closure, and a bundle built from that closure alone links, loads, launches, and
+dies at `SDL_Init` with *"Failed loading SDL3 library"*. This is the Linux
+bundle's libasound lesson arriving from the opposite direction: there, guessing
+that SDL dlopened ALSA was wrong because Debian makes it a hard `DT_NEEDED`.
+**The closure is necessary and not sufficient on both platforms, for opposite
+reasons.**
 
-So `libSDL3.dylib` is added by name — and then the load is actually exercised.
-The script dlopens the bundled `libSDL2` and calls `SDL_Init(0)`, which
-initialises no subsystem and needs no display but *is* what makes sdl2-compat go
-looking for SDL3. It fails in the packaging script rather than on a player's
-machine. The smoke test cannot cover this: `THEOC_FIX_SAVE` returns from `main`
-before SDL is touched.
+So `libSDL3.dylib` is added by name, and then the load is exercised: the script
+dlopens the bundled `libSDL2` and calls `SDL_Init(0)`, which initialises no
+subsystem and needs no display but does make sdl2-compat go looking for SDL3.
+The smoke test cannot cover this — `THEOC_FIX_SAVE` returns from `main` before
+SDL is touched.
 
-The minimal ffmpeg matters more here than anywhere else. Homebrew's ffmpeg drags
-x265, x264, svt-av1, libvpx, dav1d and openssl into the closure: **66 MB against
-21 MB**, none of it reachable by a decoder that only ever sees MPEG-1/MP2. So
-`build-ffmpeg-min.sh` grew a `macos` target — a native build, no container and
-no cross-prefix, the only branch of the three that needs neither.
+The minimal ffmpeg matters most here: Homebrew's drags x265, x264, svt-av1,
+libvpx, dav1d and openssl into the closure, **66 MB against 21 MB**.
 
 #### `install_name_tool` invalidates signatures, and arm64 does not forgive it
 
 Rewriting install names to `@rpath` is the ordinary relocatability step. On
-Apple Silicon it is also a signature-breaking step: **every dylib and every
-linker output already carries an ad-hoc signature, and arm64 macOS refuses to
-map a Mach-O whose signature does not match its contents.** It does not refuse
-politely — the process is `SIGKILL`ed with no diagnostic.
-
-The first working bundle therefore produced a dylib tree that nothing could
-load, and the symptom was `python3` dying with `Killed: 9` in the SDL check
-above. Re-signing is not the optional distribution step; it is what makes the
-bundle loadable at all. `package-macos.sh` always signs — ad-hoc when no
-identity is given, Developer ID when one is — and nothing may be reordered
-between the `install_name_tool` pass and the signing pass.
+Apple Silicon it is also a signature-breaking step: **every dylib and linker
+output already carries an ad-hoc signature, and arm64 macOS refuses to map a
+Mach-O whose signature does not match its contents** — `SIGKILL`, no diagnostic.
+Re-signing is therefore what makes the bundle loadable at all, not merely
+distributable. `package-macos.sh` always signs, ad-hoc when no identity is
+given, and nothing may be reordered between the two passes.
 
 #### The hardened runtime versus Unicorn's JIT
 
-Notarisation requires the hardened runtime, and the hardened runtime breaks the
-port twice over. Both were measured, with a test program driving `uc_emu_start`
-against the bundle's own `libunicorn`:
+Notarisation requires the hardened runtime, which breaks the port twice.
+Measured with a test program driving `uc_emu_start` against the bundle's own
+`libunicorn`:
 
 | signing | result |
 |---|---|
@@ -1513,113 +1400,70 @@ against the bundle's own `libunicorn`:
 | hardened, `allow-jit` + `allow-unsigned-executable-memory` | JIT OK |
 | hardened, those entitlements removed | `Could not allocate dynamic translator buffer` |
 
-That is the first break, and `port/theoc.entitlements` is the fix. It grants
-exactly those two and nothing else.
+`port/theoc.entitlements` grants exactly those two.
 
-The first CI run with real credentials then failed on the entitlements file
-itself, for a reason worth recording because the obvious check does not catch
-it: **an XML comment may not contain two consecutive hyphens**, the header
-comment described signing `--options runtime`, and `codesign` rejected the whole
-file with `AMFIUnserializeXML: syntax error near line 13`. `plutil -lint` calls
-that file valid; `xmllint --noout` does not. The fix is not to remember the
-rule — it is that `package-macos.sh` now passes `--entitlements` on the ad-hoc
-path too, so `codesign` parses the file on every local build. That line was the
-one part of the signing path a local run had never exercised, which is exactly
-why it reached CI.
-
-The second break is subtler. **The hardened runtime turns on library
-validation, and a hardened process refuses any dylib whose Team ID differs from
-its own** — including ad-hoc signed ones, which have no Team ID at all. A
-hardened binary sitting next to Homebrew's dylibs dies in dyld before `main`:
-
-    Reason: ... not valid for use in process: mapping process and mapped file
-    (non-platform) have different Team IDs
-
-The tempting fix is `com.apple.security.cs.disable-library-validation`. The
-entitlements file deliberately does **not** carry it: the script re-signs every
-bundled dylib with the same identity as the executable, so validation is
-satisfied honestly rather than switched off. The opt-out was used once, to
-separate the two failures from each other while testing, and then discarded.
+The second break is subtler: **the hardened runtime turns on library validation,
+and a hardened process refuses any dylib whose Team ID differs from its own** —
+including ad-hoc signed ones, which have no Team ID at all. The fix is not
+`disable-library-validation`; the script re-signs every bundled dylib with the
+same identity as the executable, so validation is satisfied rather than switched
+off.
 
 #### Notarised, not stapled
 
-`notarytool` accepts `.zip`, `.pkg` and `.dmg` and never a `.tar.gz`, so the job
-zips the bundle with `ditto` purely as transport. That costs nothing: the ticket
-Apple issues is keyed on each binary's cdhash, so the same files then ship in
-the `.tar.gz` and Gatekeeper recognises them.
+`notarytool` accepts `.zip`, `.pkg` and `.dmg`, never `.tar.gz`, so the job zips
+the bundle with `ditto` purely as transport. The ticket is keyed on each binary's
+cdhash, so the same files then ship in the `.tar.gz` and Gatekeeper recognises
+them. But `stapler` writes tickets only into `.app`, `.dmg` and `.pkg`, so
+**first launch checks with Apple online**, and the README gives the offline
+escape (`xattr -dr com.apple.quarantine .`).
 
-What it does cost is stapling. `stapler` writes tickets into `.app`, `.dmg` and
-`.pkg` only — there is nowhere in a plain directory to put one — so **first
-launch checks with Apple online**. That is the consequence of not shipping an
-`.app`, it is accepted, and the README says so and gives the offline escape
-(`xattr -dr com.apple.quarantine .`).
+CI submits and does not wait — Apple's queue outran a 30-minute timeout once and
+the job was killed holding a runner. The submission id goes into the draft
+release's notes and the accept/reject check is a human step before publishing.
+`--wait` would not have helped much anyway: it exits 0 on a rejected submission,
+so the `status` field was always the only thing that said.
 
-**CI submits and does not wait — 2026-08-21.** The first real submission sat in
-Apple's queue past `--wait --timeout 30m` and the job was killed at exit 124,
-holding a macOS runner for half an hour and then throwing away the answer. The
-upload had long since finished; only Apple's processing was outstanding. So the
-job now submits, prints the submission id to the step summary and into the draft
-release's notes, and stops.
+Three things that fail quietly:
 
-What that gives up is stated plainly because it is real: **nothing in CI fails
-when Apple rejects a bundle.** The check moved to the human who publishes the
-draft — which is where it already effectively was, since the release is a draft
-precisely so a person decides. `--wait` was never the guard it looked like
-either: `notarytool submit --wait` exits 0 on a rejected submission as readily
-as on an accepted one, so the `status` field was always the only thing that
-actually said so.
+- **`base64 --decode` on macOS accepts a raw PEM body and emits garbage at exit
+  0**, so a secret holding the unencoded `.p8` yields a wrong key file and a
+  `401 Unauthenticated` that names none of it.
+- **A trailing newline in a secret is invisible and fatal.** `base64 -i key.p8 |
+  pbcopy` and a copy off the App Store Connect page both carry one; GitHub stores
+  it verbatim; `--key-id ABCDE12345\n` is refused with the same 401. The job now
+  strips whitespace from the key ID and issuer, which cannot legitimately contain
+  any, and leaves the certificate password alone, which can.
+- **`--issuer` is required for a team key and meaningless for an individual
+  one**, where the JWT carries `sub:"user"` instead of `iss`. Passing it empty is
+  an error.
 
-The draft's notes carry the `notarytool info <id>` command as an unticked
-checkbox, and stapling was never on the table, so a bundle accepted after the
-artefacts were built needs no rebuild — the ticket lives on Apple's servers and
-Gatekeeper fetches it.
+The certificate goes into a throwaway keychain in `RUNNER_TEMP`, deleted in an
+`always()` step. Without `security set-key-partition-list`, `codesign` finds the
+key and macOS raises a UI authorisation prompt nobody is there to answer, so the
+job **hangs** rather than failing. The job also refuses to build unsigned on a
+tag while still allowing it on `workflow_dispatch`.
 
-Four traps in the notarisation step, all of which fail quietly rather than
-loudly:
+#### What CI cannot prove, and how to prove it anyway
 
-- **A trailing newline in a secret is invisible and fatal.** This is what the
-  first authenticated run actually died of. `base64 -i key.p8 | pbcopy`, and a
-  copy taken off the App Store Connect page, both carry a trailing newline;
-  GitHub stores the secret verbatim; and `--key-id ABCDE12345\n` is refused
-  with `401 Unauthenticated` — the same answer an unauthorised key gets. The
-  credentials were never wrong, and `notarytool history` from a laptop proved
-  it by returning "No submission history" with the very same three values. The
-  job now strips whitespace from the key ID and the issuer, which cannot
-  legitimately contain any, and leaves the certificate password alone, which
-  can.
-- **`base64 --decode` on macOS accepts a raw PEM body and emits binary garbage
-  at exit 0.** So a `MACOS_NOTARY_KEY_P8_BASE64` secret holding the unencoded
-  `.p8` produces a key file that is wrong in a way nothing notices until Apple
-  answers `401 Unauthenticated`, which names none of it. The job now accepts
-  either form and checks that what it wrote is a PEM private key before using
-  it. It also authenticates with `notarytool history` — which uploads nothing —
-  before pushing 21 MB, so a credential fault fails in seconds rather than after
-  the transfer, and warns if the key ID is not 10 characters or the issuer is
-  not a UUID. Those two shape checks exist because a 401 does not distinguish
-  "this key is not authorised" from "the wrong string is in the wrong secret",
-  and the second is the far more common mistake.
+The smoke test runs `THEOC_FIX_SAVE`, which returns before Unicorn is opened and
+before SDL is touched. So a green macOS job proves the bundle is built,
+relocatable, signed, notarised and loadable, and says nothing about whether the
+guest runs under the hardened runtime.
 
-- `notarytool submit --wait` **exits 0 on a rejected submission** as readily as
-  on an accepted one. The `status` field is the only thing that says. Without
-  checking it, a tag would publish a bundle Apple refused.
-- `--issuer` is required for a team key and meaningless for an individual one,
-  where the JWT carries `sub:"user"` instead of `iss`. Passing it empty is an
-  error, so the job appends it only when the secret is set — and does so with an
-  `if`, not `[ -n ... ] && ...`, because under `set -e` a bare failing test is
-  the exit status of the whole statement and would end the step in exactly the
-  individual-key case it exists to support.
+**`THEOC_SERVER=1` closes that without a display.** The dedicated server is the
+shipped `server` binary driven by the same emulator, so pointing a released
+bundle at a data tree and booting it exercises the whole risk in one command.
+On v1.0.1-rc3:
 
-The signing certificate goes into a throwaway keychain in `RUNNER_TEMP`, never
-the login keychain, and is deleted in an `always()` step. One line in that dance
-is the one everyone omits: without `security set-key-partition-list`, `codesign`
-finds the key and macOS raises a UI authorisation prompt that no one is there to
-answer, so the job **hangs** rather than failing.
+    mvos .ctors done: 10 ok, 0 aborted, 0 no-return, 0 faulted (of 10)
+    calling Start__12cApplication @ 0x804b210 ...
+    [net] bind(:5042) ok
 
-Finally, the job refuses to build an unsigned bundle on a tag while still
-allowing one on `workflow_dispatch`. A tag is a release and a release must be
-signed; a dispatch is a pipeline test and being able to run one without
-credentials is worth keeping.
-
+Ten guest i386 constructors translated and executed by the TCG inside a
+Developer-ID-signed, hardened-runtime, notarised binary. Any future *"does the
+signed bundle still run the guest"* is one headless server boot away. A play
+session is still needed for everything with a display attached.
 ### The third-party manifest — 2026-08-21
 
 The bundles ship other people's GPL and LGPL binaries, so the
@@ -1664,39 +1508,12 @@ build on Windows — because each takes it from where that platform gets
 libraries. That is fine, and it is exactly the sort of thing a generated
 manifest records and a written one gets wrong.
 
-#### What CI cannot prove about the macOS bundle, and how it was proved anyway
-
-The smoke test runs `THEOC_FIX_SAVE`, which returns from `main` before Unicorn
-is opened and before SDL is touched. So a green macOS job proves the bundle is
-built, relocatable, signed, notarised and *loadable*, and says nothing about
-whether the guest actually runs under the hardened runtime.
-
-**`THEOC_SERVER=1` closes that gap without a display.** The dedicated server is
-headless by design — it is the shipped `server` binary driven by the same
-emulator — so pointing the released bundle at a data tree and booting it
-exercises the entire risk in one command, on the real signed artefact rather
-than on a test program. Done on v1.0.1-rc3:
-
-    mvos .ctors: 10 constructors @ 0x100c512c
-    mvos .ctors done: 10 ok, 0 aborted, 0 no-return, 0 faulted (of 10)
-    calling OpenSubsystems @ 0x10094f20 ... returned
-    calling Start__12cApplication @ 0x804b210 ...
-    [net] bind(:5042) ok
-
-Ten guest i386 constructors translated and executed by the TCG inside a
-Developer-ID-signed, hardened-runtime, notarised binary. This is worth keeping
-as the standing recipe: **any future question of the form "does the signed
-bundle still run the guest" is one headless server boot away**, and does not
-need a play session to answer.
-
-What a play session is still needed for is everything with a display attached —
-window, input, save/load, cutscenes — and that is in `todo.md`.
 
 ### The v1.0.1-rc3 release, verified end to end — 2026-08-21
 
-The first tag to build all four bundles and draft a release from them. All four
-were then re-verified from the downloaded tarballs rather than from the build
-tree, which is the only check that covers the packaging *and* the transport:
+The first tag to build all four bundles. Each was re-verified from its
+downloaded tarball rather than from `dist/`, so the check covers packaging and
+transport together:
 
 | bundle | stamp | verified in |
 |---|---|---|
@@ -1705,20 +1522,11 @@ tree, which is the only check that covers the packaging *and* the transport:
 | macos-arm64 | `8f4b26082105a95670ma00` | host, signed + notarised + guest booted |
 | windows-x64 | `8f4b26082105a95670w600` | wine, amd64 container |
 
-Every stamp decodes to the tagged commit at the tagged date with the right
-host/arch pair and the `0` clean-tree suffix, so no dirty build reached the
-release. Two deliberate choices in how that was checked:
+Every stamp decodes to the tagged commit and date with the right host/arch pair
+and the `0` clean-tree suffix.
 
-- **A stock base image, not the build image.** A bundle tested inside the
-  container that produced it can pass by inheriting the builder's libraries,
-  which is precisely the property being tested. Both Linux bundles report no
-  unmet dependencies on a clean bookworm-slim.
-- **The downloaded tarballs, not `dist/`.** The build tree cannot show a
-  permission bit lost in `tar`, an execute bit dropped in transit, or a
-  signature broken by the round trip. (macOS signatures survive it; that was
-  checked explicitly, since `install_name_tool` had already proved how easily
-  they break.)
-
-The two Linux manifests are byte-identical across architectures — same Debian
-release, same package versions, different machine code — which is the answer
-that says the manifest is reading the system rather than inventing it.
+Two things about the method are worth repeating on any future release. Test in a
+**stock** base image, not the build image — a bundle tested where it was built
+can pass by inheriting the builder's libraries, which is the property under test.
+And test the **downloaded tarball**, since the build tree cannot show a
+permission bit lost in `tar` or a signature broken by the round trip.

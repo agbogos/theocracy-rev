@@ -347,31 +347,17 @@ our stderr diagnostics interleave in the right order.
 ```
 
 `git describe --tags --always --dirty`, resolved at **configure** time and
-compiled into `main.cpp` alone. Added for beta testing: a report is only
-actionable if we know which binary produced it, and this port ships bundles that
-differ in ways a tester cannot see — the 2026-08-04 minimal-ffmpeg swap and the
-`WSAStartup` fix both changed behaviour without changing anything on screen.
-Putting it in the banner rather than behind a flag means a tester who sends a log
-has already answered the question without being asked.
+compiled into `main.cpp` alone.
 
-Read it as follows:
+Examples:
 
-- **`v1.0.0`** — a tagged build, reproducible from that tag.
-- **`v1.0.0-7-g1a2b3c4`** — seven commits past the tag; `1a2b3c4` is the commit.
-- **anything `-dirty`** — built from an uncommitted tree. Both packaging scripts
-  print a warning when they produce one, because that is precisely the bundle
-  whose bug report cannot be reproduced later.
-- **`unknown`** — built with no git and no override. Legitimate for an exported
-  tarball; it says `unknown` rather than nothing so a missing version is legible
-  as a missing version and not as a changed banner.
+- **`v1.0.0`** — a tagged build, clean.
+- **`v1.0.0-7-g1a2b3c4`** — seven commits past the tag, with commit sha.
+- **`-dirty`** — built from an uncommitted tree.
+- **`unknown`** — built with no git and no override
 
-`-DTHEOC_VERSION=...` overrides it. Note that this is a **CMake** variable, not
-one of the runtime `THEOC_*` environment knobs above — nothing about the version
-can be changed after the binary is built, which is the point.
+**CMake** variable `-DTHEOC_VERSION=...` overrides it.
 
-Both bundle directories carry the same string in their name and in their
-`README.txt`, so the identity survives a tester unpacking it somewhere and
-forgetting where it came from.
 
 ### Which stream: stdout is the guest's, stderr is ours
 

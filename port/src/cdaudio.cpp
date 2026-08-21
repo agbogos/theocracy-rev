@@ -19,17 +19,7 @@ extern "C" {
 }
 
 namespace {
-// ffmpeg logs to stderr on its own account, at AV_LOG_INFO by default, and none
-// of it is ours: probing a file it cannot identify emits "Format mp3 detected
-// only with low score of 1" and two more lines per track, which is how seven
-// unreadable CD rips became fourteen lines of someone else's diagnostics in a
-// player's log. Silenced at the quiet level and restored to ffmpeg's own
-// default at verbose, so a verbose log is still byte-comparable with what the
-// port printed before it had levels.
-//
-// Called from every entry point that touches libav rather than once from main:
-// main.cpp has no libav headers, and a one-time static is cheaper than the
-// header churn needed to hoist this.
+// ffmpeg logs to stderr on its own account, so we silence it unless verbose
 void av_log_follow_verbosity() {
     static const bool once = [] {
         av_log_set_level(logging::level >= 1 ? AV_LOG_INFO : AV_LOG_QUIET);

@@ -23,13 +23,8 @@
 # separately into port/deps-ffmpeg-win/ by tools/build-ffmpeg-min.sh, which
 # package-windows.sh searches first.
 #
-# This is a licence fix as much as a size one. The hand-staged tree carried
-# ffmpeg-n7.1-latest-win64-**gpl**-shared, a prebuilt binary configured with
-# --enable-gpl. The port ships GPL-2.0-or-later precisely because Unicorn 2.x
-# forbids anything later, and pulling in a GPL-3 ffmpeg would have been a
-# problem the day someone looked. tools/build-ffmpeg-min.sh builds LGPL-2.1+
-# with neither --enable-gpl nor --enable-nonfree, so the correct ffmpeg is also
-# the small one: it is what takes the bundle from 119 MB to 7.3 MB.
+# tools/build-ffmpeg-min.sh builds LGPL-2.1+ with neither --enable-gpl
+# nor --enable-nonfree — it is what takes the bundle from 119 MB to 7.3 MB.
 #
 # So this script does not download that zip, and nothing should put it back.
 set -eu

@@ -488,11 +488,3 @@ incremental native-override seam. `THEOC_NATIVE_BLIT=0` disables it.
 | `THEOC_AUDIO_MS=N` | Mixer queue target = audio latency in ms (default 120). Lower = less latency, more underrun risk. |
 | `THEOC_LEGACY_SLEEP=1` | Revert Bug-1 fix (blind `usleep`, heartbeat only from present). |
 | `THEOC_NATIVE_BLIT=0` | Revert to emulated libmvos rasteriser. |
-
-## The general lesson
-
-Under this emulator, **wall-clock-shaped bugs masquerade as performance bugs.**
-The decisive question is never "what's hot?" but "**is the emulator saturated or
-idle?**" — if idle while slow, the bottleneck is a host-side wait we synthesised
-(a sleep, a signal we didn't deliver, a clock we advanced too slowly), not the
-guest's compute. The `THEOC_FPS` blocks/sec figure answers that in one line.

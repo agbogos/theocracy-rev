@@ -30,10 +30,8 @@
 # --disable-everything switches off every codec/demuxer/parser/protocol and the
 # enables put back what is used.
 #
-# THE SECOND HALF OF THE LIST IS THE CD AUDIO PATH, and it was missing until
-# 2026-08-21 — the bug that produced it is worth stating because it is a shape,
-# not a typo. The enable list was derived from `data/cd/movie/`, which is the
-# only thing *this script* knew the port decoded. But the port has a second,
+# THE SECOND HALF OF THE LIST IS THE CD AUDIO PATH
+# The enable list was derived from `data/cd/movie/`, but the port has a second,
 # unrelated libav consumer: `port/src/cdaudio.cpp` hands ripped CD audio to
 # `avformat_open_input`, and it accepts ten container extensions
 #
@@ -43,28 +41,11 @@
 # and was not: the `mp3` *demuxer* was enabled for MPEG-PS probing, while the
 # only audio *decoder* was `mp2`, which does not decode mp3.
 #
-# The failure was quiet in the way that matters — the bundles played no CD music
-# at all, and the dev build did, because it links Homebrew's full ffmpeg. So no
-# amount of playing the game on the machine that built it could ever have shown
-# this. It was found by diffing a bundle's log against a dev build's.
-#
-# THE ENABLE LIST IS NOT JUST "WHAT THE FILES CONTAIN", and the first version of
-# this script found that out. mpeg1video + mp2 + the mpegps demuxer is exactly
-# what the files are, and it produced
-#
-#     [mpeg] probed stream 0 failed
-#     [mpeg] Could not find codec parameters for stream 0 (Video: none, none)
-#
-# because an MPEG-PS elementary stream whose type the container does not state is
-# identified by libavformat *probing* it, and that probe works by asking the raw
-# demuxers — `mpegvideo` and `mp3` — to recognise their own bitstream. With those
-# disabled the codec id stays NONE and no decoder is ever looked up. The probe
-# reports MPEG-2 for MPEG-1 video, so the mpeg2video decoder is enabled too; it
-# handles both, and shares its code with mpeg1video, so it costs nothing.
-#
-# The failure mode is why this is verified rather than reasoned about: the port
-# logs "[smpeg] decode failed, will skip frames" and *carries on to the menu*. A
-# bundle 95% smaller and silently missing every cutscene looks like a success.
+# The raw `mpegvideo` and `mp3` demuxers are enabled on purpose: libavformat
+# identifies an untyped MPEG-PS elementary stream by asking them to recognise
+# their own bitstream, and without them the codec id stays NONE and no decoder
+# is looked up. The probe reports MPEG-2 for MPEG-1 video, so `mpeg2video` is
+# enabled too — it handles both and shares code with mpeg1video, so it is free.
 #
 # VERSION
 # -------

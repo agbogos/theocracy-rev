@@ -6,26 +6,12 @@
 
 // Host log levels.
 //
-// The port printed 65 lines before the dedicated server reached its first
-// socket, and every one of them was on for every user. That output is genuinely
-// valuable — it is how the guest link, the relocation passes and the subsystem
-// bring-up were debugged in the first place, and it is why a bug report from a
-// tester has usually already answered the first three questions. But it is
-// developer output, and a player running a 26-year-old strategy game should not
-// have to scroll past a relocation count to see that their save loaded.
+// The default is quiet and THEOC_VERBOSE enables debug logging.
 //
-// So the default is quiet and THEOC_VERBOSE brings it all back. Nothing is
-// deleted; the same lines print, behind a knob.
-//
-// WHAT STAYS UNCONDITIONAL, and why the list is short but not empty
+// What prints regardless:
 // ----------------------------------------------------------------
-//   * The banner. It names the build, and a tester who sends a log has then
-//     already told us which binary they ran without being asked — the only
-//     version-reporting scheme that survives contact with non-developers. See
-//     docs/porting/diagnostics.md, "The first line names the build".
-//   * Errors and warnings. Anything the user can act on, or that explains
-//     something they will otherwise experience as a mystery: a missing file, a
-//     save that could not be repaired, audio that will not play.
+//   * The banner with build info. Useful in non-developer testing.
+//   * Errors and warnings.
 //
 // Everything else is LOG_V. When in doubt the answer is LOG_V, because the cost
 // of hiding a line is one environment variable and the cost of keeping it is
