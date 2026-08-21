@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Adam Bogos
 #include "traps.hpp"
+#include "log.hpp"
 #include <cmath>
 #if defined(__APPLE__)
 #include <mach/mach.h>
@@ -210,7 +211,7 @@ TrapLayer::TrapLayer(std::vector<std::string> names)
     }
     if (const char* v = std::getenv("THEOC_MUSIC_VOL")) cd_.set_host_volume(std::atoi(v));
     if (cd_.present())
-        std::fprintf(stderr, "  [cd] %d audio tracks in '%s', TOC %u..%u\n",
+        LOG_V("  [cd] %d audio tracks in '%s', TOC %u..%u\n",
                     cd_.count(), cd_.dir().c_str(), cd_.first_track(), cd_.last_track());
 }
 
@@ -1816,7 +1817,7 @@ void TrapLayer::register_builtins() {
         ::setsockopt(hfd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
 #endif
         int gfd = adopt_host_fd(hfd, /*is_socket=*/true);
-        std::fprintf(stderr, "  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
+        LOG_V("  [net] socket(type=%d) -> guest fd %d\n", type, gfd);
         return (uint32_t)gfd;
     };
 
@@ -1855,7 +1856,7 @@ void TrapLayer::register_builtins() {
                     std::fprintf(stderr, "  [net] bind(:5043) stand-in bind failed "
                                 "(harmless unless listen() follows)\n");
             }
-            std::fprintf(stderr, "  [net] bind(:5043) faked OK — single-instance lock "
+            LOG_V("  [net] bind(:5043) faked OK — single-instance lock "
                         "(THEOC_REAL_LOCK=1 to honour it)\n");
             return 0;
         }
@@ -1866,7 +1867,7 @@ void TrapLayer::register_builtins() {
             set_errno(m, to_linux_errno(e));
             return (uint32_t)-1;
         }
-        std::fprintf(stderr, "  [net] bind(:%u) ok\n", port);
+        LOG_V("  [net] bind(:%u) ok\n", port);
         return 0;
     };
 
@@ -1890,7 +1891,7 @@ void TrapLayer::register_builtins() {
         if (c < 0) { set_errno(m, to_linux_errno(errno)); return (uint32_t)-1; }
         host_to_guest_sin(m, gaddr, glen_ptr, peer);
         int gfd = adopt_host_fd(c, /*is_socket=*/true);
-        std::fprintf(stderr, "  [net] accept -> guest fd %d from %s:%u\n", gfd,
+        LOG_V("  [net] accept -> guest fd %d from %s:%u\n", gfd,
                     inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
         return (uint32_t)gfd;
     };
@@ -1910,7 +1911,7 @@ void TrapLayer::register_builtins() {
             set_errno(m, to_linux_errno(e));
             return (uint32_t)-1;
         }
-        std::fprintf(stderr, "  [net] connect(%s:%u) ok\n", inet_ntoa(sa.sin_addr),
+        LOG_V("  [net] connect(%s:%u) ok\n", inet_ntoa(sa.sin_addr),
                     ntohs(sa.sin_port));
         return 0;
     };
@@ -2267,7 +2268,7 @@ void TrapLayer::register_builtins() {
         // address the guest receives is the m.w32 above, which was always right.
         in_addr shown{};
         shown.s_addr = (uint32_t)ip;
-        std::fprintf(stderr, "  [net] gethostbyname('%s') -> %s\n", host.c_str(),
+        LOG_V("  [net] gethostbyname('%s') -> %s\n", host.c_str(),
                     inet_ntoa(shown));
         return he;
     };
@@ -2289,12 +2290,12 @@ void TrapLayer::register_builtins() {
         if (sig == 13 /*SIGPIPE on both Linux and BSD*/ && h == 1) {
 #if defined(SIGPIPE)
             ::signal(SIGPIPE, SIG_IGN);
-            std::fprintf(stderr, "  [net] SIGPIPE ignored (guest requested)\n");
+            LOG_V("  [net] SIGPIPE ignored (guest requested)\n");
 #else
             // Windows has no SIGPIPE: a send to a dead peer returns
             // WSAECONNRESET/WSAESHUTDOWN rather than raising anything, so the
             // request is already satisfied by the platform.
-            std::fprintf(stderr, "  [net] SIGPIPE ignore requested; no-op on this host\n");
+            LOG_V("  [net] SIGPIPE ignore requested; no-op on this host\n");
 #endif
         }
         // Other signals stay stubbed: the guest's SIGALRM timer is delivered by

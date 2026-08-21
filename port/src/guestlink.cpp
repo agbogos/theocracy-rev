@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Adam Bogos
 #include "guestlink.hpp"
+#include "log.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -50,7 +51,7 @@ uint32_t map_image(Machine& m, const elf32::Image& img, uint32_t bias, const cha
             prev_end = end;
         }
         if (va + s.memsz > hi) hi = va + s.memsz;
-        std::fprintf(stderr, "  [%s] va %#010x memsz %#08x filesz %#08x bias+%#x -> [%#x,%#x)\n",
+        LOG_V("  [%s] va %#010x memsz %#08x filesz %#08x bias+%#x -> [%#x,%#x)\n",
                     tag, s.vaddr, s.memsz, s.filesz, bias, start, end);
     }
     return hi;
@@ -72,7 +73,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
 
     LinkResult R;
     std::vector<std::string> hle_names;
-    std::fprintf(stderr, "=== guest link: theocracy.real + libmvos @ %#x ===\n", MVOS_BASE);
+    LOG_V("=== guest link: theocracy.real + libmvos @ %#x ===\n", MVOS_BASE);
 
     // 1. Map both images -------------------------------------------------------
     map_image(m, game, 0, "game");
@@ -110,11 +111,11 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
     }
     hle_names.assign(need_hle.begin(), need_hle.end());
     std::sort(hle_names.begin(), hle_names.end());
-    std::fprintf(stderr, "  game UND -> mvos: %u, -> HLE: %u\n",
+    LOG_V("  game UND -> mvos: %u, -> HLE: %u\n",
                 R.game_imports_to_mvos, R.game_imports_to_hle);
-    std::fprintf(stderr, "  mvos UND -> game: %u, -> HLE: %u\n",
+    LOG_V("  mvos UND -> game: %u, -> HLE: %u\n",
                 R.mvos_imports_to_game, R.mvos_imports_to_hle);
-    std::fprintf(stderr, "  unique HLE symbols: %zu\n", hle_names.size());
+    LOG_V("  unique HLE symbols: %zu\n", hle_names.size());
 
     R.traps = std::make_unique<TrapLayer>(hle_names);
     TrapLayer* traps_ptr = R.traps.get();
@@ -175,7 +176,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         // __ctype_b points at entry for c=0 (signed char index: -128..127 → 0..255).
         m.w32(LIBC_DATA, tab + 128 * 2);
         bind["__ctype_b"] = LIBC_DATA;
-        std::fprintf(stderr, "  [libc] __ctype_b @ %#x -> table %#x\n", LIBC_DATA, tab + 128 * 2);
+        LOG_V("  [libc] __ctype_b @ %#x -> table %#x\n", LIBC_DATA, tab + 128 * 2);
     }
 
     auto resolve = [&](const std::string& name, bool weak) -> uint32_t {
@@ -206,7 +207,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         if (s.name.empty() || s.name.rfind("__vt", 0) == 0) continue;
         copy_to_game[s.name] = r.offset;
     }
-    std::fprintf(stderr, "  COPY data globals shared to game storage: %zu\n", copy_to_game.size());
+    LOG_V("  COPY data globals shared to game storage: %zu\n", copy_to_game.size());
 
     // build_idx: defined symbols use *this* image's address (so mvos R_386_32 to
     // a vtable hits mvos's relocated body). Exception: a COPY'd data global's
@@ -269,7 +270,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
     // 4. Fully relocate libmvos (vtables get real method pointers).
     IdxMap mvos_idx = build_idx(mvos, MVOS_BASE);
     apply(mvos, MVOS_BASE, mvos_idx, F_REL | F_ABS | F_GOT);
-    std::fprintf(stderr, "  mvos relocs pass 1 done\n");
+    LOG_V("  mvos relocs pass 1 done\n");
 
     // 5. COPY from relocated mvos → game .bss; rebind name → game address.
     for (const auto& r : game.relocs()) {
@@ -289,7 +290,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         bind[s.name] = dst;
         R.copies++;
     }
-    std::fprintf(stderr, "  COPY relocs applied: %u (src=relocated mvos)\n", R.copies);
+    LOG_V("  COPY relocs applied: %u (src=relocated mvos)\n", R.copies);
 
     // 6. mvos GOT/PLT only — point COPY'd globals (VVC, …) at game copies.
     //    R_386_32 in mvos text still references mvos-local vtable *bodies* (correct).
@@ -320,7 +321,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
     // 7. Game relocs.
     IdxMap game_idx = build_idx_got(game, 0);
     apply(game, 0, game_idx, F_ABS | F_GOT);
-    std::fprintf(stderr, "  relocs applied (counted entries): %u\n", R.relocs_applied);
+    LOG_V("  relocs applied (counted entries): %u\n", R.relocs_applied);
 
     // Integrity check: a GOT/PLT slot left at 0 means a call through it jumps to
     // address 0 and faults with EIP=0 and no frame pointer -- one of the least
@@ -349,7 +350,7 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         };
         scan(game, 0, "game");
         scan(mvos, MVOS_BASE, "mvos");
-        std::fprintf(stderr, "  zero GOT/PLT slots after linking: %u\n", zero);
+        LOG_V("  zero GOT/PLT slots after linking: %u\n", zero);
     }
 
     // 8. Bookkeeping ----------------------------------------------------------
@@ -366,9 +367,9 @@ LinkResult link(Machine& m, const elf32::Image& game, const elf32::Image& mvos) 
         R.mvos_ctors_n = ct->size / 4;
     }
 
-    std::fprintf(stderr, "  Init@%#x Start@%#x mvos_DT_INIT@%#x\n",
+    LOG_V("  Init@%#x Start@%#x mvos_DT_INIT@%#x\n",
                 R.init_app, R.start_app, R.mvos_init);
-    std::fprintf(stderr, "  game .ctors @%#x (%u words), mvos .ctors @%#x (%u words)\n",
+    LOG_V("  game .ctors @%#x (%u words), mvos .ctors @%#x (%u words)\n",
                 R.game_ctors, R.game_ctors_n, R.mvos_ctors, R.mvos_ctors_n);
     return R;
 }

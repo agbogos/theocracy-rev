@@ -188,6 +188,7 @@ find_package(Threads REQUIRED)
 # ---- Target ------------------------------------------------------------------
 add_executable(theoc
   src/main.cpp
+  src/log.cpp
   src/machine.cpp
   src/guestlink.cpp
   src/traps.cpp

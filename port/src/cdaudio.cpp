@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Adam Bogos
 #include "cdaudio.hpp"
+#include "log.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -16,6 +17,27 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libswresample/swresample.h>
 }
+
+namespace {
+// ffmpeg logs to stderr on its own account, at AV_LOG_INFO by default, and none
+// of it is ours: probing a file it cannot identify emits "Format mp3 detected
+// only with low score of 1" and two more lines per track, which is how seven
+// unreadable CD rips became fourteen lines of someone else's diagnostics in a
+// player's log. Silenced at the quiet level and restored to ffmpeg's own
+// default at verbose, so a verbose log is still byte-comparable with what the
+// port printed before it had levels.
+//
+// Called from every entry point that touches libav rather than once from main:
+// main.cpp has no libav headers, and a one-time static is cheaper than the
+// header churn needed to hoist this.
+void av_log_follow_verbosity() {
+    static const bool once = [] {
+        av_log_set_level(logging::level >= 1 ? AV_LOG_INFO : AV_LOG_QUIET);
+        return true;
+    }();
+    (void)once;
+}
+}  // namespace
 
 namespace {
 
@@ -54,6 +76,7 @@ int track_number(const std::string& name) {
 }
 
 double probe_duration(const std::string& path) {
+    av_log_follow_verbosity();
     AVFormatContext* fmt = nullptr;
     if (avformat_open_input(&fmt, path.c_str(), nullptr, nullptr) < 0) return 0.0;
     double secs = 0.0;
@@ -111,6 +134,7 @@ void CDPlayer::decode_loop(std::string path) {
         if (fmt) avformat_close_input(&fmt);
     };
 
+    av_log_follow_verbosity();
     if (avformat_open_input(&fmt, path.c_str(), nullptr, nullptr) < 0 ||
         avformat_find_stream_info(fmt, nullptr) < 0) {
         std::fprintf(stderr, "  [cd] cannot open '%s' for decode\n", path.c_str());
@@ -253,13 +277,25 @@ int VirtualCD::scan(const std::string& dir) {
     }
     ::closedir(d);
 
+    // Summarised, not one line per track. A rip whose files carry no duration
+    // produces the same message for every track on the disc — seven identical
+    // lines on the UK release — which is the kind of output that trains a
+    // reader to skip the log entirely. The condition is worth reporting once,
+    // because those tracks will report as ending immediately and the music will
+    // seem to stop; which tracks is a verbose-level detail.
+    unsigned no_duration = 0;
     for (auto& [n, path] : tracks_) {
         durations_[n] = probe_duration(path);
-        if (durations_[n] <= 0.0)
-            std::fprintf(stderr, "  [cd] track %u: no duration from '%s' — it "
-                                 "will report as ending immediately\n",
-                        n, path.c_str());
+        if (durations_[n] <= 0.0) {
+            ++no_duration;
+            LOG_V("  [cd] track %u: no duration from '%s'\n", n, path.c_str());
+        }
     }
+    if (no_duration)
+        std::fprintf(stderr,
+                     "  [cd] %u of %zu track(s) have no readable duration and "
+                     "will report as ending immediately\n",
+                     no_duration, tracks_.size());
     return (int)tracks_.size();
 }
 

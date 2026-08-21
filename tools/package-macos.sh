@@ -413,6 +413,7 @@ USEFUL KNOBS (full list in docs/porting/diagnostics.md)
       THEOC_SKIP_MOVIES=1     skip the intro cutscenes
       THEOC_FPS=1             per-second frame/throughput report on stderr
       THEOC_WATCHDOG=1        first thing to reach for if it ever freezes
+      THEOC_VERBOSE=1         the full host boot log (quiet by default)
       THEOC_PROVINCE_MS=50    province at 20fps / 1.67x speed (see the docs:
                               this scales game speed with frame rate)
       THEOC_SERVER=1          run the dedicated server instead of the game

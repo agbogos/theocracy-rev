@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Adam Bogos
 #include "config.hpp"
+#include "log.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -49,7 +50,7 @@ const std::set<std::string> kKnown = {
     "THEOC_LEGACY_SLEEP", "THEOC_LEGACY_SPRITE", "THEOC_NATIVE_BLIT",
     "THEOC_NO_SAVE_FIX", "THEOC_START_ANYWAY",
     // diagnostics
-    "THEOC_FPS", "THEOC_WATCHDOG", "THEOC_WATCHDOG_SAMPLE", "THEOC_SLOWLOG",
+    "THEOC_VERBOSE", "THEOC_FPS", "THEOC_WATCHDOG", "THEOC_WATCHDOG_SAMPLE", "THEOC_SLOWLOG",
     "THEOC_PROFILE", "THEOC_TRACE", "THEOC_KEYLOG", "THEOC_CD_TRACE",
     "THEOC_REPORT_CLICKS", "THEOC_LOUD_ABORT", "THEOC_ABORT_CAP",
     "THEOC_START_SEC", "THEOC_LONGRUN", "THEOC_DUMP_WORLD", "THEOC_WORLD_FILE",
@@ -179,7 +180,12 @@ std::string load(const char* argv0) {
             return "";
         }
         int n = apply(explicit_path);
-        std::fprintf(stderr, "  [cfg] %s: %d settings\n", explicit_path, n);
+        // A config file that set nothing is the normal case — the shipped
+        // theoc.cfg is entirely commented out — so saying so every run is pure
+        // noise. A file that DID set something is worth confirming, because the
+        // commonest config bug is editing a copy that is not being read.
+        if (n > 0) std::fprintf(stderr, "  [cfg] %s: %d settings\n", explicit_path, n);
+        else       LOG_V("  [cfg] %s: 0 settings\n", explicit_path);
         return explicit_path;
     }
     std::string beside = dir_of(argv0);
@@ -187,7 +193,8 @@ std::string load(const char* argv0) {
     for (const std::string& cand : {beside, std::string("theoc.cfg")}) {
         if (cand.empty() || !readable(cand)) continue;
         int n = apply(cand);
-        std::fprintf(stderr, "  [cfg] %s: %d settings\n", cand.c_str(), n);
+        if (n > 0) std::fprintf(stderr, "  [cfg] %s: %d settings\n", cand.c_str(), n);
+        else       LOG_V("  [cfg] %s: 0 settings\n", cand.c_str());
         return cand;
     }
     return "";

@@ -238,6 +238,7 @@ DIAGNOSTICS
     Every knob is an environment variable named THEOC_*. Start with:
       set THEOC_FPS=1        frame/heartbeat/sleep instrumentation
       set THEOC_WATCHDOG=1   says whether the guest is spinning or the host is
+      set THEOC_VERBOSE=1    the full host boot log (quiet by default)
     The full catalogue is docs/porting/diagnostics.md.
 
     On THEOC_FPS's sleep column, "(N slices/frame, +M ms each)" is the host
