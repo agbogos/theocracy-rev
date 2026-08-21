@@ -29,36 +29,44 @@ contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
 resolution to 1 ms (the VM's was already raised before the probe ran).
 
-### 2. Start Rancher Desktop for a container check — small
+### 2. Play one signed macOS bundle before publishing a release — small
 
-`nerdctl` needs it running. Blocks one verification: running
-`tools/smoke-test.sh` against a real *Linux* bundle inside a container, which is
-the one step of `.github/workflows/release.yml` that cannot be exercised on
-macOS. Everything else in that workflow is either YAML-valid or proven locally.
+The macOS CI job proves the bundle builds, relocates, signs, notarises and
+loads. It cannot prove the guest runs: `THEOC_FIX_SAVE` returns from `main`
+before Unicorn is opened, so the hardened runtime's effect on the JIT is
+untested by anything CI does. It was measured by hand
+([`other-os-ports.md`](docs/porting/other-os-ports.md), "The hardened runtime
+versus Unicorn's JIT") and `port/theoc.entitlements` is the fix, but the first
+Developer-ID-signed bundle should get one real session before the draft release
+is published:
 
-### 3. First CI run
+```
+tar xzf theoc-macos-arm64-<version>.tar.gz
+cd theoc-macos-arm64-<version>
+# put data/cd/linux/ and data/game/ beside ./theoc, then
+./theoc
+```
 
-Push a throwaway tag, or use the Actions "Run workflow" button
-(`workflow_dispatch`), and send back the log if it fails. Unknowns that only a
-real run settles: whether `ubuntu-24.04-arm` is available on a private repo,
-whether the mirrored tag push triggers at all, and the cache keys.
+If it dies with `Could not allocate dynamic translator buffer`, the entitlements
+did not survive signing. Anything else is an ordinary bug.
+
+### 3. Exercise the release job with three artefacts
+
+It has only ever run with two. Push a throwaway `v*-rcN` tag and check the draft
+release carries all four tarballs — Linux amd64, Linux arm64, macOS arm64,
+Windows x64 — then delete the draft. The `macos` job also refuses to build
+unsigned on a tag, so this is the first run that proves the secrets work.
 
 ---
 
 ## CLAUDE
 
-**Refilled 2026-08-20** — CI/CD work, with reasons. Reasoning lives in
+**Refilled 2026-08-20, trimmed 2026-08-21** — all three packaging scripts and
+all three CI jobs are done. Reasoning lives in
 [`other-os-ports.md`](docs/porting/other-os-ports.md), "CI: building the bundles
 on GitHub".
 
-### 1. `tools/package-macos.sh`
-
-Phase 3 blocker — macOS has only ever been a dev build. Collect the Homebrew
-dylibs, `install_name_tool` to `@rpath`, lay out `bin/` + `lib/` + launcher +
-README the way the Linux bundle does. Signing and notarization need Adam's
-secrets and come after.
-
-### 2. `THIRD-PARTY.md`
+### 1. `THIRD-PARTY.md`
 
 Decision 5: generated in CI where possible so it cannot drift from what shipped.
 The Linux bundle ships **Debian's** `libunicorn.so.2`, so the

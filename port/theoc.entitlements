@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SPDX-License-Identifier: GPL-2.0-or-later
+  Copyright (C) 2026 Adam Bogos
+
+  Entitlements for the signed macOS bundle. Notarisation requires the hardened
+  runtime, and the hardened runtime is what makes these necessary: unentitled,
+  it refuses the executable memory Unicorn's TCG needs and the guest cannot run
+  a single translated block.
+
+  Measured, not assumed. A test program driving uc_emu_start over the bundle's
+  own libunicorn, signed --options runtime three ways:
+
+    no hardened runtime            JIT OK
+    hardened, these entitlements   JIT OK
+    hardened, these removed        Could not allocate dynamic translator buffer
+
+  allow-jit is the MAP_JIT path — the sanctioned one, where a region is mapped
+  once and flipped between writable and executable per-thread. allow-unsigned-
+  executable-memory covers the plain RWX mapping QEMU-derived code still takes
+  on some paths; Apple discourages it, and it is here because the alternative
+  is patching Unicorn's TCG allocator rather than because it is nice. Both are
+  permitted by notarisation.
+
+  Nothing else is granted, and specifically NOT
+  com.apple.security.cs.disable-library-validation. The hardened runtime turns
+  library validation on, and a hardened process refuses any dylib whose Team ID
+  differs from its own — which is why a bundle carrying Homebrew's ad-hoc
+  signed dylibs dies at dyld with "different Team IDs" before main() is ever
+  reached. tools/package-macos.sh re-signs every dylib with the same identity
+  as the executable, so validation is satisfied honestly rather than switched
+  off. The opt-out is used only to isolate the two failures while testing.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

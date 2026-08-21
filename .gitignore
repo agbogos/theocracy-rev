@@ -36,6 +36,7 @@
 # 96c3db7 (32 files, including the binary) and untracked on 2026-08-04.
 /port/build-linux-*/
 /port/build-win/
+/port/build-macos-arm64/
 # Staged third-party Windows dependencies (SDL2 / Unicorn / ffmpeg headers,
 # import libs and DLLs) for the mingw-w64 cross build. Third-party binaries:
 # same rule as data/cd/ — fetched out of band, never committed.
@@ -68,3 +69,4 @@ __pycache__/
 /port/ffmpeg-src/
 /port/deps-ffmpeg-win/
 /port/deps-ffmpeg-linux-*/
+/port/deps-ffmpeg-macos-arm64/

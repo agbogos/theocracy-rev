@@ -5,6 +5,7 @@
 #
 #   tools/build-ffmpeg-min.sh windows
 #   tools/build-ffmpeg-min.sh linux [amd64|arm64]
+#   tools/build-ffmpeg-min.sh macos            (native, arm64 only)
 #
 # Output: port/deps-ffmpeg-<target>/{include,lib,bin}, which the package scripts
 # hand to cmake as -DTHEOC_FFMPEG_PREFIX=. Nothing else in the tree changes:
@@ -59,8 +60,12 @@ TARGET="${1:-}"
 ARCH="${2:-amd64}"
 case "$TARGET" in
   windows) ;;
+  # Native, so no arch argument: the runner and the bundle are both arm64. If an
+  # Intel bundle is ever wanted it is a second native build on an Intel runner,
+  # not a cross — ffmpeg's arm64 build uses the host assembler either way.
+  macos) [ "$(uname -s)" = Darwin ] || { echo "error: macos target needs a Mac" >&2; exit 1 ; } ;;
   linux) case "$ARCH" in amd64|arm64) ;; *) echo "usage: $0 linux [amd64|arm64]" >&2; exit 2 ;; esac ;;
-  *) echo "usage: $0 windows|linux [amd64|arm64]" >&2; exit 2 ;;
+  *) echo "usage: $0 windows|linux|macos [amd64|arm64]" >&2; exit 2 ;;
 esac
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -69,11 +74,11 @@ SRCDIR="$ROOT/port/ffmpeg-src"
 TARBALL="$SRCDIR/ffmpeg-$VERSION.tar.xz"
 SRC="$SRCDIR/ffmpeg-$VERSION"
 
-if [ "$TARGET" = windows ]; then
-  PREFIX="$ROOT/port/deps-ffmpeg-win"
-else
-  PREFIX="$ROOT/port/deps-ffmpeg-linux-$ARCH"
-fi
+case "$TARGET" in
+  windows) PREFIX="$ROOT/port/deps-ffmpeg-win" ;;
+  macos)   PREFIX="$ROOT/port/deps-ffmpeg-macos-arm64" ;;
+  *)       PREFIX="$ROOT/port/deps-ffmpeg-linux-$ARCH" ;;
+esac
 
 # The whole point of the exercise: exactly what the port reaches for, nothing
 # else. Keep this list and the docs/porting/other-os-ports.md table in step.
@@ -138,6 +143,24 @@ if [ "$TARGET" = windows ]; then
   make -C "$BUILD" install >/dev/null
   # Cross-built DLLs land in $PREFIX/bin; strip them, as the bundle does its own.
   x86_64-w64-mingw32-strip "$PREFIX"/bin/*.dll
+elif [ "$TARGET" = macos ]; then
+  # Native: no container, no cross-prefix. The only macOS-specific flag is the
+  # install-name handling, and there is none — configure bakes an absolute path
+  # into each dylib's LC_ID_DYLIB and tools/package-macos.sh rewrites every one
+  # of them to @rpath anyway, exactly as it does for the Homebrew dylibs. Giving
+  # ffmpeg different treatment here would mean two rewrite paths to get right
+  # instead of one.
+  BUILD="$SRCDIR/build-macos-arm64"
+  rm -rf "$BUILD" "$PREFIX"
+  mkdir -p "$BUILD"
+  echo "==> configuring (native arm64)"
+  ( cd "$BUILD" && "$SRC/configure" --prefix="$PREFIX" $CONFIG_MIN >/dev/null )
+  echo "==> building"
+  make -C "$BUILD" -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" >/dev/null
+  make -C "$BUILD" install >/dev/null
+  # No strip. Apple's strip on a dylib without -x removes symbols codesign needs
+  # to hash consistently, and the saving is ~100 KB across the whole family;
+  # package-macos.sh signs these, so leave them exactly as linked.
 else
   : "${CONTAINER:=nerdctl}"   # Rancher Desktop on macOS; CONTAINER=docker elsewhere
   IMAGE="theoc-linux-$ARCH"

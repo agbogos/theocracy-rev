@@ -1414,6 +1414,141 @@ not permissions.** Everything a container proves about architecture, linking and
 output stays true; everything it appears to prove about who may write where does
 not.
 
-**Still hand-cut:** macOS. It needs `tools/package-macos.sh`
-— it has never had a packaging script at all, having only ever been a dev
-build. It is in `todo.md`.
+### macOS joins CI, signed and notarised — 2026-08-21
+
+macOS had never had a packaging script at all — it was the platform the port was
+*developed* on, so it had only ever been a dev build against Homebrew's
+`/opt/homebrew` prefix. `tools/package-macos.sh` is the third packaging script
+and the last one; the workflow now builds all three platforms and drafts the
+release from them.
+
+The shape is the Linux bundle's: a plain directory with `bin/`, `lib/`, a
+launcher and a README, shipped as `.tar.gz`. **Not an `.app`**, deliberately —
+the game needs a data tree the user supplies from their own CD sitting beside
+the launcher, and a folder that obviously contains its data beats an app bundle
+that has to be told where the data went. That decision has one consequence,
+described at the end.
+
+#### The cut is cleaner than Linux's, and one thing is invisible to it
+
+The Linux bundle needs a hand-tuned denylist because bundling libX11 or libGL
+would be actively harmful. macOS has no equivalent hazard: the display, audio
+and GPU are reached through frameworks under `/System/Library`, and libc++ and
+libSystem live in `/usr/lib`. So the rule is the whole rule — *bundle everything
+outside those two prefixes* — and it falls out of the platform rather than
+having to be tuned.
+
+What does not fall out is SDL. **Homebrew's `sdl2` is an alias for
+`sdl2-compat`, a shim over SDL3, and it does not link SDL3 — it dlopens it**,
+first candidate `@loader_path/libSDL3.dylib`. So `libSDL3` appears nowhere in
+the `otool` closure, and a bundle built purely from that closure links, loads,
+launches, and dies at `SDL_Init` with *"Failed loading SDL3 library"*. This is
+the Linux bundle's libasound lesson arriving from the opposite direction: there,
+guessing that SDL dlopened ALSA was wrong because Debian makes it a hard
+`DT_NEEDED`; here, trusting the load commands is wrong because Homebrew makes it
+a dlopen. **The closure is necessary and not sufficient, on both platforms, for
+opposite reasons.**
+
+So `libSDL3.dylib` is added by name — and then the load is actually exercised.
+The script dlopens the bundled `libSDL2` and calls `SDL_Init(0)`, which
+initialises no subsystem and needs no display but *is* what makes sdl2-compat go
+looking for SDL3. It fails in the packaging script rather than on a player's
+machine. The smoke test cannot cover this: `THEOC_FIX_SAVE` returns from `main`
+before SDL is touched.
+
+The minimal ffmpeg matters more here than anywhere else. Homebrew's ffmpeg drags
+x265, x264, svt-av1, libvpx, dav1d and openssl into the closure: **66 MB against
+21 MB**, none of it reachable by a decoder that only ever sees MPEG-1/MP2. So
+`build-ffmpeg-min.sh` grew a `macos` target — a native build, no container and
+no cross-prefix, the only branch of the three that needs neither.
+
+#### `install_name_tool` invalidates signatures, and arm64 does not forgive it
+
+Rewriting install names to `@rpath` is the ordinary relocatability step. On
+Apple Silicon it is also a signature-breaking step: **every dylib and every
+linker output already carries an ad-hoc signature, and arm64 macOS refuses to
+map a Mach-O whose signature does not match its contents.** It does not refuse
+politely — the process is `SIGKILL`ed with no diagnostic.
+
+The first working bundle therefore produced a dylib tree that nothing could
+load, and the symptom was `python3` dying with `Killed: 9` in the SDL check
+above. Re-signing is not the optional distribution step; it is what makes the
+bundle loadable at all. `package-macos.sh` always signs — ad-hoc when no
+identity is given, Developer ID when one is — and nothing may be reordered
+between the `install_name_tool` pass and the signing pass.
+
+#### The hardened runtime versus Unicorn's JIT
+
+Notarisation requires the hardened runtime, and the hardened runtime breaks the
+port twice over. Both were measured, with a test program driving `uc_emu_start`
+against the bundle's own `libunicorn`:
+
+| signing | result |
+|---|---|
+| ad-hoc, no hardened runtime | JIT OK |
+| hardened, `allow-jit` + `allow-unsigned-executable-memory` | JIT OK |
+| hardened, those entitlements removed | `Could not allocate dynamic translator buffer` |
+
+That is the first break, and `port/theoc.entitlements` is the fix. It grants
+exactly those two and nothing else.
+
+The second break is subtler. **The hardened runtime turns on library
+validation, and a hardened process refuses any dylib whose Team ID differs from
+its own** — including ad-hoc signed ones, which have no Team ID at all. A
+hardened binary sitting next to Homebrew's dylibs dies in dyld before `main`:
+
+    Reason: ... not valid for use in process: mapping process and mapped file
+    (non-platform) have different Team IDs
+
+The tempting fix is `com.apple.security.cs.disable-library-validation`. The
+entitlements file deliberately does **not** carry it: the script re-signs every
+bundled dylib with the same identity as the executable, so validation is
+satisfied honestly rather than switched off. The opt-out was used once, to
+separate the two failures from each other while testing, and then discarded.
+
+#### Notarised, not stapled
+
+`notarytool` accepts `.zip`, `.pkg` and `.dmg` and never a `.tar.gz`, so the job
+zips the bundle with `ditto` purely as transport. That costs nothing: the ticket
+Apple issues is keyed on each binary's cdhash, so the same files then ship in
+the `.tar.gz` and Gatekeeper recognises them.
+
+What it does cost is stapling. `stapler` writes tickets into `.app`, `.dmg` and
+`.pkg` only — there is nowhere in a plain directory to put one — so **first
+launch checks with Apple online**. That is the consequence of not shipping an
+`.app`, it is accepted, and the README says so and gives the offline escape
+(`xattr -dr com.apple.quarantine .`).
+
+Two traps in the notarisation step, both of which fail quietly rather than
+loudly:
+
+- `notarytool submit --wait` **exits 0 on a rejected submission** as readily as
+  on an accepted one. The `status` field is the only thing that says. Without
+  checking it, a tag would publish a bundle Apple refused.
+- `--issuer` is required for a team key and meaningless for an individual one,
+  where the JWT carries `sub:"user"` instead of `iss`. Passing it empty is an
+  error, so the job appends it only when the secret is set — and does so with an
+  `if`, not `[ -n ... ] && ...`, because under `set -e` a bare failing test is
+  the exit status of the whole statement and would end the step in exactly the
+  individual-key case it exists to support.
+
+The signing certificate goes into a throwaway keychain in `RUNNER_TEMP`, never
+the login keychain, and is deleted in an `always()` step. One line in that dance
+is the one everyone omits: without `security set-key-partition-list`, `codesign`
+finds the key and macOS raises a UI authorisation prompt that no one is there to
+answer, so the job **hangs** rather than failing.
+
+Finally, the job refuses to build an unsigned bundle on a tag while still
+allowing one on `workflow_dispatch`. A tag is a release and a release must be
+signed; a dispatch is a pipeline test and being able to run one without
+credentials is worth keeping.
+
+#### What CI still cannot prove about the macOS bundle
+
+The smoke test runs `THEOC_FIX_SAVE`, which returns from `main` before Unicorn
+is opened and before SDL is touched. So a green macOS job proves the bundle is
+built, relocatable, signed, notarised and *loadable* — and says nothing about
+whether the guest actually runs under the hardened runtime. The entitlements
+table above is the evidence that it does, and it was gathered by hand. **A
+signed bundle still wants one real play session before a release is published**;
+it is in `todo.md`.

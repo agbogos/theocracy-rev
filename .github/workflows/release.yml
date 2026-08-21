@@ -110,6 +110,198 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  macos:
+    name: macos-arm64
+    runs-on: macos-15      # Apple Silicon. arm64 only, by decision: the Homebrew
+                           # dependencies are per-architecture, so an Intel bundle
+                           # is a second native build rather than a universal one.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # No ffmpeg here: tools/build-ffmpeg-min.sh builds the cut-down one and
+      # package-macos.sh prefers it. Installing Homebrew's would only matter as
+      # the fallback path, and that fallback drags x265, x264, svt-av1, libvpx,
+      # dav1d and openssl into the bundle — 21 MB becomes 66 MB. Leaving it out
+      # means the fallback cannot silently happen.
+      #
+      # `sdl2` is an alias for sdl2-compat, which is a shim over SDL3, so this
+      # installs both. package-macos.sh knows and bundles SDL3 by name.
+      - name: Toolchain
+        run: brew install unicorn sdl2
+
+      - name: Cache minimal ffmpeg
+        id: ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: port/deps-ffmpeg-macos-arm64
+          key: ffmpeg-macos-arm64-${{ hashFiles('tools/build-ffmpeg-min.sh') }}
+
+      - name: Build minimal ffmpeg
+        if: steps.ffmpeg.outputs.cache-hit != 'true'
+        run: tools/build-ffmpeg-min.sh macos
+
+      # A throwaway keychain in RUNNER_TEMP, not the login keychain: the runner
+      # is ephemeral, but a partition list on a shared default keychain is the
+      # kind of thing that works until it silently does not. Deleted in an
+      # always() step at the end.
+      #
+      # set-key-partition-list is the step everyone omits and then spends an
+      # afternoon on: without it codesign finds the key and macOS puts up a UI
+      # authorisation prompt that no one is there to answer, so the job hangs
+      # rather than failing.
+      - name: Import the signing certificate
+        id: signing
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "${CERT_P12:-}" ]; then
+            # A tag is a release, and a release must not ship unsigned. A
+            # workflow_dispatch without secrets is a pipeline test, and being
+            # able to run one without credentials is worth keeping.
+            if [ "${GITHUB_REF_TYPE}" = tag ]; then
+              echo "error: MACOS_CERT_P12_BASE64 is not set and this is a tag build" >&2
+              echo "       a released macOS bundle must be signed and notarised" >&2
+              exit 1
+            fi
+            echo "::warning::no signing certificate — building an unsigned bundle"
+            echo "identity=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+                  -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+                  -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          # Prepend rather than replace: codesign searches the whole list, and
+          # dropping the system keychain breaks certificate chain validation.
+          security list-keychains -d user -s "$KEYCHAIN" \
+                  $(security list-keychains -d user | tr -d '"')
+          # `|| true` so that finding no match falls through to the
+          # diagnostic below rather than ending the step on grep's exit
+          # status under `set -e`.
+          identity=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+                     | grep 'Developer ID Application' | head -1 \
+                     | sed -n 's/.*"\(.*\)".*/\1/p' || true)
+          [ -n "$identity" ] || {
+            echo "error: no Developer ID Application identity in the imported .p12" >&2
+            echo "       an 'Apple Development' or 'Mac App Distribution' cert" >&2
+            echo "       imports cleanly and cannot notarise — check which one" >&2
+            echo "       was exported. Identities found:" >&2
+            security find-identity -v -p codesigning "$KEYCHAIN" >&2
+            exit 1
+          }
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+          echo "==> signing as $identity"
+
+      - name: Package
+        env:
+          THEOC_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: tools/package-macos.sh
+
+      # Same artefact check as the other two platforms. It runs the signed
+      # binary, which also proves the hardened runtime did not break loading —
+      # though NOT that it left the JIT alone: THEOC_FIX_SAVE returns from main
+      # before Unicorn is opened. That is what port/theoc.entitlements is for,
+      # and it is verified there rather than here.
+      - name: Smoke test
+        run: |
+          set -eu
+          version=$(git describe --tags --always --dirty)
+          bundle="dist/theoc-macos-arm64-$version"
+          [ -d "$bundle" ] || { echo "no bundle at $bundle" >&2; ls -la dist >&2; exit 1; }
+          tools/smoke-test.sh "$bundle/bin/theoc"
+          size=$(du -sm "$bundle" | cut -f1)
+          echo "bundle size: ${size} MB"
+          # ~21 MB with the minimal ffmpeg, ~66 MB with Homebrew's.
+          if [ "$size" -gt 40 ]; then
+            echo "FAIL: ${size} MB — the minimal ffmpeg did not make it in" >&2
+            exit 1
+          fi
+
+      # Notarisation takes a zip because notarytool accepts only .zip, .pkg and
+      # .dmg — never a .tar.gz. That is a transport detail and nothing more: the
+      # ticket Apple issues is keyed on each binary's cdhash, so the very same
+      # files then ship in the .tar.gz below and Gatekeeper recognises them.
+      #
+      # Nothing is stapled. `stapler` writes tickets into .app/.dmg/.pkg only,
+      # and this bundle is a plain directory on purpose, so first launch checks
+      # with Apple online. The README says so and gives the offline escape.
+      - name: Notarize
+        if: steps.signing.outputs.identity != ''
+        env:
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -eu
+          version=$(git describe --tags --always --dirty)
+          bundle="dist/theoc-macos-arm64-$version"
+          # ditto, not zip: it is the only zipper Apple's tooling agrees
+          # preserves symlinks and the resource forks a signature lives in.
+          ditto -c -k --keepParent "$bundle" "$RUNNER_TEMP/notarize.zip"
+          echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          # --issuer is required for a team key and meaningless for an
+          # individual one, where the JWT carries sub:"user" instead of iss.
+          # Passing it empty is an error, so it is added only if it is set.
+          set -- --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$NOTARY_KEY_ID"
+          # An if, not `[ ... ] && ...`: under `set -e` a bare test that
+          # fails is the exit status of the whole statement, so the shorter
+          # spelling would end the step the moment the issuer is unset —
+          # which is exactly the individual-key case it exists to support.
+          if [ -n "${NOTARY_ISSUER:-}" ]; then set -- "$@" --issuer "$NOTARY_ISSUER"; fi
+          result=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+                   "$@" --wait --timeout 30m --output-format json)
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          echo "$result"
+          status=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
+          id=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+          # --wait exits 0 on a rejected submission as readily as an accepted
+          # one; the status field is the only thing that actually says. Without
+          # this check a tag would happily publish a bundle Apple refused.
+          if [ "$status" != Accepted ]; then
+            echo "error: notarisation returned $status" >&2
+            echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+            set -- --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$NOTARY_KEY_ID"
+            if [ -n "${NOTARY_ISSUER:-}" ]; then set -- "$@" --issuer "$NOTARY_ISSUER"; fi
+            xcrun notarytool log "$id" "$@" >&2 || true
+            rm -f "$RUNNER_TEMP/AuthKey.p8"
+            exit 1
+          fi
+          echo "==> notarised: $id"
+
+      - name: Tarball
+        id: tar
+        run: |
+          set -eu
+          version=$(git describe --tags --always --dirty)
+          name="theoc-macos-arm64-$version"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.tar.outputs.name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+      # always(): a failed build must not leave the private key sitting in a
+      # keychain on a runner, however ephemeral that runner is meant to be.
+      - name: Discard the keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
+
   windows:
     name: windows-x64
     runs-on: ubuntu-24.04     # cross-built with mingw-w64; no Windows machine involved
@@ -189,7 +381,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [linux, windows]
+    needs: [linux, macos, windows]
     # workflow_dispatch runs the builds and stops here.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
