@@ -276,6 +276,17 @@ The rest of the bundle is compatible: ffmpeg is LGPL-2.1+ built **without**
 `--enable-gpl`/`--enable-nonfree`, SDL2 is zlib, libwinpthread is the permissive
 mingw-w64 runtime.
 
+**[`THIRD-PARTY.md`](../THIRD-PARTY.md) is the policy and the written offer for
+source.** The per-build evidence is a `THIRD-PARTY.txt` generated *inside* every
+bundle by [`tools/third-party.sh`](../tools/third-party.sh), because the Linux
+bundle alone ships 52 libraries and a hand-kept list would be wrong within a
+Debian point release. It records each file's source package and exact version —
+`apt-get source <pkg>=<version>` retrieves precisely what shipped — and warns
+loudly if it cannot attribute something. Note that Unicorn is a *different
+version on each platform* (Debian's package, Homebrew's formula, a pinned source
+build) and on Windows is **statically linked into `theoc.exe`** rather than
+shipped as a DLL, so the Windows manifest names it separately.
+
 **What deliberately carries no header**, and the omission is the point:
 `include/mvos_api.hpp`, `data/*.tsv` and `data/mvos_api.json` are *generated
 from the game binary* — symbol names, addresses and signatures. The audit above

@@ -77,17 +77,13 @@ unsigned on a tag, so this is the first run that proves the secrets work.
 
 ## CLAUDE
 
-**Refilled 2026-08-20, trimmed 2026-08-21** — all three packaging scripts and
-all three CI jobs are done. Reasoning lives in
+**Refilled 2026-08-20, emptied 2026-08-21** — all three packaging scripts, all
+three CI jobs and the third-party manifest are done. Reasoning lives in
 [`other-os-ports.md`](docs/porting/other-os-ports.md), "CI: building the bundles
 on GitHub".
 
-### 1. `THIRD-PARTY.md`
-
-Decision 5: generated in CI where possible so it cannot drift from what shipped.
-The Linux bundle ships **Debian's** `libunicorn.so.2`, so the
-corresponding-source obligation attaches to that binary and the exact package
-versions need recording at package time, not guessing afterwards.
+*(Empty. `THIRD-PARTY.md` landed 2026-08-21 — the manifest is generated into
+every bundle by `tools/third-party.sh`, so it cannot drift from what shipped.)*
 
 ---
 

@@ -1596,6 +1596,50 @@ allowing one on `workflow_dispatch`. A tag is a release and a release must be
 signed; a dispatch is a pipeline test and being able to run one without
 credentials is worth keeping.
 
+### The third-party manifest — 2026-08-21
+
+The bundles ship other people's GPL and LGPL binaries, so the
+corresponding-source obligation is real, and a version number that is merely
+*probably* right does not discharge it: "some version of Unicorn 2" is not
+corresponding source, the exact one is.
+
+`THIRD-PARTY.md` in the repo root is the policy and the written offer.
+`tools/third-party.sh` generates the evidence — a `THIRD-PARTY.txt` written
+*into* each bundle at package time, from that bundle's own contents. **The Linux
+bundle alone ships 52 libraries**, and the set moves whenever SDL2's dependency
+graph does, so a hand-kept list would be wrong within a point release and nobody
+would notice: nothing reads it until someone asks for source, by which time the
+bundle it described shipped months ago.
+
+For Linux it runs *inside the packaging container*, which is the only place the
+package database that produced those 52 files exists. Two things made that
+harder than it sounds, both found by the first run marking 42 of 52 as
+`UNKNOWN ORIGIN` — a failure mode worth naming, because an unattributed entry in
+a compliance document is worse than useless: it looks like an answer.
+
+- **usrmerge.** `ldconfig -p` reports `/lib/<triplet>/libX11.so.6`; dpkg's
+  database records `/usr/lib/<triplet>/libX11.so.6`; and `dpkg -S` does no path
+  canonicalisation at all, being a literal lookup. Which spelling wins is
+  per-package and not guessable — `libcap2` is found *only* as `/lib/...`,
+  `libx11-6` and `libasound2` *only* as `/usr/lib/...`, and some record the
+  versioned realpath rather than the soname symlink. The lookup tries all four.
+- **Not everything bundled is in the ldconfig cache.**
+  `libpulsecommon-16.1.so` lives in a private `pulseaudio/` subdirectory and is
+  reached at runtime through libpulse's RPATH, so the cache has never heard of
+  it — but the loader pulled it in, so it is in the bundle and needs an entry.
+
+The manifest also has to say what is *not* a file. **On Windows, Unicorn is
+statically linked into `theoc.exe`** (`-DBUILD_SHARED_LIBS=OFF`), as are libgcc
+and libstdc++, so listing the seven DLLs would understate what shipped by the
+single most licence-significant component in the bundle. The Windows manifest
+names the statically linked pieces in their own table above the file list.
+
+Worth knowing: **Unicorn is a different version on each platform** — Debian's
+`unicorn-engine` 2.0.1, Homebrew's `unicorn` 2.1.4, and a pinned 2.1.3 source
+build on Windows — because each takes it from where that platform gets
+libraries. That is fine, and it is exactly the sort of thing a generated
+manifest records and a written one gets wrong.
+
 #### What CI still cannot prove about the macOS bundle
 
 The smoke test runs `THEOC_FIX_SAVE`, which returns from `main` before Unicorn

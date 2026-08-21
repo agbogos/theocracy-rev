@@ -245,6 +245,9 @@ DIAGNOSTICS
     sleep timer's own floor. See docs/porting/diagnostics.md.
 TXT
 
+echo ">>> third-party manifest"
+"$ROOT/tools/third-party.sh" windows "$OUT"
+
 SIZE=$(du -sh "$OUT" | cut -f1)
 echo ">>> done: $OUT ($SIZE, build $VERSION)"
 echo

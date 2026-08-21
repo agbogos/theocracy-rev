@@ -231,6 +231,12 @@ Useful knobs (full list in docs/porting/diagnostics.md):
   THEOC_SERVER=1          run the dedicated server instead of the game
 DOC
 echo "    wrote $OUT/theoc and $OUT/README.txt"
+
+# Inside the container on purpose: the manifest is built from dpkg, and dpkg
+# here is the database that actually produced the 52 libraries in lib/. Run on
+# the macOS host it would describe nothing, and run on a different Linux it
+# would describe the wrong machine convincingly.
+/src/tools/third-party.sh linux "$OUT"
 '
 
 echo

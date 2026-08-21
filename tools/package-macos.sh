@@ -418,6 +418,9 @@ USEFUL KNOBS (full list in docs/porting/diagnostics.md)
       THEOC_SERVER=1          run the dedicated server instead of the game
 TXT
 
+echo ">>> third-party manifest"
+"$ROOT/tools/third-party.sh" macos "$OUT"
+
 SIZE=$(du -sh "$OUT" | cut -f1)
 echo ">>> done: $OUT ($SIZE, build $VERSION)"
 echo "    Every run prints '$VERSION' in its first log line, so a tester's log"
