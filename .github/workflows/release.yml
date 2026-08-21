@@ -249,19 +249,71 @@ jobs:
           # ditto, not zip: it is the only zipper Apple's tooling agrees
           # preserves symlinks and the resource forks a signature lives in.
           ditto -c -k --keepParent "$bundle" "$RUNNER_TEMP/notarize.zip"
-          echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-          # --issuer is required for a team key and meaningless for an
-          # individual one, where the JWT carries sub:"user" instead of iss.
-          # Passing it empty is an error, so it is added only if it is set.
-          set -- --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$NOTARY_KEY_ID"
-          # An if, not `[ ... ] && ...`: under `set -e` a bare test that
-          # fails is the exit status of the whole statement, so the shorter
-          # spelling would end the step the moment the issuer is unset —
-          # which is exactly the individual-key case it exists to support.
-          if [ -n "${NOTARY_ISSUER:-}" ]; then set -- "$@" --issuer "$NOTARY_ISSUER"; fi
+
+          # Write the private key out, and check it. The secret is meant to hold
+          # the .p8 base64-encoded, but `base64 --decode` on macOS accepts a raw
+          # PEM body without complaint and emits binary garbage at exit 0 — so
+          # pasting the .p8 in unencoded produces a key file that is wrong in a
+          # way nothing notices until Apple answers "401 Unauthenticated", which
+          # names none of this. Accept both forms and verify the result.
+          write_key() {
+            if printf '%s' "$NOTARY_KEY" | grep -q 'BEGIN PRIVATE KEY'; then
+              printf '%s\n' "$NOTARY_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+            else
+              printf '%s' "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8" 2>/dev/null || true
+            fi
+            chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+            grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/AuthKey.p8" || {
+              echo "error: MACOS_NOTARY_KEY_P8_BASE64 did not yield a PEM private key" >&2
+              echo "       expected the .p8 file base64-encoded:" >&2
+              echo "         base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy" >&2
+              echo "       decoded $(wc -c < "$RUNNER_TEMP/AuthKey.p8") bytes, first line:" >&2
+              head -c 32 "$RUNNER_TEMP/AuthKey.p8" | od -c | head -1 >&2
+              exit 1
+            }
+          }
+
+          # Shape checks on the two identifiers. Lengths and formats only —
+          # GitHub masks the values, not their sizes — but they separate "the
+          # key is not authorised" from "the wrong string is in the wrong
+          # secret", and a 401 says neither.
+          [ ${#NOTARY_KEY_ID} -eq 10 ] || \
+            echo "::warning::MACOS_NOTARY_KEY_ID is ${#NOTARY_KEY_ID} characters; App Store Connect key IDs are 10"
+          case "$NOTARY_ISSUER" in
+            ????????-????-????-????-????????????) ;;
+            *) echo "::warning::MACOS_NOTARY_ISSUER_ID is not a UUID (${#NOTARY_ISSUER} characters) — the Issuer ID is the UUID at the top of the Keys page, not the key ID" ;;
+          esac
+
+          # The issuer is appended only when the secret is set: it is required
+          # for a team key and meaningless for an individual one, where the JWT
+          # carries sub:"user" instead of iss, and passing it empty is an error.
+          # ${VAR:+...} left unquoted so it expands to two words or none; a UUID
+          # cannot contain whitespace, so there is nothing for the split to break.
+          write_key
+          AUTH="--key $RUNNER_TEMP/AuthKey.p8 --key-id $NOTARY_KEY_ID"
+
+          # Ask a cheap question before pushing a 21 MB upload. `history`
+          # authenticates and does nothing else, so a credential fault fails here
+          # in seconds, with the same 401, instead of after the transfer.
+          echo "==> checking the notary credentials"
+          # shellcheck disable=SC2086
+          xcrun notarytool history $AUTH ${NOTARY_ISSUER:+--issuer "$NOTARY_ISSUER"} \
+                --output-format json >/dev/null || {
+            echo "error: the notary credentials were refused" >&2
+            echo "       401 means the key, the key ID and the issuer ID do not" >&2
+            echo "       agree, or the key lacks the Developer role. The same" >&2
+            echo "       three values can be checked locally in one command:" >&2
+            echo "         xcrun notarytool history --key AuthKey_XXXXXXXXXX.p8 \\" >&2
+            echo "           --key-id <KEY ID> --issuer <ISSUER UUID>" >&2
+            rm -f "$RUNNER_TEMP/AuthKey.p8"
+            exit 1
+          }
+
+          echo "==> submitting"
+          # shellcheck disable=SC2086
           result=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-                   "$@" --wait --timeout 30m --output-format json)
-          rm -f "$RUNNER_TEMP/AuthKey.p8"
+                   $AUTH ${NOTARY_ISSUER:+--issuer "$NOTARY_ISSUER"} \
+                   --wait --timeout 30m --output-format json)
           echo "$result"
           status=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
           id=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
@@ -270,13 +322,13 @@ jobs:
           # this check a tag would happily publish a bundle Apple refused.
           if [ "$status" != Accepted ]; then
             echo "error: notarisation returned $status" >&2
-            echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-            set -- --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$NOTARY_KEY_ID"
-            if [ -n "${NOTARY_ISSUER:-}" ]; then set -- "$@" --issuer "$NOTARY_ISSUER"; fi
-            xcrun notarytool log "$id" "$@" >&2 || true
+            # shellcheck disable=SC2086
+            xcrun notarytool log "$id" $AUTH \
+              ${NOTARY_ISSUER:+--issuer "$NOTARY_ISSUER"} >&2 || true
             rm -f "$RUNNER_TEMP/AuthKey.p8"
             exit 1
           fi
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
           echo "==> notarised: $id"
 
       - name: Tarball

@@ -1530,8 +1530,20 @@ launch checks with Apple online**. That is the consequence of not shipping an
 `.app`, it is accepted, and the README says so and gives the offline escape
 (`xattr -dr com.apple.quarantine .`).
 
-Two traps in the notarisation step, both of which fail quietly rather than
+Three traps in the notarisation step, all of which fail quietly rather than
 loudly:
+
+- **`base64 --decode` on macOS accepts a raw PEM body and emits binary garbage
+  at exit 0.** So a `MACOS_NOTARY_KEY_P8_BASE64` secret holding the unencoded
+  `.p8` produces a key file that is wrong in a way nothing notices until Apple
+  answers `401 Unauthenticated`, which names none of it. The job now accepts
+  either form and checks that what it wrote is a PEM private key before using
+  it. It also authenticates with `notarytool history` — which uploads nothing —
+  before pushing 21 MB, so a credential fault fails in seconds rather than after
+  the transfer, and warns if the key ID is not 10 characters or the issuer is
+  not a UUID. Those two shape checks exist because a 401 does not distinguish
+  "this key is not authorised" from "the wrong string is in the wrong secret",
+  and the second is the far more common mistake.
 
 - `notarytool submit --wait` **exits 0 on a rejected submission** as readily as
   on an accepted one. The `status` field is the only thing that says. Without
