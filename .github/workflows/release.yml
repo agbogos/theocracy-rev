@@ -273,10 +273,28 @@ jobs:
             }
           }
 
-          # Shape checks on the two identifiers. Lengths and formats only —
-          # GitHub masks the values, not their sizes — but they separate "the
-          # key is not authorised" from "the wrong string is in the wrong
-          # secret", and a 401 says neither.
+          # Strip whitespace from the two identifiers before anything uses them.
+          # This is not defensive tidying, it is the thing that broke the first
+          # authenticated run: `base64 -i key.p8 | pbcopy` and a copy off the
+          # App Store Connect page both carry a trailing newline, GitHub keeps
+          # it in the secret verbatim, and `--key-id ABCDE12345$(printf '\n')`
+          # is refused with "401 Unauthenticated" — the same answer an
+          # unauthorised key gets. The credentials themselves were fine and
+          # worked from a laptop, which is what made it puzzling.
+          #
+          # Safe for both: an App Store Connect key ID is alphanumeric and an
+          # issuer ID is a UUID, so neither can legitimately contain
+          # whitespace. Not applied to MACOS_CERT_PASSWORD, where whitespace is
+          # a legitimate character, or to the key body, where the newlines are
+          # part of the encoding and base64 ignores them anyway.
+          NOTARY_KEY_ID=$(printf '%s' "$NOTARY_KEY_ID" | tr -d '[:space:]')
+          NOTARY_ISSUER=$(printf '%s' "$NOTARY_ISSUER" | tr -d '[:space:]')
+
+          # Shape checks on the two identifiers, after stripping. Lengths and
+          # formats only — GitHub masks the values, not their sizes — but they
+          # separate "the key is not authorised" from "the wrong string is in
+          # the wrong secret", and a 401 says neither.
+          echo "==> key id: ${#NOTARY_KEY_ID} chars, issuer: ${#NOTARY_ISSUER} chars"
           [ ${#NOTARY_KEY_ID} -eq 10 ] || \
             echo "::warning::MACOS_NOTARY_KEY_ID is ${#NOTARY_KEY_ID} characters; App Store Connect key IDs are 10"
           case "$NOTARY_ISSUER" in

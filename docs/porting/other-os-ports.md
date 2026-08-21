@@ -1530,9 +1530,19 @@ launch checks with Apple online**. That is the consequence of not shipping an
 `.app`, it is accepted, and the README says so and gives the offline escape
 (`xattr -dr com.apple.quarantine .`).
 
-Three traps in the notarisation step, all of which fail quietly rather than
+Four traps in the notarisation step, all of which fail quietly rather than
 loudly:
 
+- **A trailing newline in a secret is invisible and fatal.** This is what the
+  first authenticated run actually died of. `base64 -i key.p8 | pbcopy`, and a
+  copy taken off the App Store Connect page, both carry a trailing newline;
+  GitHub stores the secret verbatim; and `--key-id ABCDE12345\n` is refused
+  with `401 Unauthenticated` — the same answer an unauthorised key gets. The
+  credentials were never wrong, and `notarytool history` from a laptop proved
+  it by returning "No submission history" with the very same three values. The
+  job now strips whitespace from the key ID and the issuer, which cannot
+  legitimately contain any, and leaves the certificate password alone, which
+  can.
 - **`base64 --decode` on macOS accepts a raw PEM body and emits binary garbage
   at exit 0.** So a `MACOS_NOTARY_KEY_P8_BASE64` secret holding the unencoded
   `.p8` produces a key file that is wrong in a way nothing notices until Apple
