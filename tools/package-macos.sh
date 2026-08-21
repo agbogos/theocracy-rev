@@ -381,6 +381,11 @@ WHAT YOU MUST SUPPLY
 
     Override the data tree location with THEOC_DATA=/path/to/tree.
 
+    For CD music, rip the audio tracks to a folder and point THEOC_CD_AUDIO
+    at it. Tracks are found by the first number in the filename ("2 Audio
+    Track.aiff" is disc track 2). Accepted: .aiff .aif .aifc .wav .flac
+    .ogg .mp3 .m4a .ape .wv
+
 REQUIREMENTS
     Apple Silicon (arm64) and macOS 14 or newer. There is no Intel build.
 

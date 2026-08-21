@@ -208,6 +208,10 @@ Layout expected next to this file:
 None of that is shipped here — supply it from your own copy of the game.
 Override the data tree location with THEOC_DATA=/path/to/tree.
 
+For CD music, rip the audio tracks to a folder and point THEOC_CD_AUDIO at
+it. Tracks are found by the first number in the filename ("2 Audio Track.aiff"
+is disc track 2). Accepted: .aiff .aif .aifc .wav .flac .ogg .mp3 .m4a .ape .wv
+
 Bundled in lib/: Unicorn, SDL2, ffmpeg, and the client libraries they need
 (X11, Wayland, ALSA, PulseAudio, dbus, ...). OpenGL is NOT bundled -- SDL2
 loads it at run time -- so your GPU drivers are always used.

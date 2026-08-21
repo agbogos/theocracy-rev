@@ -30,6 +30,29 @@
 # --disable-everything switches off every codec/demuxer/parser/protocol and the
 # enables put back what is used.
 #
+# THE SECOND HALF OF THE LIST IS THE CD AUDIO PATH, and it was missing until
+# 2026-08-21 — the bug that produced it is worth stating because it is a shape,
+# not a typo. The enable list was derived from `data/cd/movie/`, which is the
+# only thing *this script* knew the port decoded. But the port has a second,
+# unrelated libav consumer: `port/src/cdaudio.cpp` hands ripped CD audio to
+# `avformat_open_input`, and it accepts ten container extensions
+#
+#     .aiff .aif .aifc .flac .wav .ogg .mp3 .m4a .ape .wv
+#
+# of which the minimal build could decode exactly none. `.mp3` looked supported
+# and was not: the `mp3` *demuxer* was enabled for MPEG-PS probing, while the
+# only audio *decoder* was `mp2`, which does not decode mp3.
+#
+# The failure was quiet in the way that matters — the bundles played no CD music
+# at all, and the dev build did, because it links Homebrew's full ffmpeg. So no
+# amount of playing the game on the machine that built it could ever have shown
+# this. It was found by diffing a bundle's log against a dev build's.
+#
+# THE RULE THIS ENCODES: the enable list must cover every format the *host*
+# advertises, not every format the *data* happens to contain. `audio_ext()` in
+# cdaudio.cpp is the contract; if a format is added there it must be added here,
+# and the test at the bottom of this comment block is one line of ffprobe.
+#
 # THE ENABLE LIST IS NOT JUST "WHAT THE FILES CONTAIN", and the first version of
 # this script found that out. mpeg1video + mp2 + the mpegps demuxer is exactly
 # what the files are, and it produced
@@ -87,6 +110,10 @@ CONFIG_MIN="
   --enable-decoder=mpeg1video,mpeg2video,mp2
   --enable-demuxer=mpegps,mpegvideo,mp3
   --enable-parser=mpegvideo,mpegaudio
+  --enable-decoder=pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_u8,pcm_f32le
+  --enable-decoder=flac,vorbis,opus,mp3,aac,alac,ape,wavpack
+  --enable-demuxer=aiff,wav,flac,ogg,mov,ape,wv
+  --enable-parser=flac,vorbis,opus,aac
   --enable-protocol=file
   --enable-shared
   --disable-static

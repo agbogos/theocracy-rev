@@ -218,6 +218,11 @@ WHAT YOU MUST SUPPLY
       data/game/       the extracted CD data tree
     Point at them with THEOC_DATA and THEOC_CD if they are elsewhere.
 
+    For CD music, rip the audio tracks to a folder and point THEOC_CD_AUDIO
+    at it. Tracks are found by the first number in the filename ("2 Audio
+    Track.aiff" is disc track 2). Accepted: .aiff .aif .aifc .wav .flac
+    .ogg .mp3 .m4a .ape .wv
+
 STATUS ON WINDOWS
     Playable, verified by play on 2026-08-04: a full session, save/load, a
     netgame and cutscene playback. Cross-compiled from macOS; no Windows

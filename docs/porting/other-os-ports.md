@@ -1066,6 +1066,30 @@ mpeg1video and mp2 44.1 kHz stereo** — and `port/src/mpeg.cpp` additionally us
 swscale (YUV→RGB565) and swresample (audio format). The engine's own FLC video
 never touches ffmpeg; that is guest code decoding into the LFB.
 
+**And that measurement, on its own, produced a shipped bug — 2026-08-21.** It
+covered `mpeg.cpp` and stopped there, but the port has a *second* libav
+consumer: `port/src/cdaudio.cpp` hands ripped CD audio to
+`avformat_open_input`, and its `audio_ext()` whitelist accepts ten container
+extensions. The minimal build could decode none of them, so **every released
+bundle played no CD music at all** while the development build played it
+perfectly — because the dev build links Homebrew's full ffmpeg. No amount of
+playing the game on the machine that built it could have shown this.
+
+`.mp3` is the instructive case: it looked supported and was not. The `mp3`
+*demuxer* was enabled, because libavformat needs it to probe MPEG-PS elementary
+streams — but the only audio *decoder* was `mp2`, and mp2 does not decode mp3.
+
+**The rule this now encodes: the enable list must cover every format the _host_
+advertises, not every format the _data_ happens to contain.** `audio_ext()` is
+the contract; adding a format there means adding it to
+`tools/build-ffmpeg-min.sh`. The cost of covering all ten was 3.9 MB → 4.6 MB.
+
+One detail that would have defeated a narrower fix: macOS rips AIFF as
+**little-endian `sowt`**, so the file probes as `pcm_s16le` inside an `aiff`
+container. Enabling only `pcm_s16be` — the classic AIFF encoding, and the
+obvious single guess — would have left the very rip that exposed the bug still
+broken.
+
 ### The trap: "what the files contain" is not the enable list
 
 Configuring for exactly that — `--enable-decoder=mpeg1video,mp2

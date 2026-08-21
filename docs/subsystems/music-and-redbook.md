@@ -311,6 +311,49 @@ Knobs: `THEOC_CD_AUDIO` (rip directory), `THEOC_CD_TRACE` (log every ioctl),
 `THEOC_MUSIC_VOL` (music level, 0–100) —
 [diagnostics.md](../porting/diagnostics.md).
 
+### Supported rip formats
+
+The rip directory is scanned, not configured. There is no naming convention to
+follow beyond two rules, both in `port/src/cdaudio.cpp`:
+
+- **The extension must be one of these**, matched case-insensitively by
+  `audio_ext()`:
+
+  | | | |
+  |---|---|---|
+  | `.aiff` `.aif` `.aifc` | `.wav` | `.flac` |
+  | `.ogg` (Vorbis or Opus) | `.mp3` | `.m4a` (ALAC or AAC) |
+  | `.ape` | `.wv` | |
+
+  It is a whitelist rather than "hand everything to libav" for a concrete
+  reason: a rip directory in practice also holds the disc images and macOS's
+  `.TOC.plist`, and `theocracy-d1.iso` would otherwise parse as track 1 and
+  shadow the real data track.
+
+- **The first digit run in the basename is the absolute track number.**
+  `2 Audio Track.aiff` is disc track 2 — not the second audio track. macOS names
+  tracks this way and every common ripper form agrees (`track02.flac`,
+  `02.wav`). Getting this wrong would shift the whole soundtrack by one, and the
+  only symptom would be the wrong music on the wrong screen.
+
+Track 1 is the data track on this mixed-mode disc, so an audio file claiming
+track 1 is taken but warned about.
+
+**This list is a contract with `tools/build-ffmpeg-min.sh`, not just with
+libav.** The released bundles ship a cut-down ffmpeg, and until 2026-08-21 it
+could decode *none* of these formats — the enable list had been derived from the
+cutscenes alone, so every bundle played no CD music while the development build,
+linked against a full ffmpeg, played it perfectly. Adding a format here means
+adding its demuxer and decoder there. Verified by round-tripping a real track
+through each format and decoding it with the minimal build; `.ape` is decoder-
+verified only, since ffmpeg has no Monkey's Audio *encoder* to generate a test
+file with.
+
+Worth knowing when testing: **macOS writes little-endian `sowt` AIFFs**, so a
+Music.app rip probes as `pcm_s16le` in an `aiff` container, not the classic
+big-endian `pcm_s16be`. Both are enabled; assuming only the latter is the
+obvious mistake.
+
 ### Verified against the real disc
 
 The UK 2-CD release was ripped on 2026-08-08. Its macOS `.TOC.plist` reads
