@@ -11,23 +11,55 @@ hardware or a judgement only you have. **CLAUDE** is work I can do unattended.
 
 ## YOU
 
-### 1. Windows on bare metal — blocked until ~2026-08-18
+### 1. Windows on bare metal — blocked on hardware
 
-Hardware arrives via a third party around then. When it does, on that machine:
-
-```
-win-timing-probe.exe
-win-timing-probe.exe --busy <core count>
-win-timing-probe.exe --busy <core count x 2>
-```
-
-plus one ordinary game session with `THEOC_FPS=1`.
-
-Two specific things only bare metal answers, both recorded in
+Two things only bare metal answers, both in
 [`docs/porting/other-os-ports.md`](docs/porting/other-os-ports.md), "The
 contention runs": whether the ~98 ms loaded province frame is a VM artefact, and
 what happens on a machine where nothing has already raised the global timer
-resolution to 1 ms (the VM's was already raised before the probe ran).
+resolution to 1 ms. The VM could not answer the second — it reported
+`NtQueryTimerResolution current: 1.0000 ms` before the probe started anything,
+so it never measured Windows' 15.625 ms default at all.
+
+**That is why the first instruction below is the important one.** Browsers,
+Discord, Spotify, media players and game launchers all raise the global timer
+resolution process-wide, and any of them running in the background silently
+turns the bare-metal run into a second copy of the VM run.
+
+Send the helper this, verbatim:
+
+> 1. **Reboot, and open nothing.** No browser, no Discord, no Spotify, no game
+>    launcher. This matters more than it sounds: those programs change a global
+>    Windows timer setting, and the whole point of this test is to measure the
+>    machine without it.
+> 2. Unpack the bundle, open `cmd.exe` in that folder, and paste:
+>
+>    ```
+>    set /a CORES2=%NUMBER_OF_PROCESSORS%*2
+>    win-timing-probe.exe                            > probe-idle.txt   2>&1
+>    win-timing-probe.exe --busy %NUMBER_OF_PROCESSORS% > probe-busy1x.txt 2>&1
+>    win-timing-probe.exe --busy %CORES2%            > probe-busy2x.txt 2>&1
+>    powershell -c "Get-CimInstance Win32_Processor | Format-List Name,NumberOfCores,NumberOfLogicalProcessors" > machine.txt
+>    ```
+>
+> 3. **Check one line before going further.** Open `probe-idle.txt` and find
+>    `NtQueryTimerResolution current`. It should say about **15.6 ms**. If it
+>    says **1.0000 ms**, something was running — reboot and redo step 2 without
+>    opening anything first.
+> 4. Then one ordinary game session, ten minutes or so, reaching a province with
+>    units in it:
+>
+>    ```
+>    set THEOC_FPS=1
+>    theoc.bat > session.txt 2>&1
+>    ```
+>
+> 5. Send back `probe-idle.txt`, `probe-busy1x.txt`, `probe-busy2x.txt`,
+>    `machine.txt` and `session.txt`.
+
+The probe needs no game data and takes about a minute per run; only step 4 needs
+the data tree beside `theoc.bat`, which you have to supply — it is not
+redistributable and is not in the bundle.
 
 ### 2. Play one signed macOS bundle — interactive only
 
