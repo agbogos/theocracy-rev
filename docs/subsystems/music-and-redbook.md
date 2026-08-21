@@ -354,6 +354,10 @@ Music.app rip probes as `pcm_s16le` in an `aiff` container, not the classic
 big-endian `pcm_s16be`. Both are enabled; assuming only the latter is the
 obvious mistake.
 
+**Confirmed by play on v1.0.1-rc4**, which is the check that closes this: the
+round-trip decode test proves libav can open the files, and only a real session
+proves the music reaches the mixer and the transport model advances the track.
+
 ### Verified against the real disc
 
 The UK 2-CD release was ripped on 2026-08-08. Its macOS `.TOC.plist` reads
