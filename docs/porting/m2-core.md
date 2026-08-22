@@ -39,7 +39,7 @@ The 79 `R_386_COPY` relocs (previously skipped in M1) are now processed:
 **First native MVOS handlers** (registered via `TrapLayer::register_handler`):
 `cData_Bitmap`/`cData_AnimBitmap` ctors (construct an empty lazy descriptor with
 a valid payload vtable), `cMemBlock_::IsValid`, `cAnimBitmap::GetBoundingBox`.
-Object model confirmed from Ghidra: **`cData_Bitmap : cMemBlock`** (offsets
+Object model confirmed from Ghidra: `cData_Bitmap : cMemBlock` (offsets
 `+0x0c` data / `+0x14` lock / `+0x1c` payload-vtable line up with
 [memory-and-containers.md](../subsystems/memory-and-containers.md)); the
 caller's `if (!data && !IsValid) (*(vtbl+8))(this)` idiom is the **lazy-load
@@ -115,25 +115,25 @@ inside asset loading.
 `ctor #213 @0x8064bd0` → `FUN_08063600` (reads `data/rd/rd.txt`, the intro-demo
 subtitle table, and builds `cVObject` widgets) → `FUN_0816cc80`
 (`cSprite`-from-`cData_AnimBitmap` ctor). A game-side Ghidra pass on
-`theocracy.real` traced the source object **`DAT_085bf980`** and debunked the M1
+`theocracy.real` traced the source object `DAT_085bf980` and debunked the M1
 guess (a "libmvos-side system global with no ctor"). It is an **ordinary
 `cData_Font("data/fonts/small_1pix.mft")`**, constructed by `FUN_08141f30`
-(renamed **`RegisterGlobalResources`**, ctor #194) — a ~200-object resource
+(renamed `RegisterGlobalResources`, ctor #194) — a ~200-object resource
 registrar that our HLE already runs, in the correct order (its `.ctors` slot
 `0x08597454` runs before `#213`'s slot `0x08597408`). `cData_Font` derives from
 `cAnimBitmap`, so `GetPalette__11cAnimBitmap(&DAT_085bf980, …)` and the sprite
 ctor legitimately consume it. The fault peeled off in three stages:
 
-1. **`eip=0x816cdeb accessing 0x8`** — null payload vtable. Already fixed by the
+1. `eip=0x816cdeb accessing 0x8` — null payload vtable. Already fixed by the
    prior batch's `make_descriptor` (sets `+0x1c` via the `__vt_10cMemBlock_`
    fallback), so the lazy-load vcall lands in a vtable trap, not a null deref.
-2. **`eip=0x816ce13 accessing 0x41c`** — `MOV EAX,[EDI+0x40]` reads the
+2. `eip=0x816ce13 accessing 0x41c` — `MOV EAX,[EDI+0x40]` reads the
    `cAnimBitmap` **frame/anim-header pointer**, then `*(hdr+0x41c)` = sprite
    height. Our no-op lazy-load never populates `+0x40`, so it was 0 → deref of
    `0x41c`. **Fixed** with a shared zeroed `NULL_FRAME` page: `make_descriptor`
    points every `cData_*`'s `+0x40` at it, so unloaded sprites read a size of 0
    instead of faulting. The real asset lazy-load will overwrite `+0x40`.
-3. **`eip=0x8063a2a accessing 0x0`** — `REPE CMPSB` over a null token: the
+3. `eip=0x8063a2a accessing 0x0` — `REPE CMPSB` over a null token: the
    `rd.txt` parse calls **`strtok`, which was unimplemented** (returned 0),
    raising `Fatal("Error in config file line 0!")` (non-fatal in bring-up) and
    then dereferencing the null result. **Fixed** by implementing `strtok`
@@ -146,7 +146,7 @@ still 0→1. The two remaining `[vtable] TODO` hits (`__vt_10cMemBlock_[2]`,
 
 ## M2 work order — updated
 
-Done: vtable synthesis, singletons, **`cTextFile` (+RSA4096)**, **`sscanf`**, and
+Done: vtable synthesis, singletons, **`cTextFile` (+RSA4096)**, `sscanf`, and
 the **MVOS method batch** (`Rnd` + x87 returns, `cData_*` ctors, `cNode`/`cList`
 unlink, `cLocaleEntry`). The boot now runs with only a low-frequency tail left.
 Next frontiers (bigger than the tail):
@@ -177,7 +177,7 @@ pumps events.
 The video boundary is **direct import traps, not virtual dispatch** — the game
 calls concrete `cVVC`/`cGD` methods as imported symbols (confirmed: no
 `__vt_*cVVC*`/`__vt_*cGD*` in the copyrelocs). First handler:
-**`cVVC::OpenDisplay(cVModeRequest&)`** (`mvos.cpp`). Request layout confirmed
+`cVVC::OpenDisplay(cVModeRequest&)` (`mvos.cpp`). Request layout confirmed
 from libmvos `0x95ce0`: `+0 w, +4 h, +8 depthCode` (matching `cVVC+0x20/+0x24/
 +0x1c`). The handler reads the request, opens the SDL window, records w/h/depth
 back into the guest `cVVC` object at libmvos's own offsets, and returns success.
@@ -229,13 +229,13 @@ resolved:
 ### Render loop LIVE — the game drives the SDL window
 The three render-boundary imports are reimplemented natively (`mvos.cpp`) from
 the libmvos originals:
-- **`ActivateScreen__10cIntuition`** (`0x9d830`): the game's `cScreen` header IS
+- `ActivateScreen__10cIntuition` (`0x9d830`): the game's `cScreen` header IS
   a `cVModeRequest` (w/h/depth @ +0/+4/+8), root `cVObject` at +0x14. Native
   handler opens the SDL window from that header and stores the screen at
   `Intuition+0x24` (the active screen the render path reads), returns success.
   (Real one also calls `OpenDisplay(VVC, screen)` — collapsed here.)
-- **`BeginRefresh__7cScreen`** (`0x9d2a0`): pumps the SDL event queue.
-- **`EndRefresh__7cScreen`** (`0x9d2d0`): presents the framebuffer. (Real one
+- `BeginRefresh__7cScreen` (`0x9d2a0`): pumps the SDL event queue.
+- `EndRefresh__7cScreen` (`0x9d2d0`): presents the framebuffer. (Real one
   does `PaintTree(root, *(VVC+0x14))` then `SwapBuffers` — widget paint is TBD.)
 
 **`cApplication::Start` now runs end-to-end with no fault**: boot → `Init` →

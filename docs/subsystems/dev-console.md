@@ -42,7 +42,7 @@ Intuition key matrix, which is indexed `Intuition + 0x3c + eKey`:
 |---|---|---|---|
 | `+0x73/0x74` | `0x37/0x38` | Shift | (read as the `shiftMod` field, not a route) |
 | `+0x75/0x76` | `0x39/0x3a` | Ctrl | `FUN_081e2120` |
-| `+0x77/0x78` | `0x3b/0x3c` | **Alt** | **`InGame_HandleKeyCommand`** |
+| `+0x77/0x78` | `0x3b/0x3c` | **Alt** | `InGame_HandleKeyCommand` |
 | — | — | none | `FUN_081e2330` |
 
 The case selector is the raw eKey, and case `0x21` is **V**. So the chord is
@@ -95,7 +95,7 @@ This is the part that is easy to miss, and it makes the obvious patch useless.
 On ENTER, `cConsoleVO::Key` case `0x48` calls `cConsole::Input(owner, line)`.
 `Input` formats the line into the ring and then dispatches through the object's
 own vtable at `+0x3c`, slot `+0xc` — which for both `cConsole` and `cVOConsole`
-resolves to **`cConsole::Process`**. And `Process` is null-safe:
+resolves to `cConsole::Process`. And `Process` is null-safe:
 
 ```c
 cShell *shell = *(cShell **)(this + 0x38);
@@ -123,7 +123,7 @@ input half was never connected.
 ## Why the realm screen has no opener at all
 
 `InGame_HandleKeyCommand` is **not** a global hotkey handler. Key events reach
-whichever `cVObject` has focus, through that widget class's **`vtable+0x10`**
+whichever `cVObject` has focus, through that widget class's `vtable+0x10`
 slot (4-byte slots; the classes in this family share `+0x14`/`+0x18` PLT
 entries). Only two functions in the binary call `InGame_HandleKeyCommand`, and
 only one of them — `FUN_080bfff0`, at `vtable+0x10` of the vtable at `0x832c960`
@@ -184,14 +184,14 @@ i386 a `va_list` is just a pointer into the caller's stack, so it reuses
 
 ## Using it — the commands
 
-The shell is real and has a help system. **`help`** or **`?`** prints the
+The shell is real and has a help system. `help` or `?` prints the
 command list for the screen you are on. The two shells are separate and reject
 each other's commands ("On realm screen you have different commands!"). An
-unrecognised word prints **`Unknown command.`** — which is itself useful:
+unrecognised word prints `Unknown command.` — which is itself useful:
 silence means something is broken upstream, not that you mistyped.
 
 `cShell` carries its name at `+0x00` (hence `Shell Changed to Province Shell` in
-the log), an echo flag at `+0x40` — set to **1** by both ctors, so input is
+the log), an echo flag at `+0x40` — set to 1 by both ctors, so input is
 echoed as `> <line>` — and its vtable at `+0x4c`, which `cShell::Parser`
 dispatches through (`vt+0xc` = `ProcessCommand`).
 
@@ -251,12 +251,12 @@ saveanim, pos
 (below). Only three carry any description of their own: `stat` (its own
 `Available commands:` block — `(nothing)` prints all statistics, `help`,
 `clear`), `mannaking` (as on realm), and `printid` (prints `Registration
-ID:[%s]`). The whole province handler contains exactly **one** `Syntax :`
+ID:[%s]`). The whole province handler contains exactly one `Syntax :`
 string, against the realm shell's five.
 
 ### Undocumented literals
 
-`ProcessCommand` for the province shell compares against **57** distinct string
+`ProcessCommand` for the province shell compares against 57 distinct string
 literals, versus the 36 its help advertises. The extra ones are real — they are
 in the code — but they are a **mix of top-level commands and sub-arguments of
 other commands**, and the two cannot be reliably separated from the decompiler
@@ -265,7 +265,7 @@ load is hoisted far from each comparison. Two independent classification passes
 disagreed, so no split is claimed here.
 
 - **Confirmed top-level and hidden** (read directly from the code, sitting in the
-  same ladder as `onlycheat`/`printid`): **`zila`**, **`bagoy`**, **`tomy`** —
+  same ladder as `onlycheat`/`printid`): `zila`, `bagoy`, `tomy` —
   Hungarian, and almost certainly developer nicknames used as personal shortcuts.
 - **Clearly sub-arguments** by form and by the commands they neighbour: `on`,
   `off`, `enable`, `disable`, `add`, `sub`, `set`, `all`, `closest`, `null`,
@@ -364,7 +364,7 @@ eKey is a dense enum, not a PC scancode: digits `1`–`0` are `0x02`–`0x0b`,
 | Key | eKey | Action |
 |---|---|---|
 | `1`–`9`, `0` | 0x02–0x0b | `FUN_081d0e20(world, faction, digit)` — separate path, not the event pipe |
-| A | 0x0c | subcode **0** (and the only one that hardcodes the shift byte to 0) |
+| A | 0x0c | subcode 0 (and the only one that hardcodes the shift byte to 0) |
 | B | 0x0d | hide `g_CmdConsole` if shown |
 | D F H J L M N P S T U W Y | — | subcodes **5 7 8 4 1 c d a b 9 2 3 6** respectively |
 | I | 0x14 | inline unit selection — walks `world+0x40bb0`, adds matches to the selection at `world+0x40de4`. Early-returns in battle mode |
@@ -438,7 +438,7 @@ Print(DAT_084c9124 ? "ProvCheat Enabled" : "ProvCheat Disabled");
 - **`allcheat` toggles both flags**; **`onlycheat` force-enables both** and
   additionally toggles `0x84c9125`. The `… Disabled` strings report the state
   *after* the toggle.
-- So cheats **can** be turned back off: run `allcheat` twice.
+- So cheats can be turned back off: run `allcheat` twice.
 - The effect is to **unlock extra in-game key commands** — the ProvCheat readers
   are the key dispatchers. Decoded below.
 
@@ -503,11 +503,11 @@ The other two gates are small:
   `[world+0x40dd4] = 6` and calls `FUN_0814e2b0`.
 - **Alt dispatcher**: `InGame_HandleKeyCommand` case `0x1c` = **Alt+Q** →
   `FUN_081d81d0`.
-- **`0x81b5be8`**: a permission check that is bypassed when ProvCheat is on **and
+- `0x81b5be8`: a permission check that is bypassed when ProvCheat is on **and
   Right-Shift is held** (`Intuition+0x3c+0x38`), skipping a test of `[obj+0x10]`.
 
 **Two orphaned enablers.** `FUN_080635a0` and `FUN_080635d0` both set
-`Intuition_Mode` (to `1` and `-1`) and turn **both** cheat flags on. They sit
+`Intuition_Mode` (to `1` and `-1`) and turn both cheat flags on. They sit
 immediately after `RollingDemoFrame__Fv` (`0x8063540`), i.e. in the attract/demo
 -mode neighbourhood, which fits their setting of `Intuition_Mode`. Neither has a
 single reference anywhere — not a call, not a data word in any table (checked

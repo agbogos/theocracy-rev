@@ -46,7 +46,7 @@ dirty-rect present is the entire contract.**
 - KeyPress/KeyRelease: `XLookupKeysym` → `cKeyboard::ConvertRawkey(keysym,
   isDown)` → `PushKey(eKeyCode, bool)`.
 - ButtonPress/Release: X buttons 1/3/2 → engine bitmask bits 0/1/2
-  (left/right/middle) → `EVENT_Buttons(uchar)` on **both** `cMouse` and
+  (left/right/middle) → `EVENT_Buttons(uchar)` on both `cMouse` and
   `cPointer`.
 - MotionNotify: `EVENT_Move(tPoint&)` on both.
 - EnterNotify: re-grab pointer if grab requested; LeaveNotify: ungrab
@@ -90,10 +90,10 @@ the shipped `vvc_x` sidesteps it.)
 
 ## Plugin load handshake (resolved)
 The plugin exposes two **unmangled `extern "C"`** symbols — these are the `dlsym` targets:
-- **`QueryDevice()`** → returns `1` — capability probe ("is this backend
+- `QueryDevice()` → returns `1` — capability probe ("is this backend
   usable?").
-- **`CreateVideoDevice()`** → `new cVVC_Linux_X`, sets its vtable, calls
-  `XDriver_Setup()` (`XOpenDisplay`), returns it as a **`cVVC*`**.
+- `CreateVideoDevice()` → `new cVVC_Linux_X`, sets its vtable, calls
+  `XDriver_Setup()` (`XOpenDisplay`), returns it as a `cVVC*`.
 
 So the engine side (libmvos, via `cLibrary`) is: `dlopen("vvc_x…") →
 dlsym("QueryDevice")` probe → `dlsym("CreateVideoDevice")` → use the returned
@@ -106,7 +106,7 @@ in `vvc_x`** (`0x19f80` / `0x19f90`, empty bodies). There is no page-flip; the
 Double-buffering is engine-side (`cVVC` front/back GDs); an SDL replacement only
 needs Refresh → texture-update → present.
 
-**`cVVC_Linux_X`** (0x2c bytes): `[0]` front `cGD_X*`, `[1]` back-buffer GD,
+`cVVC_Linux_X` (0x2c bytes): `[0]` front `cGD_X*`, `[1]` back-buffer GD,
 `[2]` offscreen `cBitmap`, `[7]` depth code, `[8]` w, `[9]` h, `[10]` vtable.
 
 `SetVideoMode(cVModeRequest{w,h,depthCode})` maps depth code → backend:
@@ -114,9 +114,9 @@ needs Refresh → texture-update → present.
 | depthCode | requires X visual depth | backend | game usage |
 |-----------|------------------------|---------|-----------|
 | 2 | ≥ 8 | `cGD_X16` | — |
-| 4 | **15** | `cGD_X15` | SP fallback |
-| 5 | **16** | `cGD_X16` | SP primary |
-| 6 / 7 | **24** | `cGD_X32` | — |
+| 4 | 15 | `cGD_X15` | SP fallback |
+| 5 | 16 | `cGD_X16` | SP primary |
+| 6 / 7 | 24 | `cGD_X32` | — |
 | 0 / 8 | — | unsupported (returns 0) | — |
 
 ## ⚠️ Color-depth gotcha (the key practical finding)
@@ -139,7 +139,7 @@ bpp) but would fail on a stock modern X server.
 ## Engine-side loader (confirmed — `LoadDevicePlugins`, libmvos `0xa4990`)
 
 > **Address corrected (audit 2026-07-26).** This doc previously cited `0xa49a0`.
-> The true entry is **`0xa4990`** (file `0x94990`): it is the address
+> The true entry is `0xa4990` (file `0x94990`): it is the address
 > `OpenSubsystems` actually calls (`0xa4f73`), and it begins with the
 > "already loaded?" guard `CMP [0xd6b80],0 / JNZ`. `0xa49a0` is only a
 > fragment start — no callers, a single `.eh_frame` DATA xref. The Ghidra DB
@@ -159,14 +159,14 @@ Hardcoded default plugin paths (the `_x` = X11 family), each wrapped by a
 
 | Family | Default `.so` | Wrapper | Global |
 |--------|--------------|---------|--------|
-| Video | **`libmvos_vvc_x.so`** | `cLibVVC` | `VVC` |
-| Video (alt) | **`libmvos_vvc_glide.so`** | `cLibVVC` | — (3dfx Glide) |
+| Video | `libmvos_vvc_x.so` | `cLibVVC` | `VVC` |
+| Video (alt) | `libmvos_vvc_glide.so` | `cLibVVC` | — (3dfx Glide) |
 | Keyboard | `libmvos_keyboard_x.so` | `cLibKeyboard` | `VKeyboard` |
 | Mouse | `libmvos_mouse_x.so` | `cLibMouse` | `VMouse` |
 | Pointer | `libmvos_pointer_x.so` | `cLibPointer` | `VPointer` |
 
 Video-device **selection** (caller `FUN_000a4fae`): reads a configured device
-name; default is **`xf86`** (→ `libmvos_vvc_x.so`), alternative `glide`. So the
+name; default is `xf86` (→ `libmvos_vvc_x.so`), alternative `glide`. So the
 input/mouse/pointer are **separate plugins** from `vvc_x` (same
 `Create*Device`/`QueryDevice` ABI), not duplicated inside it — `vvc_x` owns the
 X window/present + event pump; the input plugins are the device objects.

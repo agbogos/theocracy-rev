@@ -85,12 +85,12 @@ against a decompiled body.
 | `+0x00` | delta, always `0` | GNU v2 |
 | `+0x04` | `__rtti_si` getter | 12 distinct, one per class |
 | `+0x08` | destructor | |
-| `+0x0c` | **`Load(stream)`** — base `0x0820e570` | called on every mission by `cMissionHandler_Load`; `cMission_WallChecker` is the one class that overrides it (`0x0821ec60`) |
-| `+0x10` | **`Save(stream)`** — base `0x0820e610` | the mirror call in `cMissionHandler_Save` (`0x0820fd60`); WallChecker's override at `0x0821ec90` |
-| `+0x14` | **`Start(province)`** | stores the province at `this+0x24`; `cMission_TwoRings_Start`, `cMission_TheWall_Start`, `cMission_S4_0_Start` |
+| `+0x0c` | `Load(stream)` — base `0x0820e570` | called on every mission by `cMissionHandler_Load`; `cMission_WallChecker` is the one class that overrides it (`0x0821ec60`) |
+| `+0x10` | `Save(stream)` — base `0x0820e610` | the mirror call in `cMissionHandler_Save` (`0x0820fd60`); WallChecker's override at `0x0821ec90` |
+| `+0x14` | `Start(province)` | stores the province at `this+0x24`; `cMission_TwoRings_Start`, `cMission_TheWall_Start`, `cMission_S4_0_Start` |
 | `+0x18` | **`Check()` → state** | returns `this+0x2c`; `cMission_TwoRings_Check` |
-| `+0x1c` | **`Activate()`** | `this` only; `cMission_Josda_Activate` loads its man file here, `cMission_TwoRings`' does nothing but set two flags |
-| `+0x2c` | **`Finish()`** | branches on the state byte; five of the six hero rewards live here |
+| `+0x1c` | `Activate()` | `this` only; `cMission_Josda_Activate` loads its man file here, `cMission_TwoRings`' does nothing but set two flags |
+| `+0x2c` | `Finish()` | branches on the state byte; five of the six hero rewards live here |
 
 > **`+0x0c`/`+0x10` corrected 2026-08-10.** This table used to list them as
 > anonymous "base `cMission`" slots. They are `Load` and `Save`: the handler
@@ -424,7 +424,7 @@ static table of missions and timers**, not a registry anything registers with:
 | vtable slot | role |
 |---|---|
 | `+0x0c` | `GetMissionsForProvince(prov)` → `cList*` |
-| `+0x10` | **`Update(dayCount)`** — the driver |
+| `+0x10` | `Update(dayCount)` — the driver |
 | `+0x14` | `ForceActivate(missionId)` |
 | `+0x18` | `OnGameEnd(result)` |
 | `+0x1c`, `+0x20` | two per-province mission predicates |
@@ -752,7 +752,7 @@ Who writes `prov+0x400fb` is unread.
   virtuals were read. The scenario handlers are at the eight remaining callers of
   `iMissionHandler_ctor`; two of them (`0x0822ed30`, `0x08233210`) extend `Load`
   with a scenario-specific `u16`.
-- **`prov+0x400fb`**, the placement-mode byte behind province virtual `+0xe0` —
+- `prov+0x400fb`, the placement-mode byte behind province virtual `+0xe0` —
   no writer found.
 - **Mission field `+0x39`**, read by the handler's `+0x1c` predicate; no writer
   found.

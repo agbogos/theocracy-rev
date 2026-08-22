@@ -267,7 +267,7 @@ The current export list is `QueryDevice`, `CreateVideoDevice`,
 
 ### The present chain
 
-We replace **one** function in the present path, and it is the innermost of
+We replace one function in the present path, and it is the innermost of
 three. Every link below has exactly one call site, so this is the whole of it
 (libmvos, read off the disassembly 2026-08-03):
 
@@ -313,7 +313,7 @@ had it wrong:
 
 `cVVC::SetBuffers` (`0x85c90`) is what copies `+0x00`/`+0x04` into
 `+0x10`/`+0x14` according to `+0x18`. It has exactly two callers —
-`cVVC::OpenDisplay` and `cVVC::SwapBuffers` — and the host replaces **both**, so
+`cVVC::OpenDisplay` and `cVVC::SwapBuffers` — and the host replaces both, so
 it never executes. Nothing in the guest can therefore move a GD slot under us.
 Two consequences: `HLE_OpenDisplay` is the **sole** writer of those slots, and
 our writing `gd` into `+0x08` is meaningless but harmless, since its only two
@@ -357,7 +357,7 @@ are traps for us:
 
 | | Original | Us |
 |---|---|---|
-| `IsAsyncRefreshCapable()` | returns **1** — an LFB *is* the display | still returns 1, but now it is a lie |
+| `IsAsyncRefreshCapable()` | returns 1 — an LFB *is* the display | still returns 1, but now it is a lie |
 | `Refresh(rect)` | `{ return; }` — writing the LFB already displayed it | `{ return; }` — the pixels sit in a staging buffer |
 
 `cGD_LFB16` is the **linear framebuffer** GD: on real hardware, writing to it is
@@ -664,7 +664,7 @@ context: [../subsystems/dev-console.md](../subsystems/dev-console.md).
 - **`Machine::install_traps` vs `add_code_traps`.** The header calls
   `install_traps` a "back-compat shim". Both are live; `install_traps` is used
   only for the import window.
-- **`Video::keep_open_for`** presents outside the frame counter, which is why
+- `Video::keep_open_for` presents outside the frame counter, which is why
   `stop_watchdog()` must be called before it. That ordering is a real coupling,
   not a stylistic one.
 - **Trap-window sizing.** `add_code_traps` maps `(nslots + 0xfff) & ~0xfff`

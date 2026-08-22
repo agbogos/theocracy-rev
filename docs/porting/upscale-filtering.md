@@ -128,7 +128,7 @@ already done the pixel-exact part, so the final blit is free to fit fractionally
 — which recovers the ~5% of image area the floor was throwing away (3.00×
 against 3.08× on a 2940×1846 panel), exactly as the assessment predicted.
 
-**`THEOC_SCANLINES=N`** darkens one row in every three *of the intermediate*,
+`THEOC_SCANLINES=N` darkens one row in every three *of the intermediate*,
 i.e. one dark line per guest pixel row, whatever the window is doing. `N` is a
 percentage, clamped to 90 so a typo cannot black out the screen; 25 is a light
 hint, 60 is heavy. Off by default — scanlines are polarising and cost

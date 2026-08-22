@@ -5,14 +5,14 @@ Addresses in the **game executable** (`0x08048000`). Reached from
 `OpenRealmScreen` → `InitWorldForPlay` → `RealmGameLoop`.
 
 ## Two world objects (don't confuse them)
-- **`g_GameSession`** @ `0x84c9610` — session/controller (created by
+- `g_GameSession` @ `0x84c9610` — session/controller (created by
   `SetupGame`, ~88 bytes): player list (up to 8), **pause flag @ `+0x50`**,
   mode. This is *who's playing*.
-- **`g_World`** @ `0x85c0b74` — the map/simulation data (large). Key offsets:
+- `g_World` @ `0x85c0b74` — the map/simulation data (large). Key offsets:
   **units** container `+0x1f398` / count `+0x1f3a0`; **provinces** container
   `+0x1468` / count `+0x1470`; tick duration `+0x1408`, sim timer `+0x1410`; the
   **`cDate` game date @ `+0x83c`** ([calendar.md](calendar.md)); a `cMsgSender`
-  @ `+0x5c8`; a `cShell` @ **`+0x5d8`**. This is *the world state*.
+  @ `+0x5c8`; a `cShell` @ `+0x5d8`. This is *the world state*.
 
   > **Corrected 2026-07-27.** The `cShell` was previously given as `+0x176` — an
   > `int *` offset copied out of a decompile without scaling (`0x176 * 4 =
@@ -62,7 +62,7 @@ Then, each frame while running:
 2. `cScreen::BeginRefresh(g_RealmScreen)` — begin drawing to the back buffer.
 3. **Mouse/focus:** if the Intuition mouse (`Intuition+0x14/+0x18`) moved or
    focus changed → `RefreshFocus` + update the hovered `cVObject`.
-4. **`if (g_GameSession+0x50 == 0) SimulationUpdate(g_World)`** — advance the
+4. `if (g_GameSession+0x50 == 0) SimulationUpdate(g_World)` — advance the
    sim *only when not paused*.
 5. `RefreshTree(mainView)` — draw the map view.
 6. **Drain the input event pipe** (`g_RealmScreen+0x70..0x7c` ring buffer):

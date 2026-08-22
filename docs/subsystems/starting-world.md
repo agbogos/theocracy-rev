@@ -74,7 +74,7 @@ un-adjust. The world holds provinces in the polymorphic array at `world+0x1468`.
 Inside `cProvince_ctor_fromStream`, eleven `cManList_Load` calls (`0x08147540`,
 one per tribe) each read a leader count, then per leader a count of inferiors,
 then a flat trailing list. Every one of those men comes from
-**`CreateMan_fromStream`** (`0x081bece0`):
+`CreateMan_fromStream` (`0x081bece0`):
 
 ```c
 Read(stream, &caste, 1);                       // 0..0x29 — 42 castes
@@ -164,13 +164,13 @@ All nine world files, read by the game's own loader (2026-08-09):
 
 | file | men | heroes | magic items |
 |---|---:|---|---|
-| `campaign` | 1248 | 1, 2, 4, 6, 7, **11**, 12, 13, 14, 15, 16, 18 | 3, 4, 5, 9, 10, 14, 15, **16×2**, 20, 22, 27, 32, 33, 35, **36×2**, 38, 39, 42, 44, 47 |
+| `campaign` | 1248 | 1, 2, 4, 6, 7, 11, 12, 13, 14, 15, 16, 18 | 3, 4, 5, 9, 10, 14, 15, **16×2**, 20, 22, 27, 32, 33, 35, **36×2**, 38, 39, 42, 44, 47 |
 | `scn1` | 26 | — | — |
 | `scn2` | 216 | — | — |
 | `scn3` | 582 | 6 | 3, 36 |
 | `scn4` | 266 | 2 | 10 |
 | `scn5` | 270 | 18 | 33 |
-| `scn6` | 56 | **19** | 46 |
+| `scn6` | 56 | 19 | 46 |
 | `scn7` | 978 | 12 | 14, 35 |
 | `scn8` | 183 | — | 3 |
 
@@ -235,11 +235,11 @@ their own `printf` strings:
 
 | | `SetupGame(mode)` — Prophecy, `0x081457e0` | `FUN_08145550(mode, id)` — Chronicles, `0x08145550` |
 |---|---|---|
-| **0** "init mode" | `GameSession_Construct(new(0x58), 0, paused=1)` | `GameSession_Construct(new(0x58), id, paused=1)` |
-| **1** "edit mode" | `LoadGame("<map>/init.dat", paused=1)` | same |
-| **2** "normal mode" | `LoadGame("<map>/init.dat", paused=0)` | same |
+| 0 "init mode" | `GameSession_Construct(new(0x58), 0, paused=1)` | `GameSession_Construct(new(0x58), id, paused=1)` |
+| 1 "edit mode" | `LoadGame("<map>/init.dat", paused=1)` | same |
+| 2 "normal mode" | `LoadGame("<map>/init.dat", paused=0)` | same |
 
-The menu sends **2**. Mode 0 is the only one that never touches `init.dat`: it
+The menu sends 2. Mode 0 is the only one that never touches `init.dat`: it
 runs the **non-stream** `cWorld` constructor (`0x081fc4b0`), which leaves
 `world+0x5b4` at zero — and that byte is the whole load-vs-generate fork.
 `FUN_081f99b0` branches on it:
@@ -266,7 +266,7 @@ forgotten value.
 ### Its inputs had already stopped working
 
 Generation dies immediately on `Fatal:Unknown textfile format! data/mitem.cfg`.
-`cTextFile` accepts exactly **one** format — a file prefixed `RSA4096` — and
+`cTextFile` accepts exactly one format — a file prefixed `RSA4096` — and
 `data/mitem.cfg` and `data/hero.cfg` are two of only **four** files in the whole
 tree with no magic at all (the others are `mvos.cfg`, which is ours, and
 `servers.txt`). 4473 shipped files are `RSA4096`.

@@ -1,7 +1,7 @@
 # Guest libmvos — architecture pivot
 
 **Status: done and playable on macOS, Linux and Windows.** The host maps
-**both** `theocracy.real` and `libmvos.so.0.9` under Unicorn and HLE-only the OS
+both `theocracy.real` and `libmvos.so.0.9` under Unicorn and HLE-only the OS
 boundary. Pure-HLE MVOS (`mvos.cpp`) is left in tree but **not linked**.
 
 > **This document is a milestone log, written forwards from the 2026-07-22
@@ -26,7 +26,7 @@ code”; pure HLE front-loads a native engine rewrite. We chose guest libmvos.
 | Region | VA |
 |--------|-----|
 | game (ET_EXEC) | native `0x08048000+` |
-| libmvos (ET_DYN) | **`0x10000000`** (`guestlink::MVOS_BASE`) |
+| libmvos (ET_DYN) | `0x10000000` (`guestlink::MVOS_BASE`) |
 | HLE traps | `0x77000000` (unchanged) |
 | heap / stack / scratch | `0x60` / `0x70` / `0x50` (unchanged) |
 
@@ -143,7 +143,7 @@ Start FAULTED in cVOBitmap::Paint (cGD* null @ +0x14)
 
 ## G5 — cGD_LFB16 + SwapBuffers present (done)
 
-HLE `OpenDisplay` now builds a guest **`cGD_LFB16`** (layout from ctor
+HLE `OpenDisplay` now builds a guest `cGD_LFB16` (layout from ctor
 `0x6bb30`):
 
 | Off | Field |
@@ -155,7 +155,7 @@ HLE `OpenDisplay` now builds a guest **`cGD_LFB16`** (layout from ctor
 | +0x14 | `__vt_9cGD_LFB16` @ mvos+`0xa2820` |
 
 Wired onto the VVC device at `+0`, `+4`, and `+0x14` (PaintTree path).
-**`SwapBuffers`** patched to copy guest LFB → SDL and `present()`.
+`SwapBuffers` patched to copy guest LFB → SDL and `present()`.
 
 ### G5 result
 ```
@@ -173,7 +173,7 @@ No faults.
 
 Movies open **640×480**, then the menu opens **800×600**. `Video::open` used to
 `return true` if a window already existed, so SDL stayed at 640×480 (pitch 1280)
-while the guest `cGD_LFB16` painted at pitch **1600**. Presenting that buffer
+while the guest `cGD_LFB16` painted at pitch 1600. Presenting that buffer
 with the wrong stride produces the CRT-streak / multi-tile menu background.
 
 **Fix:** recreate the SDL texture + host FB (and `SDL_SetWindowSize`) whenever
@@ -235,10 +235,10 @@ under `data/game/movie/` instead of the CD tree.
   `THEOC_SKIP_MOVIES=1` to succeed even without files.
 
 **Root cause (round 2 — freeze with *and* without skip):** after SMPEG open the path still:
-1. constructs **`cDisplay`** (`__8cDisplayPvUsUsUsUcUiUlUl`, from libsmpeg
+1. constructs `cDisplay` (`__8cDisplayPvUsUsUsUcUiUlUl`, from libsmpeg
    `MPEGextra.cpp`) — was UND→TODO no-op
 2. allocates a streaming audio `cMemBlock` sized from
-   **`SMPEG_Info.samplerate`** (`Sample_Size[fmt] * chans * samplerate/5`)
+   `SMPEG_Info.samplerate` (`Sample_Size[fmt] * chans * samplerate/5`)
 
 With a zeroed `cDisplay` + `samplerate=0` → `MemBlock.Alloc(0)` → `Fatal` →
 `abort` ignored → Start re-opens subsystems in a loop (looked like a hard
@@ -352,9 +352,9 @@ matrices (ReleaseAll).
 **Problem.** `R_386_COPY` gives the executable (game) ownership of the storage
 for globals defined in the DSO (libmvos): VVC/Intuition/… singletons, the
 24-byte `EnvSystem`, the 9 `_12cApplication.*` subsystem flags (45 non-vtable
-symbols in all). Real `ld.so` then makes **every** reference in **both** images
+symbols in all). Real `ld.so` then makes every reference in both images
 resolve to the game's `.bss` copy. Our linker only rebound the GOT (`GLOB_DAT`),
-but libmvos reaches these via **`R_386_32`** to its *own* DSO-local slot — so
+but libmvos reaches these via `R_386_32` to its *own* DSO-local slot — so
 libmvos wrote its slot while the game read its copy, and they diverged. The
 workaround was three manual mvos↔game syncs in `main.cpp` (after mvos ctors,
 after the cfg loader, after `OpenSubsystems`), plus a flags mirror — fragile,
@@ -382,7 +382,7 @@ non-critical Fatals; the happy path is abort-free so this never fires in normal
 play. The risk was that a *real* fault could hide as a silent continue /
 restart.
 
-**`THEOC_LOUD_ABORT=1`** turns `abort` into a diagnostic: walk the g++ 2.95 EBP
+`THEOC_LOUD_ABORT=1` turns `abort` into a diagnostic: walk the g++ 2.95 EBP
 frame chain (`[ebp]`=saved ebp, `[ebp+4]`=ret) and print a labeled backtrace,
 then `Machine::request_stop()` the current call so the failure surfaces here.
 Addresses are tagged `game 0x080…` or `mvos+0x…` so each drops straight into the
@@ -422,7 +422,7 @@ ESP+0x34) gives `this` = `0x60f00000`, return address `0x08146058` in the game's
 screen-activation helper (`SetPalette` → `SetPointer` → `ActivateScreen`;
 `Intuition` global `0x08598454`, screen global `0x084c9128`).
 
-So `Intuition+0x24` held **`0xc4c4c5c4`** — non-null, so the guard at `8d848`
+So `Intuition+0x24` held `0xc4c4c5c4` — non-null, so the guard at `8d848`
 passed, then the deref faulted. That value is not a stale pointer (the heap is
 `0x60xxxxxx`); it is **two adjacent RGB565 pixels of near-identical colour**.
 The singleton had been painted over with bitmap data.
@@ -453,7 +453,7 @@ So the 15 MB line is crossed **during game entry**, not at boot: the singleton
 survived the whole menu intact and died the moment a game started. That matches
 the repro — the crash needs a route that has entered a game at least once. The
 remaining route-dependence is just *what* landed there: the fault needs a
-previously-active screen (`eax != 0`) **and** garbage that lands unmapped; other
+previously-active screen (`eax != 0`) and garbage that lands unmapped; other
 values read junk silently or skip the branch.
 
 Two side observations from the same run: province play is flat at +0.00 MB/s, so
@@ -518,7 +518,7 @@ Frontier now tracks live to within 0.1 MB (7 free blocks), so fragmentation
 waste is negligible and a second load reuses the first one's memory instead of
 extending the arena.
 
-**`THEOC_HEAP_TEST=1`** runs the allocator standalone against a randomized
+`THEOC_HEAP_TEST=1` runs the allocator standalone against a randomized
 alloc/free workload and exits. It guards the failure that would be *worse* than
 the leak — two live blocks overlapping, which corrupts guest memory silently:
 
@@ -529,7 +529,7 @@ the leak — two live blocks overlapping, which corrupts guest memory silently:
 ```
 
 18k ops with no overlap or double-hand-out; freeing everything collapses 465
-fragments back to **one** block (coalescing is correct); and re-allocating after
+fragments back to one block (coalescing is correct); and re-allocating after
 a full free reuses rather than extending the frontier.
 
 Reporting now distinguishes **live** (held right now) from **frontier**
@@ -567,7 +567,7 @@ on *every* key-down anywhere, and cleared only `keycode` on read. Pressing SPACE
 exit test sat one branch past the loop and was never reached.
 
 Fixed by matching the real contract: `flags = 0` (bit 0 clear), the stub clears
-**both** words on read, and the mailbox is only ever non-empty **while a
+both words on read, and the mailbox is only ever non-empty **while a
 cutscene is on screen** (`movie_playing_`, set from `SMPEG_status`). Outside a
 movie it stays empty, so the normal input path is exactly as before — keys
 already reach the game via the Intuition ring and the `cKeyboard` matrix, and
@@ -579,13 +579,13 @@ report `keycode 1` for any key, so **any key skips a cutscene**.
 
 ### Instruments added by this hunt
 
-- **`THEOC_WATCHDOG=secs`** (default 10) — a host thread that reports when
+- `THEOC_WATCHDOG=secs` (default 10) — a host thread that reports when
   presents stop, and crucially whether the emulator is *still executing guest
   code*: blocks climbing = the guest is spinning, and the reported EIP is the
   loop; blocks frozen = wedged host-side in the named trap. This is what turned
   "it hangs" into `mvos+0x8e6cc` in one run. Freezes are hard to catch
   interactively, so reach for this first.
-- **`THEOC_AUTO_KEYS=1`** — taps SPACE every 6s through the real SDL event path,
+- `THEOC_AUTO_KEYS=1` — taps SPACE every 6s through the real SDL event path,
   from both present sites (so it also fires during cutscenes). The mouse
   self-drivers never pressed a key, which is why this hang had no unattended
   coverage.
@@ -600,7 +600,7 @@ On static screens (Credits, Load Game) the pointer smeared its whole path into
 the background. G14 reduced it (that was `cIntuition` corruption) but a second
 cause survived.
 
-`cSprite` keeps **two** saved-background slots, one per buffer:
+`cSprite` keeps two saved-background slots, one per buffer:
 
 ```c
 BeforeSwapBuffer: SaveBg(this, gd, this+0x24); paint at that rect
@@ -612,7 +612,7 @@ It restores the *other* buffer's background — correct when front and back are
 different memory, because each buffer's `SaveBg` is taken while that buffer is
 clean.
 
-Our `OpenDisplay` points **every** VVC GD slot at one `cGD_LFB16`. On a single
+Our `OpenDisplay` points every VVC GD slot at one `cGD_LFB16`. On a single
 buffer that invariant breaks: `SaveBg` runs over a buffer that still carries the
 previous frame's cursor (not erased until later in the same frame), captures
 those pixels into the backup, and re-stamps them every frame thereafter. Screens
@@ -781,7 +781,7 @@ in one reusable guest block.
 can run only one Theocracy in the same time!"`. Honouring that kills the
 *second* instance — which is precisely the two-clients-on-one-Mac setup needed
 to test multiplayer. So `bind` on port 5043 succeeds without touching the
-network; every other port is real. **`THEOC_REAL_LOCK=1`** restores stock
+network; every other port is real. `THEOC_REAL_LOCK=1` restores stock
 behaviour.
 
 That switch also doubles as the proof the transport works end to end:
@@ -895,7 +895,7 @@ the two do not collide. 0 unimplemented, 2.2 MB guest heap.
 
 ### SIGPIPE — a bug the fake sockets were hiding
 
-The first live test exited **141** (`128+13`) the moment a test client dropped:
+The first live test exited 141 (`128+13`) the moment a test client dropped:
 writing to a socket whose peer has gone raised SIGPIPE and killed the host.
 
 libmvos's `main()` ignores SIGPIPE as its *first* act, precisely because the IPC
@@ -944,7 +944,7 @@ Two things help drive this:
   `tools/theocracy_crypt.py`): `multi 20 350` → click ~`65,360`, per the G17 offset
   rule. The rest were read off a captured frame of the *TCP server selection*
   screen: list entry ~`350,245`, **Join server** ~`505,361`.
-- **`data/game/servers.txt`** holds the server list — plaintext, `int32 count` +
+- `data/game/servers.txt` holds the server list — plaintext, `int32 count` +
   a 40-byte address field + `int32`. It ships pointing at `192.168.0.1`; patching
   the address field to `127.0.0.1` is exactly what the UI's "New entry" would
   write, and avoids driving text entry to test. Original kept as `servers.txt.orig`
@@ -967,15 +967,15 @@ peers agreeing on the master, and **master migration plus DeletePlayer** when
 one leaves. The engine also logs `No ipx, so going to the TCIPIP section` — the
 IPX probe fails and it falls through to TCP/IP, as intended.
 
-Note the server listens on **5042**, while the game's single-instance lock is
-**5043** — different ports, so the lock exemption (G19) and the server never
+Note the server listens on 5042, while the game's single-instance lock is
+5043 — different ports, so the lock exemption (G19) and the server never
 interact.
 
 ### Fixed en route: `strrchr`
 
 The first UNIMPLEMENTED trap in a long time — the netgame path is simply the
 only route that reaches it. The stub returned 0, guest code called through the
-NULL, and it faulted as a fetch at `eip=0`. Implemented `strrchr` **and**
+NULL, and it faulted as a fetch at `eip=0`. Implemented `strrchr` and
 `strchr`; both must return a *guest* pointer into the string, not a host one.
 Both clients are back to **0 unimplemented**.
 
@@ -984,13 +984,13 @@ Both clients are back to **0 unimplemented**.
 **Root cause: our `__xstat` wrote 96 bytes into an 88-byte `struct stat`.**
 
 Linux/i386 `struct stat` (`_STAT_VER_LINUX`) is exactly **88 bytes**, and
-callers put it on the stack. Our implementation wrote **96** zeroed bytes with
+callers put it on the stack. Our implementation wrote 96 zeroed bytes with
 an admittedly guessed layout, so it ran 8 bytes past the caller's local and
 zeroed the **saved EBP and return address** sitting immediately after it.
 
 The victim was `cDirent::cDirent(const char*)` (`mvos+0x4c030`), which calls
-`__xstat` twice. It completed normally and then `ret`-ed to **0**, popping `EBP`
-as **0** — a fault at `eip=0` with no frame pointer, several frames from the
+`__xstat` twice. It completed normally and then `ret`-ed to 0, popping `EBP`
+as 0 — a fault at `eip=0` with no frame pointer, several frames from the
 real damage. Only the netgame map dialog constructs a `cDirent`, which is why
 three years of single-player never tripped it.
 
@@ -1021,7 +1021,7 @@ Worth recording, because the reasoning failures were the expensive part:
 Each was stated with more confidence than the evidence carried. What actually
 solved it was building instruments and reading the result:
 
-- **Zero-GOT scan** (every `JMP_SLOT`/`GLOB_DAT` after linking) — reported **0**,
+- **Zero-GOT scan** (every `JMP_SLOT`/`GLOB_DAT` after linking) — reported 0,
   killing hypothesis 2 outright. Kept, because a zero slot is otherwise nearly
   undiagnosable.
 - **EBP-chain backtrace** on fault — printed "no frame pointer", which was itself
@@ -1030,7 +1030,7 @@ solved it was building instruments and reading the result:
   showed `mvos+0x4c082 … 0x4c1e8` with trap slots `0x19` and `0x71` in between.
   Decoding `0x4c1e8` revealed it was the **epilogue**, not a call site: the
   function returned to 0. Slot `0x71` decoded as `strrchr` (confirming the slot
-  math) and slot `0x19` as **`__xstat`** — called twice, which named the culprit.
+  math) and slot `0x19` as `__xstat` — called twice, which named the culprit.
 
 The lesson generalises: a fault at `eip=0` with `EBP=0` is a *smashed frame*,
 not a null call — look for who wrote past a buffer, not for an unresolved

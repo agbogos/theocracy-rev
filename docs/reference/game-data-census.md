@@ -29,22 +29,22 @@ the canonical tree — see phls-format.md §1).
 | `.pal` | 1 |  | palette | `cData_Palette` |
 | `.ico` | 1 |  | icon | — |
 
-Encrypted total: **4473** (all text-family: `.txt`/`.idx`/`.drn`/`.man`/`.cfg`/
+Encrypted total: 4473 (all text-family: `.txt`/`.idx`/`.drn`/`.man`/`.cfg`/
 `.dsc`). Binary assets are plaintext.
 
 ## What feeds the simulation
 
-- **`data/selap.txt`** — the **master balance file** the sim reads pervasively
+- `data/selap.txt` — the **master balance file** the sim reads pervasively
   (the heavy `cTextFile` boot path M1 saw). INI sections: `[Building_sys]`,
   `[Buildings]` (per-building stone/wood/jewel/room costs), `[Man]` (unit + hero
   combat stats: attack/defense/HP/stamina, `HEROnn_MOD_*`), `[Education]`,
   `[Food]`, `[Mission]`, `[Mitem]` (magic items), `[Scenario]`,
   `[Spell_Cost_And_ConcTime]`, `[Spell_Others]`, `[OtherValues]`, `[Network]`,
   `[Emulation]`.
-- **`data/mitem.cfg`**, **`data/menu/menu.cfg`** (`entry x y` menu layout),
+- `data/mitem.cfg`, `data/menu/menu.cfg` (`entry x y` menu layout),
   tutorial texts, and the `mananim/*.idx` animation indexes.
-- **`mission/mancfg/*.man`** — scripted unit placement per mission;
-  **`descr/forms/*.dsc`** — formation shapes per tribe.
+- `mission/mancfg/*.man` — scripted unit placement per mission;
+  `descr/forms/*.dsc` — formation shapes per tribe.
 
 ## Front-end / localized (lower priority for first pixels)
 

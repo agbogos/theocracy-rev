@@ -5,8 +5,8 @@
 > reimplement the entire libmvos API natively. It worked up the boot/Init path
 > but hit the wall that rendering the menu required hand-reimplementing the whole
 > libmvos GUI toolkit (every widget ctor / `Init` / `Paint` / `cGD` primitive /
-> font / bitmap — an unbounded surface). The project now maps **both**
-> `theocracy.real` **and** the real `libmvos.so` under Unicorn and HLE-only the
+> font / bitmap — an unbounded surface). The project now maps both
+> `theocracy.real` and the real `libmvos.so` under Unicorn and HLE-only the
 > finite OS/library boundary — see **[guest-libmvos.md](guest-libmvos.md)** (the
 > current architecture, playable). Kept as historical record; the ABI/boot RE
 > facts below remain accurate, but the *approach* is not current.
@@ -79,10 +79,10 @@ profiling stubs `monstartup`/`_mcleanup`). Full list: `objdump -T theocracy.real
 
 ### Framework → game: 348 exports from `theocracy.real`
 The callback surface (`objdump -T theocracy.real | grep -v UND`):
-- **`Init__12cApplication`** @ `0x8144600` — sets the 9 subsystem flags (all =
+- `Init__12cApplication` @ `0x8144600` — sets the 9 subsystem flags (all =
   1).
-- **`Start__12cApplicationiPPc`** @ `0x8144650` — the whole game.
-- **`RollingDemoFrame__Fv`** @ `0x8063540` — attract-mode hook.
+- `Start__12cApplicationiPPc` @ `0x8144650` — the whole game.
+- `RollingDemoFrame__Fv` @ `0x8063540` — attract-mode hook.
 - `cSprite` (`Init/Process/Lock/Unlock`), `cVODragBox`
   (`Paint/Process/Bound/GetXX/GetYY/Initialize`), `cProcess`
   (`Read/Write/Set/IsBlockMode`), `cStream::GetEventDescriptor`,

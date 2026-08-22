@@ -35,7 +35,7 @@ sample mixer, not score.
 ## `cVCDThread` — the music manager
 
 One object, `0x94` bytes, `new`'d in `cApplication::Start` at `0x8144dbb` and
-stored at the global **`0x084c9764`**. Constructor `0x081a35a0`.
+stored at the global `0x084c9764`. Constructor `0x081a35a0`.
 
 It **is-a `cThread`** with `cThread` as the *primary* base at offset 0 — worth
 stating because `cSoundCard_Linux` puts `cThread` at `+4` as a secondary base
@@ -73,11 +73,11 @@ L+0xc` and updates the pred slot at `L+0x10`, so each list base is `target −
 
 | Mood | List | Tracks | Context |
 |---|---|---|---|
-| **0** | `+0x1c` | **3** | menu / attract mode |
-| **1** | `+0x34` | **8** | realm screen |
-| **2** | `+0x4c` | **6, 7** | battle (one branch), tutorial/briefing |
-| **3** | `+0x64` | **2, 5** | battle (other branch) |
-| **4** | — | — | stop; not a list index |
+| 0 | `+0x1c` | 3 | menu / attract mode |
+| 1 | `+0x34` | 8 | realm screen |
+| 2 | `+0x4c` | **6, 7** | battle (one branch), tutorial/briefing |
+| 3 | `+0x64` | **2, 5** | battle (other branch) |
+| 4 | — | — | stop; not a list index |
 
 **The disc therefore carries audio tracks 2–8: track 1 is the data track, seven
 audio tracks follow, and the game names six of them.**
@@ -168,7 +168,7 @@ bug.
 method called` and `_exit(-1)`). The class holds state and delegates through a
 driver table at `+0xc`.
 
-The concrete driver is **`cCD_Linux`**, and `OpenSubsystems` builds the object
+The concrete driver is `cCD_Linux`, and `OpenSubsystems` builds the object
 **inline** — no constructor is ever called, not `cVCD::cVCD` (`0x90680`) and not
 `cCD_Linux::cCD_Linux` (`0xa1f80`):
 
@@ -266,10 +266,10 @@ the track ended; and **completed reports 0**, which *is* the advance trigger.
 Every layer runs as original guest code. The chain reaches the host at exactly
 two traps, and both currently *succeed*:
 
-1. **`open("/dev/cdrom", O_RDONLY)`** — `traps.cpp:2814` returns a synthetic fd
+1. `open("/dev/cdrom", O_RDONLY)` — `traps.cpp:2814` returns a synthetic fd
    for any path under `/dev/`, without touching the host filesystem. So
    `cCD_Linux`'s open **succeeds**.
-2. **`ioctl(fd, ...)`** — `traps.cpp:1674` is a blanket `return 0` with a comment
+2. `ioctl(fd, ...)` — `traps.cpp:1674` is a blanket `return 0` with a comment
    about `/dev/dsp` probes. On Linux `0` means **success**, and the stub never
    writes the output buffer.
 
@@ -294,7 +294,7 @@ unmodified: `cVCDThread` → `cVCD` → `cCD_Linux` → seven ioctls → `Virtua
 Nothing is patched, no vtable is replaced, no guest function is bypassed.
 
 - `open` (`traps.cpp`) tags a CD fd alongside the existing `/dev/dsp` tag.
-- `ioctl` dispatches the seven CD requests to `VirtualCD` **only** for a tagged
+- `ioctl` dispatches the seven CD requests to `VirtualCD` only for a tagged
   fd with a rip loaded; everything else keeps the blanket `return 0` that
   `/dev/dsp`'s `SNDCTL_DSP_*` probes depend on.
 - `VirtualCD` holds the TOC and a wall-clock model of the transport. Track
@@ -370,7 +370,7 @@ confirms:
 |---|---|---|
 | 2 | 245.9s | mood 3 |
 | 3 | 373.9s | mood 0 (menu) |
-| **4** | **166.3s** | **nothing** |
+| 4 | **166.3s** | **nothing** |
 | 5 | 285.8s | mood 3 |
 | 6 | 124.1s | mood 2 |
 | 7 | 106.3s | mood 2 |

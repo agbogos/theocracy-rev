@@ -6,8 +6,8 @@ base `0x08048000`), not libmvos.
 ## Entry & the game↔engine handshake
 
 - `main` @ `0x804fb44` is a **PLT thunk** (`JMP [GOT]`) into libmvos. The generic bootstrap lives in the engine; it calls back into two game-provided symbols (which libmvos imports as `Init`/`Start`):
-  - **`cApplication::Init`** @ `0x8144600` — sets every requirement flag: `Sound, Video, Mouse, Keyboard, Redbook, Network, Pointer, Timer, Intuition` all = 1. Theocracy uses the whole engine.
-  - **`cApplication::Start(argc, argv)`** @ `0x8144650` — the top-level state machine (below).
+  - `cApplication::Init` @ `0x8144600` — sets every requirement flag: `Sound, Video, Mouse, Keyboard, Redbook, Network, Pointer, Timer, Intuition` all = 1. Theocracy uses the whole engine.
+  - `cApplication::Start(argc, argv)` @ `0x8144650` — the top-level state machine (below).
 
 So the real init order is: engine `.so` load (global ctors) → engine bootstrap →
 `Init()` (declare needs) → engine opens required subsystems → `Start()` (game).
@@ -43,7 +43,7 @@ So the real init order is: engine `.so` load (global ctors) → engine bootstrap
 
 ## Key routines (named in Ghidra)
 
-- **`MainMenu_Run`** (`0x812e980`): builds & runs the main menu. Sets 800×600,
+- `MainMenu_Run` (`0x812e980`): builds & runs the main menu. Sets 800×600,
   loads `data/menu/menu.cfg`, prints `"Inint menu buttons begin ..."` (dev
   typo), creates a `cVOAButton` per entry —
   `single/multi/intro/load/credits/help/exit/tutorial/scenario` — each with
@@ -52,15 +52,15 @@ So the real init order is: engine `.so` load (global ctors) → engine bootstrap
   (`CalcAbsCoordTree`/`RefreshTree`/`InitTree`), then an event loop reading a
   `cVObject` event pipe; returns the pressed button's id. Exit (id 7) spawns a
   confirm dialog → returns 8.
-- **`SetupGame(mode)`** (`0x81457e0`): prepares a session.
-  - `mode 0` (new game): reset **`ManIndexArray`** (population/units) and **`BuildingIndexArray`** (buildings) — Fatal if "not clean" — then `new` the world object → **`g_GameSession`** (`0x84c9610`).
+- `SetupGame(mode)` (`0x81457e0`): prepares a session.
+  - `mode 0` (new game): reset `ManIndexArray` (population/units) and `BuildingIndexArray` (buildings) — Fatal if "not clean" — then `new` the world object → `g_GameSession` (`0x84c9610`).
   - `mode 1`: load from save (`FUN_081a07f0`). `mode 2`: load + `FUN_081f9430`.
   These `*IndexArray`s are the core **entity registries** of the simulation.
-- **`OpenRealmScreen`** (`0x8146010`): enter gameplay. Sets palette + pointer
-  sprite on **`g_RealmScreen`** (`0x84c9128`), `ActivateScreen` at depth 5
+- `OpenRealmScreen` (`0x8146010`): enter gameplay. Sets palette + pointer
+  sprite on `g_RealmScreen` (`0x84c9128`), `ActivateScreen` at depth 5
   (fallback 4), else `Fatal("unable to open realm screen")`. "Realm" = the
   in-game world (you play a god over a realm).
-- **`PlayMovie(file, skippable, ?, rect)`** (`0x817bbe0`): retries open 3×, sets
+- `PlayMovie(file, skippable, ?, rect)` (`0x817bbe0`): retries open 3×, sets
   640×480, calls `External_PlayAnim` (SMPEG). Prints `"TheocracyMovie[...]"`.
 
 ## Named globals

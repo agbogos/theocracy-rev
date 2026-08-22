@@ -11,9 +11,9 @@ at `session + slot*4`, initialized from a **static roster template**
 AI realms + neutral/special.
 
 Iteration bounds seen elsewhere are just subsets of these 11:
-- **6** — competing realms that get periodic province events (`SimulationStep`).
-- **8** — a per-player maintenance pass.
-- **11** — full roster.
+- 6 — competing realms that get periodic province events (`SimulationStep`).
+- 8 — a per-player maintenance pass.
+- 11 — full roster.
 
 ## The local player / realm — `g_GameSession+0x2d`
 - `GameSession_Construct` sets `+0x2d = 0`.
@@ -32,8 +32,8 @@ A single byte drives several mode differences:
 
 | Path | `+0x2c` | Effect |
 |------|--------|--------|
-| `SetupGame` (single-player) | **0** | interactive console off; single-player orders enabled |
-| `NetGame_InitBattle` (`0x829c630`) | **1** | interactive command console on; battle-stat views on; some SP-only orders disabled |
+| `SetupGame` (single-player) | 0 | interactive console off; single-player orders enabled |
+| `NetGame_InitBattle` (`0x829c630`) | 1 | interactive command console on; battle-stat views on; some SP-only orders disabled |
 
 `NetGame_InitBattle` builds the session with `scenarioID = -1` (no campaign
 scenario), unpaused, loads a `LevelID` battle map (`new 0x40f80`). Region
@@ -42,11 +42,11 @@ strings: `"Where is the team info in netgame?"`, `"hmm..keves a map :-o"`
 
 ## Dev console — availability
 Full write-up: **[dev-console.md](dev-console.md)**. Two `cVOConsole`s:
-- **`g_LogConsole`** (`0x85c0fe0`): output/log console, `SetExitKey(0x0e, mask
+- `g_LogConsole` (`0x85c0fe0`): output/log console, `SetExitKey(0x0e, mask
   2)` = **C**+qualifier, auto-shown on output by `Console_ShowAndPrint`
   (`0x81f3fb0`). It can only be dismissed after it self-shows. This is the
   console that receives a `cShell`.
-- **`g_CmdConsole`** (`0x85c0f80`): interactive command console, opened by
+- `g_CmdConsole` (`0x85c0f80`): interactive command console, opened by
   `InGame_HandleKeyCommand` **case 0x21** (= **Alt+V**) → `Edit`, **gated on
   `+0x2c != 0`**. ⇒ **reachable in multiplayer battles only** — and it never
   gets a shell, so a command typed into it is dropped by the null check in

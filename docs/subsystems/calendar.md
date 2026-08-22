@@ -21,7 +21,7 @@ A small `cDate`-shaped object — three ints and a vtable pointer:
 | `+0x08` | day index (**0-based**) |
 | `+0x14` | vtable (`0x08378ba4`) |
 
-The live game date is the instance at **`g_World + 0x83c`** — that is the object
+The live game date is the instance at `g_World + 0x83c` — that is the object
 the console writes, the save serialises and the UI formats.
 
 | Address | Named | Does |
@@ -48,14 +48,14 @@ since these are the load-bearing values:
 |---|---|---|
 | `0x085a5874`, `0x085a588c` | 60 k | minute |
 | `0x085a5888` | 3,600 k | hour |
-| **`0x085a5884`** (`g_TicksPerDay`) | **86,400 k** | day |
+| `0x085a5884` (`g_TicksPerDay`) | **86,400 k** | day |
 | `0x085a5880` | 604,800 k | week (7 days) |
-| **`0x085a587c`** (`g_TicksPerMonth`) | **1,728,000 k** | **20 days** |
-| **`0x085a5878`** (`g_TicksPerYear`) | **31,536,000 k** | **365 days** |
+| `0x085a587c` (`g_TicksPerMonth`) | **1,728,000 k** | **20 days** |
+| `0x085a5878` (`g_TicksPerYear`) | **31,536,000 k** | **365 days** |
 
 The calendar code never uses these directly — only the two ratios
-`g_TicksPerMonth / g_TicksPerDay` = **20** and `g_TicksPerYear / g_TicksPerDay`
-= **365**, so the scale cancels and the calendar is exact whatever it is set to.
+`g_TicksPerMonth / g_TicksPerDay` = 20 and `g_TicksPerYear / g_TicksPerDay`
+= 365, so the scale cancels and the calendar is exact whatever it is set to.
 The week constant exists and the date code never touches it.
 
 ## The rule, as the code states it
@@ -82,7 +82,7 @@ and does not.
 
 ## The five days that have no month
 
-365 = 18 × 20 + **5**, and this is the question the hex-editing session could
+365 = 18 × 20 + 5, and this is the question the hex-editing session could
 not answer, because it would have had to land on one of 5 days in every 365 to
 notice. The answer is that **the engine does not handle them at all**:
 `cDate_SetFromDayCount` is plain div/mod with no special case, so days 360–364
@@ -159,7 +159,7 @@ the top: `date 5 25 40` is accepted and normalises through the div/mod.
   drive realm-screen world events
   ([../porting/frame-timing.md](../porting/frame-timing.md)). 175 days is
   8 months and 15 days under this rule.
-- **`SimulationStep`** reads `g_TicksPerDay` at `0x081f96a3` and calls
+- `SimulationStep` reads `g_TicksPerDay` at `0x081f96a3` and calls
   `cDate_ToDayCount` at `0x081f9511` and `0x081f967a`. Both of those are
   *readers* of the date, not writers — see below for where it is actually
   advanced.
@@ -181,7 +181,7 @@ while (ticks != 0 && *(char *)(*(int *)(g_World + 0x140c) + 0x4f4) != '\0') {
 
 `cDate_Add` (`0x081a2180`, named this pass) is `a = ToDayCount(a) +
 ToDayCount(b)` fed back through `SetFromDayCount`. With `b` built as `(0, 0,
-1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = **1**.
+1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = 1.
 
 So **one simulation tick is exactly one in-game day.** They are not merely
 proportional and there is no accumulator, no remainder and no separate calendar

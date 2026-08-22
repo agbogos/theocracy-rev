@@ -115,7 +115,7 @@ anyone "improves" it: **per-slice sleep overshoots do not accumulate across a
 frame.** The loop charges *real elapsed* time against the remaining budget and
 recomputes the next slice, so one slice that overshoots by 20 ms consumes the
 rest of the frame instead of extending it. The frame floor is the budget plus
-roughly **one** overshoot, not N of them.
+roughly one overshoot, not N of them.
 
 Measured on a Windows VM under deliberate CPU contention: between one spinning
 thread per core and two per core, the **single-shot sleep median degraded 4×**
@@ -267,7 +267,7 @@ sleep handling entirely.
 > asset loading where the emulator is genuinely compute-bound and rarely yields.
 > Pre-existing and already documented; it recovers to 0 underruns immediately.
 
-12fps in province is choppy but authentic. Making it smooth-**and**-correct was
+12fps in province is choppy but authentic. Making it smooth-and-correct was
 the remaining half of the task. It is now a **won't-do** — see below.
 
 ## Why province stays at 12fps — decoupling closed as won't-do (2026-08-03)
@@ -335,7 +335,7 @@ cursor timer is the evidence.
 **What remains available** is the frame limiter constant itself
 (`Set__8cDayTimell(&target, 0, 0x14585)` in `cProvince_Do`). Patching it changes
 sim rate and frame rate together, which is what the engine's design allows and
-all it allows. That is shipped as **`THEOC_PROVINCE_MS`**:
+all it allows. That is shipped as `THEOC_PROVINCE_MS`:
 
 ```
 0x81da529:  68 85 45 01 00   push 0x14585   <- the 4 bytes at 0x81da52a

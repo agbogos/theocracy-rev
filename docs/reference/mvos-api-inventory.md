@@ -79,9 +79,9 @@ public:
 ```
 
 Honest limitations, all inherent to the symbol table (documented in the file banner, filled in as implementation proceeds from Ghidra):
-- **`mvret /*ret?*/`** — GNU-v2 mangling omits return types. `mvret` is a
+- `mvret /*ret?*/` — GNU-v2 mangling omits return types. `mvret` is a
   placeholder typedef; grep `/*ret?*/` for the worklist.
-- **`[polymorphic]`** flags a vtable exists, but *which* methods are virtual and
+- `[polymorphic]` flags a vtable exists, but *which* methods are virtual and
   their *slot order* aren't in the symbols — read Ghidra vtables.
 - **Bases** are vtable-mixin hints only (23 classes; primary base + order not
   recoverable from symbols — e.g. `cString : cMemBlock_`, `cSoundCard_Linux :
@@ -94,14 +94,14 @@ Honest limitations, all inherent to the symbol table (documented in the file ban
 
 ## Tooling
 
-- **`tools/gnuv2_demangle.py`** — stdin `[addr] symbol` lines → stdout
+- `tools/gnuv2_demangle.py` — stdin `[addr] symbol` lines → stdout
   `addr<TAB>symbol<TAB>demangled`; coverage summary to stderr. Importable (`from
   gnuv2_demangle import demangle`). Reusable for the game binary's own
   RTTI/vtable symbols and any future `.so`.
-- **`tools/build_api_inventory.py`** — demangled TSV → structured JSON
+- `tools/build_api_inventory.py` — demangled TSV → structured JSON
   (stdin→stdout).
-- **`tools/gen_headers.py`** — JSON → `include/mvos_api.hpp` (stdin→stdout).
-- **`tools/regen_api.sh`** — regenerates all `data/` artifacts **and** the
+- `tools/gen_headers.py` — JSON → `include/mvos_api.hpp` (stdin→stdout).
+- `tools/regen_api.sh` — regenerates all `data/` artifacts and the
   header in one shot.
 
 ### Grammar coverage caveat

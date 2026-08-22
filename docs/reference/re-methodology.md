@@ -80,7 +80,7 @@ thunk call. Nothing warns you.
 
 `tools/ghidra/FixBogusNoReturn.java` clears the bogus flags (and the
 fall-through overrides they stamp on call sites). Run in 2026-07-26 it
-un-flagged **495** functions in `libmvos.so` and **277** in `theocracy.real`.
+un-flagged 495 functions in `libmvos.so` and 277 in `theocracy.real`.
 
 Two things about the repair are worth knowing, both learned the hard way:
 
@@ -132,7 +132,7 @@ independent instances, each of which cost a debugging session:
 
 | What was assumed | What it actually is | How it presented |
 |---|---|---|
-| Linux/i386 `struct stat` is ~96 bytes | Exactly **88**, `st_size` at `+0x2c` | `__xstat` wrote 8 bytes past a caller's stack local, zeroing the saved EBP and return address; the victim `ret`-ed to 0 several frames from the damage |
+| Linux/i386 `struct stat` is ~96 bytes | Exactly 88, `st_size` at `+0x2c` | `__xstat` wrote 8 bytes past a caller's stack local, zeroing the saved EBP and return address; the victim `ret`-ed to 0 several frames from the damage |
 | Keyboard driver's next-event struct is `{count, key}` | `{keycode, flags}`, where `flags & 1` means "clear the key matrix" and is tested *before* the `keycode == 0` exit | Stale odd flags from one keypress wedged the menu in an infinite guest loop |
 | `cSprite`'s save/restore is single-buffered | Two slots, one per buffer; `AfterSwapBuffer` restores through the *swapped* pointer | Cursor smeared its whole path across static screens |
 | `cSoundCard_Linux`'s ctor ends `cThread::Launch(this)` | `Launch(this + 4)` — `cThread` is a *secondary* base at `+4` | Would misplace every `cThread` field read off a sound card (fds at `+0x0c`/`+0x10`, not `+0x08`/`+0x0c`) |
@@ -211,8 +211,8 @@ device xf86."`) and are equally good grep anchors.
 
 Reading a vtable straight out of `libmvos.so.0.9` gives **all zeros**, and it
 looks for all the world like the class has no virtual functions. It does not.
-libmvos puts its vtables in **`.rodata`** and populates them with relocations in
-**`.rel.rodata`** (`0x3f98` bytes of them). The stored values are 0 because the
+libmvos puts its vtables in `.rodata` and populates them with relocations in
+`.rel.rodata` (`0x3f98` bytes of them). The stored values are 0 because the
 `R_386_32` entries resolve against a symbol, not against an inline addend.
 
 Two ways this bites:
@@ -346,7 +346,7 @@ Chasing where hero stats come from, a `grep -i hero data/game/data/selap.txt`
 returned nothing, and the conclusion drawn from it — "the hero constants are not
 in `selap.txt`, so they must come from somewhere else" — was wrong and sent the
 search off after another config file that does not exist. `selap.txt` ships
-`RSA4096`-encrypted and contains **103** hero keys. A `wc -l` on the same file
+`RSA4096`-encrypted and contains 103 hero keys. A `wc -l` on the same file
 was equally meaningless: 126 lines of ciphertext against 986 real ones.
 
 This is the cheapest possible mistake to make, because the failure is silent and
@@ -514,7 +514,7 @@ together next to that message:
 0x9e274 'RSA4096'   0x9e27c 'theocracy sux'   0x9e28a 'mutant technology'
 ```
 
-Reported, confidently, as "`cTextFile` accepts three formats". They are **one**
+Reported, confidently, as "`cTextFile` accepts three formats". They are one
 magic and **two XOR keys**, periods 13 and 17 — which
 [phls-format.md](phls-format.md) has documented since the format was cracked, in
 this repo, unread. The census that "confirmed" the reading (4473 files with

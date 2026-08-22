@@ -11,7 +11,7 @@ stream, because the decompiler is actively misleading about it (see "A note on
 
 ## Where mana lives
 
-The five mana spheres are **`cTribe::resource[5]`** at `cTribe+0x34` — the array
+The five mana spheres are `cTribe::resource[5]` at `cTribe+0x34` — the array
 [../structs/cTribe.md](../structs/cTribe.md) describes as "five per-tribe
 resource/mana pools". That doc's `g_TribeResourceInit` (`0x84c85f1`) and
 `g_TribeResourceMax` (`0x84c85f5`) are **`START_MANA` (0) and `MAX_MANA`
@@ -25,7 +25,7 @@ with a clamp at `MAX_MANA`. **There are no diminishing returns on stored mana.**
 
 ## The class
 
-**`cPyramidBuilding`** — the RTTI name at `0x083857eb`, in the same vtable
+`cPyramidBuilding` — the RTTI name at `0x083857eb`, in the same vtable
 region as the two vtables its constructor installs (`0x08385200`, then
 `0x08384c60`). Ten concrete subclasses, `cBld_Pyramid{A,B,C,D,E}{1,2}` — five
 spheres × small and big — which is why each pyramid constant below has exactly
@@ -34,7 +34,7 @@ five read sites.
 | Address | Name | Does |
 |---|---|---|
 | `0x081b9ab0` | `cPyramidBuilding_ctor` | zeroes the queues, sets the payout period |
-| `0x081b9ba0` | `cPyramidBuilding_Tick` | passive mana **and** sacrifice payout |
+| `0x081b9ba0` | `cPyramidBuilding_Tick` | passive mana and sacrifice payout |
 | `0x081b9e40` | `cPyramidBuilding_DoSacrifice` | the sacrifice command |
 | `0x081bc780` | `cPyramidBuilding_ResetSacrificeTimer` | one line; 11 call sites |
 | `0x0815a0a0` | `Mana_GaugeFraction` | the UI curve — **not** production |
@@ -54,8 +54,8 @@ Names other than `cPyramidBuilding` are ours, written back into the Ghidra DB.
 | `+0x389` | `i32` | passive-mana accumulator |
 | `+0x38d` | `i32` | ticks per payout = `SACRIFICE_MINUTES × g_TicksPerMinute` |
 
-Two virtuals matter: **`vt+0xcc`** returns the pyramid's sphere index, and
-**`vt+0x114`** returns the ticks per one unit of passive mana. The latter is a
+Two virtuals matter: `vt+0xcc` returns the pyramid's sphere index, and
+`vt+0x114` returns the ticks per one unit of passive mana. The latter is a
 one-line override per subclass —
 
 ```c
@@ -121,7 +121,7 @@ a bill.
 they are not. Settled 2026-08-08.
 
 The function this project has been calling `RegisterConfigVar` keeps **no
-registry**, so it is renamed **`LoadConfigVar`** (`0x080b3de0`) as of this work.
+registry**, so it is renamed `LoadConfigVar` (`0x080b3de0`) as of this work.
 It looks the name up in the parsed environment and does one `strtol` into the
 destination int:
 
@@ -180,7 +180,7 @@ if (this[+0x230]) {
 }
 ```
 
-`SACRIFICE_MINUTES` is **480** — 8 in-game hours, exactly one third of a day
+`SACRIFICE_MINUTES` is 480 — 8 in-game hours, exactly one third of a day
 under the 86,400k-per-day scale in [calendar.md](calendar.md). So the queue pays
 out **three sacrifices per in-game day at a constant rate**, one man each, in
 ascending *man-type* order, until it drains.
@@ -281,13 +281,13 @@ Method for resolving any of these: see
   data.** See "`typeBase` does not come from `selap.txt`" above. The whole
   16-entry `*_VALUE` array is loaded and never read; `LoadConfigVar` keeps no
   registry, so there is no by-name path either.
-- **`man+0x80`** — read as experience from how it is used, not confirmed. It is
+- `man+0x80` — read as experience from how it is used, not confirmed. It is
   the same struct the births work left three unnamed enums in.
 - **The second `MANA_GRADIENT` reader** at `0x082b8e31` is unexamined; if it is
   not also UI, the "display only" claim above needs narrowing.
-- **`FUN_081b9420`** — the limit that decides how many children the sacrifice
+- `FUN_081b9420` — the limit that decides how many children the sacrifice
   loop will skip before taking one anyway.
-- **`ONE_JEWEL_EQUALS_HOW_MANY_MANAS`** — read at `0x082b1153`/`0x082b117e`, the
+- `ONE_JEWEL_EQUALS_HOW_MANY_MANAS` — read at `0x082b1153`/`0x082b117e`, the
   jewel↔mana exchange, not looked at.
 
 ## Cross-references

@@ -37,8 +37,8 @@ implying the junk ran to the end of the 72:
 | Offset | Bytes | What |
 |---|---|---|
 | `0x00` | 8–10 + NUL | the save name, NUL-terminated |
-| ~`0x0a` | **53–55** | `local_ac`'s tail — **never initialised**, written anyway |
-| `0x40` | 8 | `local_6c` = **`"theosg42"`**, the format magic. Real data |
+| ~`0x0a` | 53–55 | `local_ac`'s tail — **never initialised**, written anyway |
+| `0x40` | 8 | `local_6c` = `"theosg42"`, the format magic. Real data |
 
 The magic at `+0x40` is the same one every `init.dat` carries
 ([starting-world.md](starting-world.md)). It is inside the 72-byte write but it
@@ -151,7 +151,7 @@ list at the end of *each province's* data. Each list stores its length in a
 | unit | **17 bytes** — four LE `u32` then one trailing byte |
 | group appended per save | **4 units (68 B)**; map23 appends **5 (85 B)** |
 | counter | **1 byte**, immediately before the list, = number of units |
-| lists per file | **44** (one per province) |
+| lists per file | 44 (one per province) |
 
 So the counter climbs 4 or 5 per save and dies at 255 — the 5-per-save province
 first, at **51 saves**. Past that the byte wraps, the loader reads the wrong

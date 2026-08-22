@@ -27,28 +27,28 @@ called from the game binary.
 Confirmed. This is the function our native HLE runtime replaces verbatim (steps
 4 and 8 are calls into emulated game code; everything else becomes native):
 
-1. **`signal(SIGPIPE=13, SIG_IGN)`** — ignore SIGPIPE (the socket/pipe IPC layer
+1. `signal(SIGPIPE=13, SIG_IGN)` — ignore SIGPIPE (the socket/pipe IPC layer
    relies on this).
-2. **`MessagePort = cPipe::UsePipe("MVOSMessagePort")`** — attach the global
+2. `MessagePort = cPipe::UsePipe("MVOSMessagePort")` — attach the global
    message port.
-3. **`IdentifyFileSystemMvosCfg()`** (`0xa4640`) — locate & parse **`mvos.cfg`**
+3. `IdentifyFileSystemMvosCfg()` (`0xa4640`) — locate & parse `mvos.cfg`
    into `EnvSystem` (config is available from here on).
-4. **`cApplication::Init()`** — *game callback*; sets the 9 requirement flags
+4. `cApplication::Init()` — *game callback*; sets the 9 requirement flags
    (Theocracy: all 1).
 5. **Read `EnvSystem` class `"vmachine"` var `"fillobjmem"`** → global
-   `Objmem_Fill` (default **1**; value `"n"` → 0). `Objmem_Fill=1` means
+   `Objmem_Fill` (default 1; value `"n"` → 0). `Objmem_Fill=1` means
    **freshly-allocated object memory is poison-filled**, so game code does *not*
    rely on zero-initialized allocations — **our HLE allocator need not zero
    memory.**
-6. **`OpenSubsystems()`** (`0xa4f20`) — construct device plugins + subsystems
+6. `OpenSubsystems()` (`0xa4f20`) — construct device plugins + subsystems
    (order below).
 7. **If `Application::Intuition` flag:** `new cIntuition(0xb4)` → global
    `Intuition`.
-8. **`cApplication::Start(argc, argv)`** — *game callback*; the entire game runs
+8. `cApplication::Start(argc, argv)` — *game callback*; the entire game runs
    inside this call.
 9. **Destroy `Intuition`** (vcall slot `+8`, arg `3` = delete-mode) — *before*
    subsystem teardown.
-10. **`CloseSubsystems()`** (`0xa50e0`); final cleanup; `return 0`.
+10. `CloseSubsystems()` (`0xa50e0`); final cleanup; `return 0`.
 
 ### `OpenSubsystems()` construction order (`0xa4fae`)
 Each gated by its flag (read after `Init()`):
@@ -110,7 +110,7 @@ the `.ctors` table (`PTR_PTR_000bee60`) running each global constructor, then
 - `keyed.to.VVC` (`0x970e0`): inits `VModeInfo` (a `cDimension`) to 0×0 — the
   video controller's mode state.
 - `keyed.to.Intuition` (`0x9ea10`): sets up a global `cFile inputfile` for
-  **`input0.data`** and calls `IdentifyFileSystem` — the input/UI layer loads an
+  `input0.data` and calls `IdentifyFileSystem` — the input/UI layer loads an
   input config (keymap/bindings) at load.
 - Others: `keyed.to.cPalette`, `keyed.to.cEnvVar`, `keyed.to.A` (audio),
   `keyed.to.cString`, `keyed.to.Create`, `keyed.to.OpenR`.

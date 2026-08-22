@@ -9,7 +9,7 @@ this doc set: the port is as much archaeology as restoration, and what was
 learned about these binaries should outlive the port.
 
 **Current architecture — [porting/guest-libmvos.md](porting/guest-libmvos.md)
-(playable):** map **both** `theocracy.real` and the real `libmvos.so` under
+(playable):** map both `theocracy.real` and the real `libmvos.so` under
 Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl /
 sockets / SMPEG). Single-player is playable end to end. The earlier *pure-HLE
 native-replace* plan is **superseded** — it hit an unbounded
@@ -465,9 +465,9 @@ accurate and still cited; the *approach* is not current.
 | Area | State |
 |-----------|-------|
 | Memory & containers | first pass done |
-| Application bootstrap | done — `main()`-ownership corrected **and** libmvos `main()` decompiled (the 10-step boot sequence is in [application-bootstrap.md](subsystems/application-bootstrap.md)) |
+| Application bootstrap | done — `main()`-ownership corrected and libmvos `main()` decompiled (the 10-step boot sequence is in [application-bootstrap.md](subsystems/application-bootstrap.md)) |
 | Audio / threads / processes | first pass done |
-| Music (CD audio / Redbook) | **both binaries read 2026-08-08** — the score is Redbook CD audio, so the port has never had music and never logged its absence. Game side: `cVCDThread`'s four moods, the track table (tracks 2–8 on the disc, **track 4 unreferenced**), the fixed-seed chooser, the poll thread. Engine side: `cVCD` is an abstract shell over **`cCD_Linux`**, seven plain Linux CD ioctls, stateless per call. **Implemented the same day**: `port/src/cdaudio.cpp` is a virtual drive answering those ioctls plus a streaming decoder, so the whole chain — `cVCDThread`/`cVCD`/`cCD_Linux` — runs as original guest code with nothing patched. UK disc ripped and the TOC matched the prediction made from the binary. **Played and confirmed working 2026-08-08** — music plays and switches on mood changes. The session also pinned an original-game gap: SFX and ambience sliders both work, CD music has an on/off toggle and **no volume control at all**, now the named first candidate in [native-rewrite.md](porting/native-rewrite.md) — [music-and-redbook.md](subsystems/music-and-redbook.md) |
+| Music (CD audio / Redbook) | **both binaries read 2026-08-08** — the score is Redbook CD audio, so the port has never had music and never logged its absence. Game side: `cVCDThread`'s four moods, the track table (tracks 2–8 on the disc, **track 4 unreferenced**), the fixed-seed chooser, the poll thread. Engine side: `cVCD` is an abstract shell over `cCD_Linux`, seven plain Linux CD ioctls, stateless per call. **Implemented the same day**: `port/src/cdaudio.cpp` is a virtual drive answering those ioctls plus a streaming decoder, so the whole chain — `cVCDThread`/`cVCD`/`cCD_Linux` — runs as original guest code with nothing patched. UK disc ripped and the TOC matched the prediction made from the binary. **Played and confirmed working 2026-08-08** — music plays and switches on mood changes. The session also pinned an original-game gap: SFX and ambience sliders both work, CD music has an on/off toggle and **no volume control at all**, now the named first candidate in [native-rewrite.md](porting/native-rewrite.md) — [music-and-redbook.md](subsystems/music-and-redbook.md) |
 | Video/input plugin (vvc_x) | fully decompiled — contract complete |
 | Game↔engine ABI contract | inventoried (232 imports / 348 exports / copy relocs) |
 | Game flow / main loop | first pass done |

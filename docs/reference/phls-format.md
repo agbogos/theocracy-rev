@@ -51,7 +51,7 @@ splash BMPs, `theocracy-*.exe/.icd`) — not needed for the port.
 Two independent layers sit *inside* extracted files:
 
 1. **Text/config encryption — SOLVED.** Config/text files begin with the ASCII
-   marker **`RSA4096`** (7 bytes) followed by ciphertext. The `RSA4096` name is a
+   marker `RSA4096` (7 bytes) followed by ciphertext. The `RSA4096` name is a
    joke — the actual cipher is a symmetric **XOR against two short repeating
    keys**:
 

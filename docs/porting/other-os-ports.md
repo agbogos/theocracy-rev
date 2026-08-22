@@ -74,7 +74,7 @@ host(BSD/macOS) socket translation"):
 > map an already-Linux errno through a BSD→Linux table. **That was wrong, and it
 > was an inference rather than a measurement.** The translations are written
 > *host macro → guest constant*: `case EAGAIN: return 11`. On Linux the host
-> macro **is** the guest constant, so every one of them is the identity;
+> macro is the guest constant, so every one of them is the identity;
 > on macOS every one translates. Verified by compiling the same probe on both:
 >
 > ```
@@ -121,7 +121,7 @@ Roughly in risk order:
 3. **Filesystem** — `open`/`stat`/`opendir`/`readdir`/`mkdir`, plus path
    separators inside guest-supplied paths.
 4. **Clock** — `gettimeofday` → `QueryPerformanceCounter`.
-5. **`THEOC_WATCHDOG_SAMPLE`** shells out to the macOS `sample` tool via
+5. `THEOC_WATCHDOG_SAMPLE` shells out to the macOS `sample` tool via
    `std::system`. No equivalent; stub it or drop it.
 
 Audio needs nothing — `/dev/dsp` is already HLE'd onto SDL.
@@ -183,7 +183,7 @@ That moves the risk list:
 
 - **Risk 3, filesystem — largely dissolves.** `open`/`stat`/`opendir`/`readdir`
   are all there. What survives is *semantics*, and one specific hazard:
-  **`O_BINARY`**. Windows translates CRLF on handles opened without it, which
+  `O_BINARY`. Windows translates CRLF on handles opened without it, which
   would silently corrupt the `.tsg` saves and the PHLS packs — a data-corruption
   bug that compiles cleanly and only shows up in a file. Every guest-facing
   `open` must carry it.
@@ -398,9 +398,9 @@ are the ones that were not:
 
 | Fix | Why it is more than mechanical |
 |---|---|
-| **`HostFile::sock`** | Winsock SOCKETs are a **separate namespace from CRT fds**, so `::read`/`::write`/`::close` on one are silently wrong. libmvos forces the issue: `cIPCO_TCPIP::Read/Write` poll the socket through plain `read`/`write`. This would have compiled, linked, and failed at runtime. |
-| **`O_BINARY`** everywhere | Windows translates CRLF and stops at `0x1a` in text mode. The `.tsg` saves, the PHLS `.pck` archives and the MPEG cutscenes are all binary. A clean-compiling, silent data-corruption bug. `fopen` mode strings get a `'b'` forced on for the same reason — the guest is a Linux binary, so it never supplies one. |
-| **`last_socket_errno()`** | Winsock errors come from `WSAGetLastError()` with 100xx numbering. libmvos maps anything outside errno 4..22 to its generic "unknown error", and a non-blocking read with no data is the common case *every netgame frame* — so leaking `WSAEWOULDBLOCK` (10035) instead of 11 would be the BSD `EAGAIN=35` bug again, three orders of magnitude further out of range. |
+| `HostFile::sock` | Winsock SOCKETs are a **separate namespace from CRT fds**, so `::read`/`::write`/`::close` on one are silently wrong. libmvos forces the issue: `cIPCO_TCPIP::Read/Write` poll the socket through plain `read`/`write`. This would have compiled, linked, and failed at runtime. |
+| `O_BINARY` everywhere | Windows translates CRLF and stops at `0x1a` in text mode. The `.tsg` saves, the PHLS `.pck` archives and the MPEG cutscenes are all binary. A clean-compiling, silent data-corruption bug. `fopen` mode strings get a `'b'` forced on for the same reason — the guest is a Linux binary, so it never supplies one. |
+| `last_socket_errno()` | Winsock errors come from `WSAGetLastError()` with 100xx numbering. libmvos maps anything outside errno 4..22 to its generic "unknown error", and a non-blocking read with no data is the common case *every netgame frame* — so leaking `WSAEWOULDBLOCK` (10035) instead of 11 would be the BSD `EAGAIN=35` bug again, three orders of magnitude further out of range. |
 | **`fcntl` → `ioctlsocket(FIONBIO)`** | Windows has no `fcntl`, and `FIONBIO` is **write-only** — there is no way to read the blocking state back. `HostFile::nonblock` remembers it, which is exact only because this handler is its sole writer. |
 | **`std::floor` in `video.cpp`** | A genuine latent bug, not a Windows-ism: `<cmath>` was never included and libc++/libstdc++ happened to provide it transitively. **Cross-compiling found a real defect in the working macOS build.** |
 
@@ -410,7 +410,7 @@ The rest were `char*` casts for Winsock, `socklen_t`→`int`, one-argument
 `in_addr_t`, and a `SIGPIPE` guard — Windows has no SIGPIPE, so the guest's
 request to ignore it is satisfied by the platform.
 
-Link needed `ws2_32` and `winmm`, plus **`SDL_MAIN_HANDLED`**: on Windows,
+Link needed `ws2_32` and `winmm`, plus `SDL_MAIN_HANDLED`: on Windows,
 including `SDL.h` `#define`s `main` to `SDL_main` and expects `SDL2main` to
 supply a `WinMain`. The host wants its own `main`.
 
@@ -449,7 +449,7 @@ Two things measured rather than assumed:
 There is no system-integration hazard to reason about, which on Linux was the
 hard part: the Windows equivalents of libX11/libGL (`d2d1`, `DWrite`, `USP10`,
 `ntdll`, `msvcrt`) are all system DLLs the denylist excludes anyway, so the rule
-falls out instead of needing a judgement call. `libwinpthread-1.dll` **is**
+falls out instead of needing a judgement call. `libwinpthread-1.dll` is
 bundled — it comes from the toolchain, not from Windows — while libgcc and
 libstdc++ are statically linked and so never appear.
 
@@ -625,7 +625,7 @@ change if someone looked:
    not this.
 3. ~~**Path handling**~~ — **fixed 2026-08-04**, see below. Still worth knowing
    that no run has ever exercised the branch.
-4. ~~**`THEOC_WATCHDOG_SAMPLE`**~~ — **fixed 2026-08-04**: it now says it is
+4. ~~`THEOC_WATCHDOG_SAMPLE`~~ — **fixed 2026-08-04**: it now says it is
    macOS-only instead of appearing to run. Still macOS-only.
 5. ~~**`CloseSubsystems` is still skipped**~~ — **closed 2026-08-04, as a
    decision rather than a fix.** Windows was the platform
@@ -639,8 +639,8 @@ change if someone looked:
 Three runs and no code change. Two of them can be done today; the third waits on
 hardware. The in-game half is already done and shipped.
 
-**The in-game half — done.** `[fps]` now prints **`(N slices/frame, +M ms
-each)`** directly, measured at the sleep call. The 2026-08-04 residual above was
+**The in-game half — done.** `[fps]` now prints `(N slices/frame, +M ms
+each)` directly, measured at the sleep call. The 2026-08-04 residual above was
 decomposed by hand out of three separate columns to reach "≈1.0 ms per slice";
 that arithmetic is now the instrument's job, on every host, so the next person
 to question timing on unfamiliar hardware reads it instead of deriving it. See
@@ -898,7 +898,7 @@ no display. Run on both platforms under `SDL_VIDEODRIVER=dummy`:
 | guest heap live | 28.6 MB | 28.6 MB |
 | audio underrun/s | 396–1502 | 0 |
 | `THEOC_START_SEC` | **never fires** | fires |
-| unimplemented traps | — | **0** |
+| unimplemented traps | — | 0 |
 
 **The port behaves identically where it matters.** Guest blocks per frame,
 blocks per second and live heap all match, so the emulation is doing the same
@@ -1199,7 +1199,7 @@ Windows touches every item on that list.
 > *not* touch every item on that list. Clock and filesystem needed nothing beyond
 > a one-line `theoc_mkdir` and `O_BINARY` at the open sites; the shell-out is
 > `THEOC_WATCHDOG_SAMPLE`, still unported and off by default. What Windows
-> actually needed was **two** contiguous blocks in `traps.cpp` — Winsock, and
+> actually needed was two contiguous blocks in `traps.cpp` — Winsock, and
 > `theoc_sleep_us` — sitting next to each other, plus scattered `O_BINARY` flags
 > that an interface would not have collected anyway.
 >
@@ -1232,7 +1232,7 @@ only ever be fired by hand in the web UI. Worse, the split puts the build in one
 workflow run and the publish in another, and artefacts do not cross runs without
 a token, an explicit `run-id`, and a race against the retention window. Hanging
 the release job off the build jobs with `needs:` keeps the artefacts inside one
-run, and **`--draft`** supplies the human gate the two-trigger design was
+run, and `--draft` supplies the human gate the two-trigger design was
 reaching for: the tag builds and uploads, a person decides whether it becomes a
 release.
 

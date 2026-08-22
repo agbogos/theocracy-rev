@@ -12,8 +12,8 @@ against the instruction stream at both sites, not just the decompiler.
 
 | Address | Name | Does |
 |---|---|---|
-| `0x081db7e0` | **`cProvince::EatHealBirth`** | the mechanic: eating, healing and births, once per province per elapsed day |
-| `0x081db530` | **`cProvince::UpdateBirthRate`** | recomputes the derived per-year figure at `+0x40f74` and nothing else |
+| `0x081db7e0` | `cProvince::EatHealBirth` | the mechanic: eating, healing and births, once per province per elapsed day |
+| `0x081db530` | `cProvince::UpdateBirthRate` | recomputes the derived per-year figure at `+0x40f74` and nothing else |
 
 The first names itself — `Fatal("cProvince::EatHealBirth : Negative resource
 amount")`. The second is ours, and is named for the only thing it writes.
@@ -77,7 +77,7 @@ slots**, two per-tribe lists on the province:
   inferiors at `leader+0x10`
 - `+0x40bb0 + tribe*0x30` — a second flat list
 
-A man counts when **all** of these hold:
+A man counts when all of these hold:
 
 | Test | Field |
 |---|---|
@@ -85,7 +85,7 @@ A man counts when **all** of these hold:
 | `!= 2` and `!= 10` | `man+0x11c` — a state enum; `10` is separately handled as a corpse-like case |
 | `!= 5`, `!= 0x1c`, `!= 2` | `man+0xb3` — a type/profession byte |
 
-The three excluded `+0xb3` values are not identified. `+0xb3 == 0x19` **is**
+The three excluded `+0xb3` values are not identified. `+0xb3 == 0x19` is
 identified, indirectly and strongly: it is the type `EatHealBirth` spawns on a
 birth, and it is counted separately against a 31% threshold that raises a
 province notification — i.e. children, tracked so the game can warn you when too
@@ -114,9 +114,9 @@ constants:
 | Tier | Birth divisor `D` | Births/yr at P=400 | Heal per day |
 |---|---|---|---|
 | 0 — none | `FUCK_PER_BIRTH` 7120 | 21 | `NO_HOSPITAL_HEAL` 1 |
-| 1 — HOSPITAL1 | **`FUCK_PER_BIRTH` 7120** | **21** | `HOSPITAL1_Heals` 2 |
+| 1 — HOSPITAL1 | **`FUCK_PER_BIRTH` 7120** | 21 | `HOSPITAL1_Heals` 2 |
 | 2 — HOSPITAL2 | `FUCK_PER_BIRTH_HOSP2` 5476 | 27 | `HOSPITAL2_Heals` 4 |
-| 3 — HOSPITAL3 | **`FUCK_PER_BIRTH_HOSP2` 5476** | **27** | `HOSPITAL3_Heals` 4 |
+| 3 — HOSPITAL3 | **`FUCK_PER_BIRTH_HOSP2` 5476** | 27 | `HOSPITAL3_Heals` 4 |
 
 The identification of the tiers as the three hospitals rests on the *config
 variables the tier selects* — `HOSPITAL1_Heals` / `HOSPITAL2_Heals` /
@@ -131,7 +131,7 @@ rather than design:
 - **HOSPITAL1 does nothing for births.** It selects the same divisor as having
   no hospital at all. Its only effect is doubling the heal, 1 → 2.
 - **HOSPITAL3 is identical to HOSPITAL2** on both axes — same divisor, and
-  `HOSPITAL3_Heals` and `HOSPITAL2_Heals` are both **4** in the shipped
+  `HOSPITAL3_Heals` and `HOSPITAL2_Heals` are both 4 in the shipped
   `selap.txt`. It costs 240 stone / 240 wood / 90 jewel against HOSPITAL2's 120
   / 180 / 0, and the only thing it buys is `ROOM_FOR_PEOPLE` 60 vs 30.
 
@@ -248,7 +248,7 @@ Step 2 is the reusable key: it turns any balance constant a player can see in
   clamping it. The 1.0 balance narrows the band to 400–500 where the built-in
   defaults left 100–1000, which at least suggests someone tuned around the
   behaviour rather than tripping over it.
-- **`0x084c862d`**, the food ceiling — where it is initialised.
+- `0x084c862d`, the food ceiling — where it is initialised.
 
 ## Cross-references
 

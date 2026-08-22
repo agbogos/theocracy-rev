@@ -3,7 +3,7 @@
 > **This doc covers sound effects only.** Theocracy's *music* is Redbook CD
 > audio on a separate path (`cVCD`, `/dev/cdrom`) that shares nothing with the
 > sample mixer below — see [music-and-redbook.md](music-and-redbook.md). Note in
-> particular that `cVCDThread` puts `cThread` at offset **0**, not at `+4` as
+> particular that `cVCDThread` puts `cThread` at offset 0, not at `+4` as
 > `cSoundCard_Linux` does.
 
 Decompile findings on the Linux platform layer. Addresses in `libmvos.so`
@@ -21,16 +21,16 @@ Classic OSS, opened on the device path passed in (`/dev/dsp` string @
 3. Capability negotiation, best-first: `SetStereo(true)` → else mono (mono
    *must* work or `Fatal`); `SetSoundFormat(4)` (16-bit) → fallback format 1
    (8-bit); `SetFrequency(22050)` → fallback `11025`.
-4. **Two** buffers, both via `__builtin_vec_new`:
+4. Two buffers, both via `__builtin_vec_new`:
    - `+0x4c` — ring/back buffer, `rate/10` samples (100 ms) × channels × sample size (`Sample_Size[fmt]`, 1 or 2; anything else → `Fatal("Illegal format")`). Sample count is cached at `+0x50`, rate at `+0x40`.
-   - `+0x34` — the software-**mix accumulation** buffer, `rate/10` × channels × **4** (32-bit headroom per sample). Any previous one is `__builtin_delete`d first. Alongside it: `+0x39` = `Sample_Size[fmt]`, `+0x3a` = channels, `+0x38` = 0.
+   - `+0x34` — the software-**mix accumulation** buffer, `rate/10` × channels × 4 (32-bit headroom per sample). Any previous one is `__builtin_delete`d first. Alongside it: `+0x39` = `Sample_Size[fmt]`, `+0x3a` = channels, `+0x38` = 0.
 5. Inherits `cSoundCard_SoftwareMix` (all mixing in software;
    `cSoundChannel_SoftwareMix` per voice) **and `cThread`** — ctor ends with
-   **`cThread::Launch(this + 4)`**: the mixer runs on its own thread, writing
+   `cThread::Launch(this + 4)`: the mixer runs on its own thread, writing
    mixed blocks to the fd.
 
 > **ABI correction (audit 2026-07-26).** This doc previously said the ctor ends
-> with `cThread::Launch(this)`. It is **`Launch(this + 4)`** — `cThread` is a
+> with `cThread::Launch(this)`. It is `Launch(this + 4)` — `cThread` is a
 > *secondary* base at offset `+4`, which is why the ctor writes the `cThread`
 > vtable to `cSoundCard+0x08` (= `+0x04` within the `cThread` subobject, matching
 > `cThread`'s own ctor). The guarding `if (this == 0) p = 0` is the g++ 2.95
@@ -68,8 +68,8 @@ the guest's own code doing it.
 
 ## Processes — `cTask` (`Launch` @ `0xa5740`)
 
-- `cPipe::CreatePipe("MVOSMessagePort")` then **`fork()`**; child path does
-  **`execlp`** (target from ctor args), parent stores child pid at `+0x10`.
+- `cPipe::CreatePipe("MVOSMessagePort")` then `fork()`; child path does
+  `execlp` (target from ctor args), parent stores child pid at `+0x10`.
 - This is how the game would spawn the multiplayer server from the menu — and
   the readme.linux "GNU C library bug" that broke in-game server start almost
   certainly lived here (workaround: run `theoserver` manually).

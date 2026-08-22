@@ -74,7 +74,7 @@ repeated. Four pieces of evidence, in descending strength:
 | `libmvos.so.0.9` | egcs-2.91.60 Debian 2.1 (egcs-1.1.1) | 25 Feb 2000 |
 | `server` | egcs-2.91.60 Debian 2.1 (egcs-1.1.1) | 25 Feb 2000 |
 | `inst.linux` | **gcc 2.95.2 19991109** | 23 Feb 2000 |
-| **`reconf`** | **gcc 2.95.2 20000116** | *(lost)* |
+| `reconf` | **gcc 2.95.2 20000116** | *(lost)* |
 
 The game and its engine were built with the older egcs; the *tooling* around
 them with 2.95.2. `reconf`'s package is ~2 months newer than the installer's.
@@ -126,7 +126,7 @@ visible operand.
 Flow:
 
 1. `LoadConfig(~/.theocracy/mvos.cfg)`. On failure, warn and retry
-   `DEFAULT_CONFIG_NAME`. If **both** fail:
+   `DEFAULT_CONFIG_NAME`. If both fail:
    `Error: %s not found, probably the Theocracy has not installed.` and abort —
    the in-memory defaults are *not* used to write a file from nothing. They only
    fill in keys missing from a config that did load.
@@ -201,11 +201,11 @@ its seven lines are read by nothing at all:
 
 | our line | read by | verdict |
 |---|---|---|
-| `[vmachine] device=xf86` | nobody | the engine's key is **`video`** |
+| `[vmachine] device=xf86` | nobody | the engine's key is `video` |
 | `[vmachine] fullscreen=0` | nobody | the string `fullscreen` is **absent from both binaries** |
 | `[vmachine] fillobjmem=0` | `0xa5210` | real, but only a leading `'n'` disables the fill — `0` leaves it **on** |
 | `[vmachine] cdrom_mountpoint=/mnt/cdrom` | `VM_GetCDRomName` | real, and equal to the built-in default |
-| `[sound] card=dummy` | nobody | the engine's key is **`[vmachine] soundcard`** |
+| `[sound] card=dummy` | nobody | the engine's key is `[vmachine] soundcard` |
 | `[network] enable=1` | nobody | the string `network` is **absent from both binaries** |
 | *(no `cdrom_device`)* | `GetCDRomDeviceName` | absent → default `/dev/cdrom` |
 

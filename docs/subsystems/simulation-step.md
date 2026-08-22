@@ -6,7 +6,7 @@ executable (`0x08048000`).
 
 ## Player / realm model (confirmed)
 From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
-- **`g_GameSession`** (`0x84c9610`): **11 faction slots** created (loop
+- `g_GameSession` (`0x84c9610`): **11 faction slots** created (loop
   `0..0xa`), each `new(0x84)`, pointer at `+slot*4`, initialized from a static
   template table `DAT_08645240` (11 × 16 bytes) — the fixed faction roster. An
   index table sits at `+0x2e..+0x38`.
@@ -19,9 +19,9 @@ From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
   [multiplayer-and-factions.md](multiplayer-and-factions.md).
 - `+0x48` = `cGameInfo` (scenario data, loaded by `scenarioID`), `+0x4c` =
   scenario ID, `+0x50` = pause flag (starts 1 = paused).
-- Different subsystems iterate different subsets of the 11 slots: **6**
-  (`local_21 < 6`, the competing realms) for periodic province events, **8**
-  elsewhere, **11** total. So "N players" depends on which system — the
+- Different subsystems iterate different subsets of the 11 slots: 6
+  (`local_21 < 6`, the competing realms) for periodic province events, 8
+  elsewhere, 11 total. So "N players" depends on which system — the
   allocation is 11 faction slots (1 human + AI realms + neutral/special).
 - **Provinces**: `g_World+0x1468` (count `+0x1470`); **province owner = byte at
   `province+0x40aae`** (index into the player array).
@@ -58,7 +58,7 @@ From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
 5. **Movement/transport update**: iterate `g_World+0x147c` (count `+0x1484`) →
    `UpdateMovementQueue` on each (below).
 6. **Per-ally periodic event**: for each realm `0..5` (≠ local player), gated by
-   `cTribe_IsKnown` **and** `cTribe_IsAllied` against the local player. The
+   `cTribe_IsKnown` and `cTribe_IsAllied` against the local player. The
    elapsed quantity is `cDate_ToDayCount(g_World+0x83c) −
    cTribe_GetAllyDate(localTribe, realm)` — **days since the alliance was
    formed**, not ticks since some base. The threshold is `(g_TicksPerYear /
@@ -86,7 +86,7 @@ people/goods moving between buildings/provinces.)
 Fires on a randomly chosen province each cycle. Resolves the province **owner**
 (`g_GameSession[ province+0x40aae ]`), notifies the owner
 (`FUN_0815b000`/`0815afd0`), applies the event to the province (`FUN_081d6570`),
-and updates a province sub-object at **`+0x40e84`**. Concrete effect still TBD,
+and updates a province sub-object at `+0x40e84`. Concrete effect still TBD,
 but its **only direct call site is the `ALLIED_JOIN_YEARS` site above**
 (`0x081f97ab` in `SimulationStep`), so whatever it does is part of the alliance
 mechanic — the earlier "divine/random event" guess is withdrawn (see "What this
@@ -137,7 +137,7 @@ statement is: the sim *could* be lockstep and nothing contradicts it.
 `DAT_084c8160` is not an anonymous rate constant. It is bound by name at
 `0x080b3f32` — `LoadConfigVar(&DAT_084c8160, "ALLIED_JOIN_YEARS")` — to a
 tunable in the balance file, and the shipped `data/selap.txt` sets
-**`ALLIED_JOIN_YEARS=10`**.
+`ALLIED_JOIN_YEARS=10`.
 
 Read with that name, step 6 is: **once you have been allied with a realm for 10
 in-game years, one random province of that ally is picked every 7 days and put
@@ -169,7 +169,7 @@ previously guessed at — a god-game prior that the binary does not support.
   used to cite was `cDate` all along, so the question is open again and nothing
   is known about it. `cMsgSender` at `g_World+0x5c8` is the candidate; decoding
   its payload would settle the lockstep hypothesis above.
-- **`FUN_081d6570`** — the `ALLIED_JOIN_YEARS` effect. Does an allied province
+- `FUN_081d6570` — the `ALLIED_JOIN_YEARS` effect. Does an allied province
   actually change owner? The `+0x40aae` owner byte is the thing to watch.
-- **`0x0852d6f8`** — the data reference to `TriggerProvinceEvent`. Vtable slot
+- `0x0852d6f8` — the data reference to `TriggerProvinceEvent`. Vtable slot
   or plain table?

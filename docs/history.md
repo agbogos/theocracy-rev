@@ -34,10 +34,10 @@ below.
 
 ## The studio
 
-Philos Laboratories was founded in **1995** by **Zsolt Vámosi**, initially doing
+Philos Laboratories was founded in 1995 by **Zsolt Vámosi**, initially doing
 graphics for advertising rather than games.
 
-In **1997** it hired several developers from **Perihelion: The Prophecy**, the
+In 1997 it hired several developers from **Perihelion: The Prophecy**, the
 1993 Amiga RPG, and that team became Theocracy's core. The design brief was
 explicitly to **merge Command & Conquer with Civilization**, and the **Aztec
 setting was chosen by the graphic artists rather than the designers** — which,

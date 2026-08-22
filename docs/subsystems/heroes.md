@@ -11,7 +11,7 @@ in-game description text instead, it says so.
 ## Two tiers, one byte apart
 
 A hero is not a separate unit — it is a **`cMan` with a hero id**, one byte at
-**`+0x27c`** — which, as of 2026-08-10, is known to be the byte `cHero` *adds*
+`+0x27c` — which, as of 2026-08-10, is known to be the byte `cHero` *adds*
 rather than a `cMan` field it borrows: `sizeof(cMan)` is exactly `0x27c`. See
 "What `+0x27c` actually is" below. `cHero` is a real class (RTTI `5cHero`), and
 the RTTI also carries `19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`,
@@ -122,7 +122,7 @@ The descriptions, which were the previous basis and are now corroboration:
 | `+0x90` | Soul | Shibiri (1), Akrisi (8) |
 
 Chimoki (6) is the only hero who gets all five, at
-**`HERO6_MAGICRESISTANCE=90`** rather than 100 — exactly what his description
+`HERO6_MAGICRESISTANCE=90` rather than 100 — exactly what his description
 claims, "*partial* immunity to any form of magic". Read as a percentage that is
 now literally true: he takes 10% of all magic damage. A config value, a sentence
 and a formula written by different people, agreeing.
@@ -293,7 +293,7 @@ id**, plus `hero.cfg` and the developer console:
 | `cMission_Scroll` | `Finish` | **3 Toomoo** | 21, 11 |
 | `cMission_TwoRings` | `Finish` | **5 Kukurbuki** | 45, 28 |
 | `cMission_Josda` | `Finish` | **8 Akrisi** | 31, 13 |
-| `cMission_TheWall` | **`Start`** | **17 Skalaki** | 34 |
+| `cMission_TheWall` | `Start` | **17 Skalaki** | 34 |
 
 So sixteen of the nineteen are placed by code. **Umochi (9), Jarakhi (11) and
 Tlechlal (19) are assigned by no code path** — but see the correction directly
@@ -361,7 +361,7 @@ byte gets its own field at that offset.
 `sizeof(cMan) == 0x27c`, read off the allocators rather than inferred from a
 struct guess. Six caste creators allocate a plain man with `new(0x27c)`
 (`0x08246280`, `0x08249530`, `0x0824a740`, …); every `cHero` subclass creator
-and `cMan_Comm1`'s allocate **`new(0x280)`** — `0x27c` plus one byte, padded to
+and `cMan_Comm1`'s allocate `new(0x280)` — `0x27c` plus one byte, padded to
 four.
 
 So `cHero` and `cMan_Comm1` are not sharing a field, they are two classes each
@@ -416,7 +416,7 @@ return range;
 ```
 
 Hero 12 is **Turmoth, the archer**, whose two listed modifiers are `VIS_MOD` and
-`RANGE_MOD`. So hero abilities live in **two** places, not one:
+`RANGE_MOD`. So hero abilities live in two places, not one:
 
 - **Baked into the object** by `cHero_SetHeroId` — the four stat modifiers, the
   magic-school immunities, and `HERO12_VIS_MOD`, which is added to `+0x86` there.

@@ -33,9 +33,9 @@ DYLD_LIBRARY_PATH=/opt/homebrew/lib \
 python3 tools/plot_health.py session-trial-N.log --table
 ```
 
-- **`THEOC_LONGRUN=15`** — 60 s is too coarse for a ten-minute trial; 15 s
+- `THEOC_LONGRUN=15` — 60 s is too coarse for a ten-minute trial; 15 s
   resolves a teardown and the rebuild that follows it as separate samples.
-- **`Alt+M`** stamps a numbered `[mark]` and forces the next `[health]` out
+- `Alt+M` stamps a numbered `[mark]` and forces the next `[health]` out
   immediately, so an interval boundary lands on the event. A trial is the
   segment between two marks. Mark *after* the transition has settled, so the
   transition's own cost falls in the previous segment.
