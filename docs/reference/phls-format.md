@@ -119,8 +119,8 @@ of `data/game` is extracted content.
 **Rewritten 2026-08-15, and the previous version of this paragraph was wrong.**
 It claimed the file was "reconstructed from the `EnvSystem` keys the boot
 actually reads — `[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`,
-`[sound] card`, `[network] enable`". Four of those six are read by nothing:
-the engine's video key is `video`, not `device`; its sound key is `[vmachine]
+`[sound] card`, `[network] enable`". Four of those six are read by nothing: the
+engine's video key is `video`, not `device`; its sound key is `[vmachine]
 soundcard`, not `[sound] card`; and the strings `fullscreen` and `network` do
 not occur anywhere in `libmvos.so` or `theocracy.real`. Only `fillobjmem` and
 `cdrom_mountpoint` were real, and both were set to values equal to their

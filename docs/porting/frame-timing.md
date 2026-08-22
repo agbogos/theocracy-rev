@@ -2,8 +2,8 @@
 
 This documents a subtle, high-impact class of bug in the guest-libmvos emulator:
 **the game's real-time behaviour depends on host-side timing that our HLE has to
-synthesise**, and getting it wrong produces symptoms that *look* like performance
-problems but are not. Province view was the case that exposed it.
+synthesise**, and getting it wrong produces symptoms that *look* like
+performance problems but are not. Province view was the case that exposed it.
 
 Two distinct bugs, discovered in sequence:
 
@@ -46,9 +46,10 @@ timer and a roughly fixed frame rate.
 Our HLE has **no real signal delivery and no host thread running the guest** —
 Unicorn is single-threaded and *nested* `uc_emu_start` crashes it. So the
 heartbeat can only be serviced when the guest voluntarily yields to a trap. The
-original design serviced it **only at `SwapBuffers`/present** (`maybe_redirect_timer`),
-via `redirect_guest` (splice `_TimerFunction` into the current emulation instead of
-nesting). See [guest-libmvos.md](guest-libmvos.md) for the green-run mechanism.
+original design serviced it **only at `SwapBuffers`/present**
+(`maybe_redirect_timer`), via `redirect_guest` (splice `_TimerFunction` into the
+current emulation instead of nesting). See [guest-libmvos.md](guest-libmvos.md)
+for the green-run mechanism.
 
 ---
 
@@ -75,8 +76,8 @@ Reading this:
   each. The wall-clock is going into *host sleep*, not work.
 - **Heartbeat is 6Hz, not the armed 30Hz.**
 
-The `usleep` caller was `cSyncSystem::Sleep`, driven from the game's frame limiter
-(`theocracy.real:0x81da59b`), requesting a steady **~68ms** per frame.
+The `usleep` caller was `cSyncSystem::Sleep`, driven from the game's frame
+limiter (`theocracy.real:0x81da59b`), requesting a steady **~68ms** per frame.
 
 ### Root cause — a circular timing dependency
 - The frame limiter sleeps waiting for the game clock to reach the next frame
@@ -87,7 +88,8 @@ The `usleep` caller was `cSyncSystem::Sleep`, driven from the game's frame limit
 So: *sleep waits for a tick → tick needs a present → present needs the sleep to
 end.* The loop settles at a slow equilibrium (~12fps / 6Hz). On Woody the kernel
 delivers `SIGALRM` at 30Hz independent of rendering, so the wait resolves in
-~33ms and province runs normally. **Our present-coupled timer is the whole bug.**
+~33ms and province runs normally. **Our present-coupled timer is the whole
+bug.**
 
 ### Fix — deliver the heartbeat during `usleep` (real Linux `EINTR` semantics)
 On Linux, `SIGALRM` *interrupts* `usleep` to run the handler. We reproduce that:
@@ -96,11 +98,9 @@ in the `usleep` trap, if a timer tick is due, deliver it right there (same
 sleep past the next tick deadline, so the 30Hz cadence is preserved and the loop
 re-evaluates promptly.
 
-`port/src/traps.cpp`, `t["usleep"]`:
-```
-if (!legacy && maybe_redirect_timer(m, esp)) return 0;   // tick due → deliver (EINTR)
-// else sleep, bounded to time-until-next-tick, so the clock keeps 30Hz cadence
-```
+`port/src/traps.cpp`, `t["usleep"]`: ``` if (!legacy && maybe_redirect_timer(m,
+esp)) return 0;   // tick due → deliver (EINTR) // else sleep, bounded to
+time-until-next-tick, so the clock keeps 30Hz cadence ```
 
 Result: province **12fps → ~40fps**, heartbeat back to a solid **30Hz**.
 `THEOC_LEGACY_SLEEP=1` reverts to the old blind sleep for A/B.
@@ -120,8 +120,8 @@ roughly **one** overshoot, not N of them.
 Measured on a Windows VM under deliberate CPU contention: between one spinning
 thread per core and two per core, the **single-shot sleep median degraded 4×**
 (6.6 → 26.7 ms) while the **province frame moved 0.9 ms** (97.9 → 98.8). It also
-means a host-timing budget expressed as `slices × overshoot` is the wrong model —
-a mistake this project made when writing the acceptance criteria for that very
+means a host-timing budget expressed as `slices × overshoot` is the wrong model
+— a mistake this project made when writing the acceptance criteria for that very
 run. See [other-os-ports.md](other-os-ports.md), "The contention runs".
 
 `THEOC_FPS=1` now reports both terms directly as `(N slices/frame, +M ms each)`;
@@ -154,25 +154,25 @@ if (elapsed_since_last_frame < target)
 ```
 
 **`0x14585` = 83,333 µs = exactly 1/12 s → province is designed for 12fps.**
-(The `40000`/`30000` constants just below are unrelated: the async asset-streaming
-budget — spend up to 40ms/frame preloading bitmaps — which is also what causes the
-province-**entry** load spike.) This means the *original* 11.9fps we measured was
-the **designed** rate — province was never too slow in frame rate; what read as
-"slow/bad" was Bug 1's 6Hz heartbeat (laggy input/UI), which Bug 1 fixes
-independently. On Woody it's **12fps render + async 30Hz heartbeat**, the two
-decoupled by the kernel; our single-threaded emulator cannot run them independently.
+(The `40000`/`30000` constants just below are unrelated: the async
+asset-streaming budget — spend up to 40ms/frame preloading bitmaps — which is
+also what causes the province-**entry** load spike.) This means the *original*
+11.9fps we measured was the **designed** rate — province was never too slow in
+frame rate; what read as "slow/bad" was Bug 1's 6Hz heartbeat (laggy input/UI),
+which Bug 1 fixes independently. On Woody it's **12fps render + async 30Hz
+heartbeat**, the two decoupled by the kernel; our single-threaded emulator
+cannot run them independently.
 
 ### Fix — cap the render rate to the designed cadence
-Clamp the **minimum** present interval to the game's own limiter period
-(default **83ms = 12fps**; `THEOC_FRAME_MS` overrides, 0 disables). Measured
-*present-to-present* so it only slows frames that are already too fast; the game's
-own `usleep` pacing counts toward the interval and is never double-limited.
+Clamp the **minimum** present interval to the game's own limiter period (default
+**83ms = 12fps**; `THEOC_FRAME_MS` overrides, 0 disables). Measured
+*present-to-present* so it only slows frames that are already too fast; the
+game's own `usleep` pacing counts toward the interval and is never
+double-limited.
 
-`port/src/traps.cpp`, in `HLE_SwapBuffers` after present:
-```
-static const int frame_ms = env THEOC_FRAME_MS ?: 83;   // 0 disables
-if (frame_ms > 0 && elapsed_since_last_present < frame_ms) usleep(remainder);
-```
+`port/src/traps.cpp`, in `HLE_SwapBuffers` after present: ``` static const int
+frame_ms = env THEOC_FRAME_MS ?: 83;   // 0 disables if (frame_ms > 0 &&
+elapsed_since_last_present < frame_ms) usleep(remainder); ```
 
 Result: province **12fps with correct sim speed** — faithful to the original.
 
@@ -275,13 +275,13 @@ the remaining half of the task. It is now a **won't-do** — see below.
 The plan was: render province at ~30fps, step the simulation at 12Hz. Four
 approaches, all closed on evidence rather than on effort estimates.
 
-**1. Run the sim at 30Hz with scaled per-tick deltas — impossible.** There are no
-deltas. `cMan::Do` (`0x80a0c60`, **24.6 KB**) is the per-unit update, reached
+**1. Run the sim at 30Hz with scaled per-tick deltas — impossible.** There are
+no deltas. `cMan::Do` (`0x80a0c60`, **24.6 KB**) is the per-unit update, reached
 from `cProvince_Do` via 11× `cManList::Do` (`0x8147c40`), and **not one xref to
 `SetBySys__8cDayTime` falls inside its range** — nor inside `cManList::Do`.
-Province movement and animation never read wall-clock; they advance by
-fixed increments per call. (Contrast `SimulationUpdate`/`SimulationStep`, which
-call it three times each — the *realm* sim is time-based. Province is not.)
+Province movement and animation never read wall-clock; they advance by fixed
+increments per call. (Contrast `SimulationUpdate`/`SimulationStep`, which call
+it three times each — the *realm* sim is time-based. Province is not.)
 
 **2. Skip the sim body on some frames — worse than doing nothing.** Cheap to
 build: `cProvince_Do` already has a `LAB_081daefb` path that jumps past the AI
@@ -296,8 +296,8 @@ Snapshot every unit's position per step and lerp during paint, i.e. build an
 interpolating renderer into an engine with no concept of one, from outside,
 against 24.6 KB of unit state we do not understand.
 
-**4. Scale the balance data instead of the code — the real reason it dies.**
-Run at 30fps and multiply every rate-like quantity by 0.4 so things move at the
+**4. Scale the balance data instead of the code — the real reason it dies.** Run
+at 30fps and multiply every rate-like quantity by 0.4 so things move at the
 correct real-world speed in smaller steps. `selap.txt` is internally consistent
 about units once you know the game — three time bases, three subsystems:
 
@@ -327,8 +327,8 @@ a design fact: the cursor was given its **own 30Hz timer** (`setitimer` → the
 single `cVTimer`, i.e. `cIntuition::TimerProc`; see "What the heartbeat actually
 drives") *because the engine supports nothing but 12Hz*. The original developers
 hit this exact wall and solved it the only way available — they moved the one
-thing that had to feel responsive onto a separate clock, and left everything else
-at the designed rate. Province at 12fps is not a limitation we inherited by
+thing that had to feel responsive onto a separate clock, and left everything
+else at the designed rate. Province at 12fps is not a limitation we inherited by
 accident; it is the engine's intended sim rate and frame rate, and the separate
 cursor timer is the evidence.
 
@@ -364,16 +364,17 @@ have to accept to get there is what spoils it, not the frame rate.
 ## Bug 3 — audio mixer coupled to frame rate (stutter)
 
 ### Symptom
-After the frame cap, audio **stuttered**, worst at low fps, still faintly audible
-at 30fps. `THEOC_FPS` `underrun=N/s` (callback samples pulled from an empty queue)
-made it objective.
+After the frame cap, audio **stuttered**, worst at low fps, still faintly
+audible at 30fps. `THEOC_FPS` `underrun=N/s` (callback samples pulled from an
+empty queue) made it objective.
 
 ### Root cause
-The soft-threaded mixer (`cSoundCard_Linux` Main, one-shot patched) is green-run to
-produce one OSS fragment (~91ms of audio) per call — and was serviced **only at
-present**, gated to one fragment / 90ms (~11/s). The drain is 44.1k int16/s ≈ one
-91ms fragment every 90ms — so production == consumption with **zero margin**, and
-any servicing jitter (worse as the present grid coarsens at low fps) underruns.
+The soft-threaded mixer (`cSoundCard_Linux` Main, one-shot patched) is green-run
+to produce one OSS fragment (~91ms of audio) per call — and was serviced **only
+at present**, gated to one fragment / 90ms (~11/s). The drain is 44.1k int16/s ≈
+one 91ms fragment every 90ms — so production == consumption with **zero
+margin**, and any servicing jitter (worse as the present grid coarsens at low
+fps) underruns.
 
 Same shape as the heartbeat: a real-time obligation tied to the render loop.
 
@@ -387,15 +388,15 @@ Same shape as the heartbeat: a real-time obligation tied to the render loop.
 latency↔margin tradeoff: too high delays SFX (0.5s buffer = 0.5s lag — audible),
 too low re-introduces underrun. Target is **~120ms** (`THEOC_AUDIO_MS`), which
 holds the queue at ~0.16–0.21s with **0 underruns/s** even at the 12fps default
-(the buffer absorbs the sparse yields — the mixer stays ~11/s, decoupled from the
-frame rate). A brief blip remains during the **province-load spike** (~1s of heavy
-asset loading where the emulator is genuinely compute-busy and rarely yields) —
-transient, on screen entry, not the continuous stutter.
+(the buffer absorbs the sparse yields — the mixer stays ~11/s, decoupled from
+the frame rate). A brief blip remains during the **province-load spike** (~1s of
+heavy asset loading where the emulator is genuinely compute-busy and rarely
+yields) — transient, on screen entry, not the continuous stutter.
 
 ## What the heartbeat actually drives — and why "real threads" was closed
 
-The three bugs above left a follow-up on the worklist for a year: *real threads /
-signal delivery — no multi-tick catch-up when frames stall*. Closed 2026-08-03
+The three bugs above left a follow-up on the worklist for a year: *real threads
+/ signal delivery — no multi-tick catch-up when frames stall*. Closed 2026-08-03
 **as a non-issue**, once the chain was actually read rather than assumed. It is
 worth recording why, because the premise was wrong in a way that made the port
 look fragile where it is not.
@@ -417,8 +418,8 @@ setitimer(ITIMER_REAL, 33ms) → SIGALRM
 clock.** The heartbeat is the *cursor and animation* tick. It is not, and never
 was, the simulation's clock.
 
-**The simulation clocks itself, and already has catch-up.**
-`SimulationUpdate` (`theocracy.real:0x81f97e0`, see
+**The simulation clocks itself, and already has catch-up.** `SimulationUpdate`
+(`theocracy.real:0x81f97e0`, see
 [game-loop-and-simulation.md](../subsystems/game-loop-and-simulation.md)) runs
 from `RealmGameLoop` once per frame and computes its own work:
 
@@ -463,16 +464,17 @@ during heavy load, or a `cVTimer` other than the three above turning up in the
 ## Why the native blit work still mattered
 
 Before the timing bugs were understood, the province cost was (correctly)
-attributed by the profiler to libmvos's software RGB565 rasteriser, and the whole
-**LFB16 blit family was reimplemented natively** (`port/src/blit.cpp`): entry-point
-code-hook overrides for `LFB16_PutBitmap8C1_AMask`, `PutBitmap8`, `PutBitmap8_AMask`,
-`PutBitmap`, `VLineAlfa` — byte-exact transliterations of the Ghidra decompiles,
-running at host speed instead of emulated pixel loops. (All are plain cdecl despite
-Ghidra's `__regparm` labels — every arg is read from the stack.)
+attributed by the profiler to libmvos's software RGB565 rasteriser, and the
+whole **LFB16 blit family was reimplemented natively** (`port/src/blit.cpp`):
+entry-point code-hook overrides for `LFB16_PutBitmap8C1_AMask`, `PutBitmap8`,
+`PutBitmap8_AMask`, `PutBitmap`, `VLineAlfa` — byte-exact transliterations of
+the Ghidra decompiles, running at host speed instead of emulated pixel loops.
+(All are plain cdecl despite Ghidra's `__regparm` labels — every arg is read
+from the stack.)
 
 That work removed real per-frame CPU cost and is correct and kept — it just was
-**not** the province bottleneck (a stalled clock was). It matters for headroom and
-for any genuinely blit-bound screen, and it is the first instance of the
+**not** the province bottleneck (a stalled clock was). It matters for headroom
+and for any genuinely blit-bound screen, and it is the first instance of the
 incremental native-override seam. `THEOC_NATIVE_BLIT=0` disables it.
 
 ---

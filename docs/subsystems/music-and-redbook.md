@@ -55,9 +55,8 @@ read the same way. Running flag `+0x10`, vtable `+0x04`, as usual.
 | `+0x90` | enabled flag (`1` at construction) |
 
 Each `cList` is `0x18` bytes = two `0xc`-byte `cNode`s, the Exec header idiom
-already documented in
-[memory-and-containers.md](memory-and-containers.md). Track nodes are `0x10`
-bytes: `{succ, pred, vtbl, track byte at +0xc}`.
+already documented in [memory-and-containers.md](memory-and-containers.md).
+Track nodes are `0x10` bytes: `{succ, pred, vtbl, track byte at +0xc}`.
 
 **Four moods exactly.** The constructor initialises four lists, and the
 destructor (`0x081a38e0`) confirms it twice over — its node-free loop runs
@@ -68,9 +67,9 @@ the same number, which is the discipline
 
 ## The track table
 
-Six `AddTail` calls in the constructor. The insert idiom writes
-`node->succ = L+0xc` and updates the pred slot at `L+0x10`, so each list base is
-`target − 0xc`:
+Six `AddTail` calls in the constructor. The insert idiom writes `node->succ =
+L+0xc` and updates the pred slot at `L+0x10`, so each list base is `target −
+0xc`:
 
 | Mood | List | Tracks | Context |
 |---|---|---|---|
@@ -83,12 +82,12 @@ Six `AddTail` calls in the constructor. The insert idiom writes
 **The disc therefore carries audio tracks 2–8: track 1 is the data track, seven
 audio tracks follow, and the game names six of them.**
 
-**Track 4 is never referenced.** `Play__4cVCDUl` has exactly one call site in the
-entire binary (`0x081a3c67`, inside `cVCDThread_StartTrackForMood`), and
+**Track 4 is never referenced.** `Play__4cVCDUl` has exactly one call site in
+the entire binary (`0x081a3c67`, inside `cVCDThread_StartTrackForMood`), and
 `cVCD::PlayAll` / `cVCD::GetNumberOfTracks` are not imported by the game at all.
 So track 4 is not reachable through any code path — it is either a bonus track,
-or the credits/end-title music triggered some other way, or it does not exist and
-the disc has six audio tracks with a gap in the numbering the game assumes.
+or the credits/end-title music triggered some other way, or it does not exist
+and the disc has six audio tracks with a gap in the numbering the game assumes.
 **Only the TOC of a real disc can tell these apart**, which is the single most
 useful thing a rip will settle.
 
@@ -165,9 +164,9 @@ bug.
 ## The engine side: `cVCD` is abstract, `cCD_Linux` is the driver
 
 `cVCD` (libmvos) is a **shell**. Every operational slot of `__vt_4cVCD`
-(`0xb7200`) points at `__pure_virtual` (`0xa6160`, which prints
-`pure virtual method called` and `_exit(-1)`). The class holds state and
-delegates through a driver table at `+0xc`.
+(`0xb7200`) points at `__pure_virtual` (`0xa6160`, which prints `pure virtual
+method called` and `_exit(-1)`). The class holds state and delegates through a
+driver table at `+0xc`.
 
 The concrete driver is **`cCD_Linux`**, and `OpenSubsystems` builds the object
 **inline** — no constructor is ever called, not `cVCD::cVCD` (`0x90680`) and not
@@ -183,8 +182,9 @@ if (cApplication::Redbook) {
 }
 ```
 
-`GetCDRomDeviceName` reads `mvos.cfg` `[vmachine] cdrom_device` and **defaults to
-`/dev/cdrom`**. Our `data/game/mvos.cfg` does not set it, so `/dev/cdrom` it is.
+`GetCDRomDeviceName` reads `mvos.cfg` `[vmachine] cdrom_device` and **defaults
+to `/dev/cdrom`**. Our `data/game/mvos.cfg` does not set it, so `/dev/cdrom` it
+is.
 
 ### `cVCD` object layout (`0x14` bytes)
 
@@ -234,12 +234,12 @@ Details worth having before implementing:
 
 ### `GetActualTrack` — read the disassembly, not the decompile
 
-Ghidra renders `GetActualTrack` (`0xa1de0`) as a bare `return 0` with
-*"Switch with 1 destination removed"* and *"Exceeded maximum restarts"*. That is
-wrong, and it is the artifact class
-[re-methodology.md](../reference/re-methodology.md) exists to catch. The real
-body reads `struct cdrom_subchnl` (requested as `CDROM_MSF`, format 2) and
-switches on `cdsc_audiostatus` through a 22-entry jump table at `0xbc1e0`:
+Ghidra renders `GetActualTrack` (`0xa1de0`) as a bare `return 0` with *"Switch
+with 1 destination removed"* and *"Exceeded maximum restarts"*. That is wrong,
+and it is the artifact class [re-methodology.md](../reference/re-methodology.md)
+exists to catch. The real body reads `struct cdrom_subchnl` (requested as
+`CDROM_MSF`, format 2) and switches on `cdsc_audiostatus` through a 22-entry
+jump table at `0xbc1e0`:
 
 | `cdsc_audiostatus` | Result |
 |---|---|
@@ -354,9 +354,9 @@ Music.app rip probes as `pcm_s16le` in an `aiff` container, not the classic
 big-endian `pcm_s16be`. Both are enabled; assuming only the latter is the
 obvious mistake.
 
-**Confirmed by play on v1.0.1-rc4**, which is the check that closes this: the
-round-trip decode test proves libav can open the files, and only a real session
-proves the music reaches the mixer and the transport model advances the track.
+**Confirmed by play**, which is the check that closes this: the round-trip
+decode test proves libav can open the files, and only a real session proves the
+music reaches the mixer and the transport model advances the track.
 
 ### Verified against the real disc
 
@@ -415,10 +415,10 @@ Three decisions worth keeping:
   against the device and, worse, declare the track over while a second of it was
   still buffered — an audible cut at the end of every track.
 
-`CDROMVOLCTRL` scales the mix, and `THEOC_MUSIC_VOL` (0–100) trims it
-host-side. That knob exists because there is **no reference for the balance**:
-the original mixed CD audio through the sound card's CD line at a level set
-outside the game, so music-vs-SFX has to be set by ear.
+`CDROMVOLCTRL` scales the mix, and `THEOC_MUSIC_VOL` (0–100) trims it host-side.
+That knob exists because there is **no reference for the balance**: the original
+mixed CD audio through the sound card's CD line at a level set outside the game,
+so music-vs-SFX has to be set by ear.
 
 ### Verified
 
@@ -468,12 +468,12 @@ overrides of `cVCD`.**
 The seven ioctls above are the entire device contract, the driver is stateless
 across calls, and `open` already hands out a taggable fd. Implementing them
 against a host-side player backed by ripped audio files leaves `cVCDThread`,
-`cVCD` and `cCD_Linux` running **completely unmodified as original guest code** —
-no vtable patching, no native method overrides, nothing bypassed. A CD-ROM drive
-is an OS device, so this lands exactly on the boundary
-[guest-libmvos.md](../porting/guest-libmvos.md) says the port HLEs and no deeper.
-It is a smaller and more faithful change than the native-override route this doc
-originally assumed.
+`cVCD` and `cCD_Linux` running **completely unmodified as original guest code**
+— no vtable patching, no native method overrides, nothing bypassed. A CD-ROM
+drive is an OS device, so this lands exactly on the boundary
+[guest-libmvos.md](../porting/guest-libmvos.md) says the port HLEs and no
+deeper. It is a smaller and more faithful change than the native-override route
+this doc originally assumed.
 
 The one piece that does *not* fall out for free is the auto-advance, because
 `cVCDThread::Main` never runs (below). Two options, in preference order:
@@ -489,8 +489,8 @@ The one piece that does *not* fall out for free is the auto-advance, because
    harder to cut than the mixer's.
 
 A host-side loop of the current track would also produce continuous music, but
-it is *not* faithful — the original picks a fresh random track from the mood list
-each time — so it belongs in neither option.
+it is *not* faithful — the original picks a fresh random track from the mood
+list each time — so it belongs in neither option.
 
 ## Open threads
 

@@ -55,10 +55,10 @@ name. Slot 3/4's role is read from the default's body.
 
 Seven of the 90 overrides do nothing but call the slot's own default and
 normalise its return value. Item 1's slot-3 override is fifteen instructions
-that amount to `return default(this, m) != 0`. Taking "overrides a slot" as
-"has an effect" gives the wrong answer for three items, and was the first
-conclusion reached here before the bodies were read. The working test is
-**"its only call is the slot default, and it adds nothing around it"** — see
+that amount to `return default(this, m) != 0`. Taking "overrides a slot" as "has
+an effect" gives the wrong answer for three items, and was the first conclusion
+reached here before the bodies were read. The working test is **"its only call
+is the slot default, and it adds nothing around it"** — see
 [re-methodology.md](../reference/re-methodology.md) §14.
 
 ## The effects are named in `selap.txt`
@@ -66,8 +66,8 @@ conclusion reached here before the bodies were read. The working test is
 Item constants live at `0x084c792c..0x084c7a04`, keyed `<code>_<effect>` — the
 item's own code without the `MI_` prefix. The block ends where the spell tables
 begin (`Sun1_Wound`, `Moon2_ShieldPercent`, `Star4_ModifyAtt`, …), which is a
-useful independent sighting of the same school names that
-[heroes.md](heroes.md) derived from immunity slots.
+useful independent sighting of the same school names that [heroes.md](heroes.md)
+derived from immunity slots.
 
 **The key column in the table below is read from each item's override bodies,
 not matched by name prefix.** Six of the fifty do not follow their own naming:
@@ -85,8 +85,8 @@ victim's man type at `+0xb3` against 2 and 0x17 and scales damage by
 default.
 
 Not every working item needs a constant: Mask of Protection has none, and its
-description explains why — it is an immunity ("swords cannot injure its wearer"),
-which is a branch, not a number.
+description explains why — it is an immunity ("swords cannot injure its
+wearer"), which is a branch, not a number.
 
 ## The fifty
 
@@ -191,9 +191,9 @@ these.
 
 **Read 2026-08-10.** The other half of that AND — man vtable slot `+0x24` — is
 `cMan::GetItemCarryMask`, and every implementation in the image is a single
-`return <constant>`. So the entire carrier table is sixteen numbers, recovered by
-reading slot `+0x24` out of each man-class vtable and the constant out of each
-function it points at:
+`return <constant>`. So the entire carrier table is sixteen numbers, recovered
+by reading slot `+0x24` out of each man-class vtable and the constant out of
+each function it points at:
 
 | mask | classes | can carry |
 |---|---|---|
@@ -207,10 +207,11 @@ function it points at:
 | `0xb0` | `cMan_Spy` | mask, ring, `0x80` oddments — **not `0x40`** |
 | `0x00` | the other 27 | nothing |
 
-**The default is zero**, so carrying is opt-in and most of the roster is excluded:
-every civilian (farmer, miner, woodcutter, builder, trader, slave, lama driver,
-`cMan_Kezmuves`), and also `cMan_Vampire`, `cMan_Jaguar`, `cMan_Lama`,
-`cMan_Shadow`, `cMan_Stonewarrior`, `cMan_Cortes` and `cMan_Dragonkiller`.
+**The default is zero**, so carrying is opt-in and most of the roster is
+excluded: every civilian (farmer, miner, woodcutter, builder, trader, slave,
+lama driver, `cMan_Kezmuves`), and also `cMan_Vampire`, `cMan_Jaguar`,
+`cMan_Lama`, `cMan_Shadow`, `cMan_Stonewarrior`, `cMan_Cortes` and
+`cMan_Dragonkiller`.
 
 Three things fall out that the item table alone could not say:
 
@@ -229,8 +230,8 @@ design oddity rather than a rule; recorded as observed.
 
 ## The thirteen without flavour text
 
-Thirteen items have a description equal to their own name: **1, 2, 7, 12, 17, 18,
-20, 24, 25, 29, 41, 49, 50**. Every other item runs 122–415 characters.
+Thirteen items have a description equal to their own name: **1, 2, 7, 12, 17,
+18, 20, 24, 25, 29, 41, 49, 50**. Every other item runs 122–415 characters.
 
 This is **not a localisation gap**. All six shipped languages are short for
 exactly the same thirteen keys and full for all the others — the lengths differ
@@ -239,9 +240,9 @@ Whatever produced these files had no source text to work from in any language.
 
 Of the thirteen, **ten are fully implemented** — they have real vtable overrides
 and, in most cases, their own balance constants. Ray Axe reads `AD_ATT` and
-`AD_DEF`; Night Blade reads `SWNB_ATT`; Bone Horn has a working timed effect with
-a counter capped by `MBH_TIME`. A player who picks these up gets exactly what
-the numbers say; nobody wrote the sentence.
+`AD_DEF`; Night Blade reads `SWNB_ATT`; Bone Horn has a working timed effect
+with a counter capped by `MBH_TIME`. A player who picks these up gets exactly
+what the numbers say; nobody wrote the sentence.
 
 Three are genuinely inert:
 
@@ -283,10 +284,10 @@ more, including the Ring pieces. See "The third placement channel" below.
 
 **Read 2026-08-09; full write-up in [missions.md](missions.md).** The claim
 above that `Item_CreateById` is "the only way an item comes into existence" is
-**wrong, and was wrong in the confident direction**: mission code calls the fifty
-per-item constructors *directly*, bypassing the factory switch. Xref'ing the
-constructors rather than the factory finds 25 items with a non-factory caller
-([re-methodology.md](../reference/re-methodology.md) §15).
+**wrong, and was wrong in the confident direction**: mission code calls the
+fifty per-item constructors *directly*, bypassing the factory switch. Xref'ing
+the constructors rather than the factory finds 25 items with a non-factory
+caller ([re-methodology.md](../reference/re-methodology.md) §15).
 
 That closes both of this doc's headline open questions:
 
@@ -336,8 +337,8 @@ So the honest state of the question:
 
 The parallel correction on the hero side is sharper still, and is what surfaced
 this: Jarakhi is the campaign's **player character** and is assigned by no code
-path either — because he ships in the world state
-([heroes.md](heroes.md), [missions.md](missions.md)).
+path either — because he ships in the world state ([heroes.md](heroes.md),
+[missions.md](missions.md)).
 
 ### …and the fourth channel has now been read — the withdrawal is lifted
 

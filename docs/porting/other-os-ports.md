@@ -7,13 +7,13 @@ Three hosts now run the same 2000 i386 binaries from the same source, with no
 `#ifdef` in any unit but `traps.cpp`.
 
 Both bundles are cross-built from macOS with no machine of the target OS in the
-loop: `tools/package-windows.sh` → `dist/theoc-windows-x64-<version>/` (mingw-w64),
-`tools/package-linux.sh [amd64|arm64]` → `dist/theoc-linux-<arch>-<version>/`
-(a container).
+loop: `tools/package-windows.sh` → `dist/theoc-windows-x64-<version>/`
+(mingw-w64), `tools/package-linux.sh [amd64|arm64]` →
+`dist/theoc-linux-<arch>-<version>/` (a container).
 
-One item is outstanding: a **bare-metal Windows timing run**, blocked on hardware
-until ~2026-08-18. It qualifies a measurement rather than blocking anything — see
-[The contention runs](#the-contention-runs--2026-08-04).
+One item is outstanding: a **bare-metal Windows timing run**, blocked on
+hardware until ~2026-08-18. It qualifies a measurement rather than blocking
+anything — see [The contention runs](#the-contention-runs--2026-08-04).
 
 > **This document is written forwards, and is kept that way on purpose.** The
 > risk list below was authored from an audit *before anything was compiled*, and
@@ -26,8 +26,8 @@ until ~2026-08-18. It qualifies a measurement rather than blocking anything — 
 ## The reusable core is bigger than it looks
 
 `port/src` contains **zero platform conditionals** — no `__APPLE__`, no
-`_WIN32`, nothing. That is a clean starting point, but it also means every
-macOS assumption in there is implicit and has to be found rather than read off.
+`_WIN32`, nothing. That is a clean starting point, but it also means every macOS
+assumption in there is implicit and has to be found rather than read off.
 
 Four of the seven units already travel unchanged:
 
@@ -41,7 +41,8 @@ Four of the seven units already travel unchanged:
 **All of `docs/` transfers untouched.** The 232-symbol boundary, every struct
 layout, every guest patch and every address describes a 1999 Linux i386 binary,
 which does not care what is running it. So does every fix this year produced —
-the save-file collapse, the cursor refresh, the sleep model, `THEOC_PROVINCE_MS`.
+the save-file collapse, the cursor refresh, the sleep model,
+`THEOC_PROVINCE_MS`.
 
 ## Three things that look like blockers and are not
 
@@ -64,7 +65,8 @@ conditionals, they are unconditional code in `traps.cpp` ("guest(Linux/i386) <->
 host(BSD/macOS) socket translation"):
 
 - `sockaddr_in` layout — BSD has `u8 sin_len` at offset 0, Linux a `u16` family
-- `O_NONBLOCK` `0x800`→`0x0004`, `SOL_SOCKET` `1`→`0xffff`, `SO_REUSEADDR` `2`→`4`
+- `O_NONBLOCK` `0x800`→`0x0004`, `SOL_SOCKET` `1`→`0xffff`, `SO_REUSEADDR`
+  `2`→`4`
 - `to_linux_errno()` — EAGAIN 11/35, EINPROGRESS 115/36, EADDRINUSE 98/48
 
 > **Correction (2026-08-03, measured).** This section originally claimed those
@@ -94,8 +96,8 @@ already cost three wrong diagnoses (re-methodology §7).
 
 **Linux also gives an oracle nothing else does.** On x86-64 with 32-bit
 libraries you can run `theocracy.real` and the real `libmvos.so` **natively,
-unemulated**, beside the port. Every behavioural question this project has had to
-answer by reverse-engineering becomes a differential test.
+unemulated**, beside the port. Every behavioural question this project has had
+to answer by reverse-engineering becomes a differential test.
 
 ## Windows is the real port
 
@@ -165,8 +167,8 @@ would turn it into a fact.
 
 ### The entire POSIX gap in `traps.cpp` is sockets
 
-`traps.cpp` stops at its first missing header, so the useful question is which of
-its POSIX includes mingw-w64 lacks. Tested one header per compile:
+`traps.cpp` stops at its first missing header, so the useful question is which
+of its POSIX includes mingw-w64 lacks. Tested one header per compile:
 
 | Present in mingw-w64 | Missing |
 |---|---|
@@ -198,8 +200,8 @@ That moves the risk list:
 `usleep` is in the "present and links" column — and that is the trap, not the
 reprieve. It links; it says nothing about *granularity*. The port would build,
 run, and be quietly wrong: mingw's `usleep` is a wrapper over the same Windows
-sleep primitive whose default granularity is ~15.6 ms, and
-[the sleep model](#windows-is-the-real-port) needs sub-millisecond slices.
+sleep primitive whose default granularity is ~15.6 ms, and [the sleep
+model](#windows-is-the-real-port) needs sub-millisecond slices.
 
 Read the `usleep` handler in `traps.cpp` to see why sub-millisecond is not an
 edge case. It does **not** sleep the guest's 83 ms; it sleeps in slices bounded
@@ -218,9 +220,10 @@ sails past the deadline the slice existed to stop at.
 was ranked first, and it is now the only deep unknown in the Windows port.**
 
 `tools/win_timing_probe.cpp` measures it, standalone, before `traps.cpp` is
-touched — the errno-probe move from [Linux is a subtraction](#linux-is-a-subtraction-not-a-port),
-applied to the claim that is currently still an argument. It cross-compiles from
-macOS with no Windows involved:
+touched — the errno-probe move from [Linux is a
+subtraction](#linux-is-a-subtraction-not-a-port), applied to the claim that is
+currently still an argument. It cross-compiles from macOS with no Windows
+involved:
 
 ```sh
 x86_64-w64-mingw32-g++ -O2 -std=c++17 -static -Wall -Wextra \
@@ -262,8 +265,8 @@ it has a clean fix.**
 
 (medians, ms). Sustained 30 Hz heartbeat, median lateness against an absolute
 schedule: `Sleep()` **9.04 ms**, `+timeBeginPeriod` 1.59 ms, waitable timer
-**0.655 ms**. Province frame, sliced as `traps.cpp` slices it: **94.0 ms**,
-84.9 ms, **84.0 ms** against an 83.3 ms target.
+**0.655 ms**. Province frame, sliced as `traps.cpp` slices it: **94.0 ms**, 84.9
+ms, **84.0 ms** against an 83.3 ms target.
 
 Four things fall out, and the third was not predicted:
 
@@ -340,10 +343,10 @@ the fallback.
 
 **Realm is the cleanest proof, and it is an accident of the frame cap.** That
 cap is a `theoc_sleep_us()` call for a 16 ms interval; under `Sleep()`'s 15.6 ms
-granularity a 16 ms request quantises to ~31 ms and the screen would sit at
-~32 fps. Hitting 60 is only reachable with sub-millisecond resolution. It is not
-the display, either: the renderer is created without `SDL_RENDERER_PRESENTVSYNC`
-and samples land *above* 60 (60.3, 60.4), which a vsync clamp cannot produce.
+granularity a 16 ms request quantises to ~31 ms and the screen would sit at ~32
+fps. Hitting 60 is only reachable with sub-millisecond resolution. It is not the
+display, either: the renderer is created without `SDL_RENDERER_PRESENTVSYNC` and
+samples land *above* 60 (60.3, 60.4), which a vsync clamp cannot produce.
 
 **The residual 3.7 ms is the timer's own floor, not a defect**, and the log
 decomposes it without needing another probe:
@@ -357,12 +360,12 @@ so the guest asks for 83.3 − 22.7 = 60.6 ms and gets 64.3
 ```
 
 1.0 ms per slice is what the probe measured for the timer itself (0.63 ms for a
-sub-millisecond request, 1.67 ms at 1 ms). The probe's 84.0 ms prediction assumed
-~3.5 slices; the real frame takes 3.78, and the difference is that extra slice
-plus VM noise. **Left alone deliberately** — biasing the request down to cancel
-a 1 ms overshoot would be fitting the port to one VM's timer, and 4% on an engine
-[designed at 12 Hz](frame-timing.md) is not perceptible. The number to watch if
-this is ever revisited is slices/frame, not fps.
+sub-millisecond request, 1.67 ms at 1 ms). The probe's 84.0 ms prediction
+assumed ~3.5 slices; the real frame takes 3.78, and the difference is that extra
+slice plus VM noise. **Left alone deliberately** — biasing the request down to
+cancel a 1 ms overshoot would be fitting the port to one VM's timer, and 4% on
+an engine [designed at 12 Hz](frame-timing.md) is not perceptible. The number to
+watch if this is ever revisited is slices/frame, not fps.
 
 ## The Windows build — 2026-08-03
 
@@ -401,11 +404,11 @@ are the ones that were not:
 | **`fcntl` → `ioctlsocket(FIONBIO)`** | Windows has no `fcntl`, and `FIONBIO` is **write-only** — there is no way to read the blocking state back. `HostFile::nonblock` remembers it, which is exact only because this handler is its sole writer. |
 | **`std::floor` in `video.cpp`** | A genuine latent bug, not a Windows-ism: `<cmath>` was never included and libc++/libstdc++ happened to provide it transitively. **Cross-compiling found a real defect in the working macOS build.** |
 
-The rest were `char*` casts for Winsock, `socklen_t`→`int`, one-argument `mkdir`,
-`localtime_r`→`localtime_s` (reversed arguments), absent `st_blksize`/`st_blocks`,
-absent `dirent::d_type` (derived with `stat` instead), `in_addr_t`, and a
-`SIGPIPE` guard — Windows has no SIGPIPE, so the guest's request to ignore it is
-satisfied by the platform.
+The rest were `char*` casts for Winsock, `socklen_t`→`int`, one-argument
+`mkdir`, `localtime_r`→`localtime_s` (reversed arguments), absent
+`st_blksize`/`st_blocks`, absent `dirent::d_type` (derived with `stat` instead),
+`in_addr_t`, and a `SIGPIPE` guard — Windows has no SIGPIPE, so the guest's
+request to ignore it is satisfied by the platform.
 
 Link needed `ws2_32` and `winmm`, plus **`SDL_MAIN_HANDLED`**: on Windows,
 including `SDL.h` `#define`s `main` to `SDL_main` and expects `SDL2main` to
@@ -418,11 +421,11 @@ where one namespace covers both).
 
 ### The bundle
 
-`dist/theoc-windows-x64-<version>/` — launcher, `bin/theoc.exe`, seven DLLs, the timing
-probe, README. The DLL list is **not hand-written**: it is the transitive import
-closure of `theoc.exe` walked with `objdump` and filtered against a denylist of
-DLLs that ship with Windows, because the Linux bundle already established that
-guessing does not work and the loader is the oracle.
+`dist/theoc-windows-x64-<version>/` — launcher, `bin/theoc.exe`, seven DLLs, the
+timing probe, README. The DLL list is **not hand-written**: it is the transitive
+import closure of `theoc.exe` walked with `objdump` and filtered against a
+denylist of DLLs that ship with Windows, because the Linux bundle already
+established that guessing does not work and the loader is the oracle.
 
 Two things measured rather than assumed:
 
@@ -471,10 +474,10 @@ returned success from `bind` *without binding anything*
 ([guest-libmvos.md](guest-libmvos.md), "The single-instance lock stays faked").
 That worked on macOS and Linux **by accident**: POSIX `listen()` auto-binds an
 unbound socket to an ephemeral port, so the game's next call succeeded anyway.
-Verified rather than assumed — a five-line probe on macOS returns `listen() == 0`
-and `getsockname` then reports a kernel-chosen port. Winsock has no such
-behaviour: `listen()` on an unbound socket fails with `WSAEINVAL`, the game reads
-that as "the port is taken", and `Fatal`s.
+Verified rather than assumed — a five-line probe on macOS returns `listen() ==
+0` and `getsockname` then reports a kernel-chosen port. Winsock has no such
+behaviour: `listen()` on an unbound socket fails with `WSAEINVAL`, the game
+reads that as "the port is taken", and `Fatal`s.
 
 The fix binds the socket to an **ephemeral loopback port** instead of returning
 early. The purpose of the fake was only ever to avoid *holding* `:5043` so a
@@ -493,17 +496,18 @@ restart" — and that is precisely what happened, 16 times over, until the run w
 killed. Ignoring `abort` returns into guest code that has already concluded it
 cannot continue, so everything after is undefined. The ignore is now **bounded**
 (`THEOC_ABORT_CAP`, default 32): past the cap the host stops and prints the
-diagnosis, instead of leaving someone to infer it from a repeating log. A healthy
-run aborts zero times.
+diagnosis, instead of leaving someone to infer it from a repeating log. A
+healthy run aborts zero times.
 
 ### The same Fatal, a second time: `WSAStartup` was never called — 2026-08-04
 
-The bundle rebuilt with the [minimal ffmpeg](#both-bundles-minus-the-ffmpeg-nobody-uses)
-failed in `Start` with the identical message — "You can run only one Theocracy in
-the same time!", 32 ignored aborts, `Start aborted` — on a build whose *only*
-change was which ffmpeg it linked. Everything before `Start` was byte-for-byte
-the healthy boot: 79 COPY relocs, 34,994 relocs, 10/10 and 215/215 constructors,
-all nine subsystem flags, plugins, audio, `cIntuition`.
+The bundle rebuilt with the [minimal
+ffmpeg](#both-bundles-minus-the-ffmpeg-nobody-uses) failed in `Start` with the
+identical message — "You can run only one Theocracy in the same time!", 32
+ignored aborts, `Start aborted` — on a build whose *only* change was which
+ffmpeg it linked. Everything before `Start` was byte-for-byte the healthy boot:
+79 COPY relocs, 34,994 relocs, 10/10 and 215/215 constructors, all nine
+subsystem flags, plugins, audio, `cIntuition`.
 
 **The tell was an absence.** Where macOS logs
 
@@ -520,16 +524,16 @@ so a host that could not create a socket showed up as a gap.
 **Root cause: nothing in the port ever called `WSAStartup`.** Winsock requires a
 per-process initialisation before any socket call; POSIX has no equivalent, so
 there was nothing to port and the call was simply never written. Every
-`socket()` returned `WSANOTINITIALISED`, the guest's IPC lock could not open, and
-the engine reports that as the port being taken.
+`socket()` returned `WSANOTINITIALISED`, the guest's IPC lock could not open,
+and the engine reports that as the port being taken.
 
 **Why it worked for a month anyway.** The staged full-fat ffmpeg's DLLs carry
-network-capable transports whose own initialisation calls `WSAStartup`, so by the
-time the guest asked for a socket, Winsock was already up. Cutting ffmpeg down to
-`--disable-network` removed the accident, and with it a netgame that had been
-verified by play. **The bundle-size work caused this**; the size result stands,
-but the Windows netgame verification of 2026-08-04 was obtained on a binary that
-was only working by borrowed initialisation.
+network-capable transports whose own initialisation calls `WSAStartup`, so by
+the time the guest asked for a socket, Winsock was already up. Cutting ffmpeg
+down to `--disable-network` removed the accident, and with it a netgame that had
+been verified by play. **The bundle-size work caused this**; the size result
+stands, but the Windows netgame verification of 2026-08-04 was obtained on a
+binary that was only working by borrowed initialisation.
 
 **This is the listen()-auto-binds bug again, in a different costume** — an
 implicit initialisation nobody chose to depend on, load-bearing right up until a
@@ -537,12 +541,12 @@ component declined to provide it. The difference is that this one was hidden
 behind a third-party DLL rather than a kernel behaviour, so no amount of reading
 the port's own source would have found it.
 
-Fixed by calling `WSAStartup(2.2)` once from the `TrapLayer` constructor, next to
-the rest of host setup, so a failure is reported at boot rather than inside a
+Fixed by calling `WSAStartup(2.2)` once from the `TrapLayer` constructor, next
+to the rest of host setup, so a failure is reported at boot rather than inside a
 trap. `WSANOTINITIALISED` is now mapped explicitly (to `ENETDOWN`) instead of
 falling through to the generic unknown-error 5, and **`socket()` logs its
-failures** — both early returns used to be silent, which is the whole reason this
-cost a log diff to find. One `fprintf` would have named it immediately.
+failures** — both early returns used to be silent, which is the whole reason
+this cost a log diff to find. One `fprintf` would have named it immediately.
 
 > The lesson is not "call `WSAStartup`". It is that **a trap which logs only its
 > successes turns a host-side failure into a guest-side non-sequitur.** The
@@ -638,8 +642,8 @@ hardware. The in-game half is already done and shipped.
 **The in-game half — done.** `[fps]` now prints **`(N slices/frame, +M ms
 each)`** directly, measured at the sleep call. The 2026-08-04 residual above was
 decomposed by hand out of three separate columns to reach "≈1.0 ms per slice";
-that arithmetic is now the instrument's job, on every host, so the next person to
-question timing on unfamiliar hardware reads it instead of deriving it. See
+that arithmetic is now the instrument's job, on every host, so the next person
+to question timing on unfamiliar hardware reads it instead of deriving it. See
 [diagnostics.md](diagnostics.md), "Reading the sleep slices".
 
 **Two probe runs in the VM.** The probe already ships inside the bundle:
@@ -657,8 +661,8 @@ the columns that matter are test 2's median lateness and test 3's
 frame/ticks-per-frame.
 
 **One bare-metal run**, when hardware exists — see the note below. Same three
-invocations (idle, `--busy 12`, `--busy 24`), plus one ordinary game session with
-`THEOC_FPS=1` to read the two new columns in situ.
+invocations (idle, `--busy 12`, `--busy 24`), plus one ordinary game session
+with `THEOC_FPS=1` to read the two new columns in situ.
 
 **What would count as a problem**, decided in advance so the result is not read
 after the fact:
@@ -711,13 +715,14 @@ recomputes the next slice, so one slice that overshoots by 20 ms eats the
 remainder of the frame instead of extending it. The measurement shows this
 directly — between `--busy 12` and `--busy 24` the single-shot median degrades
 **4×** (6.6 → 26.7 ms) while the frame moves **0.9 ms** (97.9 → 98.8). The frame
-floor is the 83.3 ms budget plus roughly *one* overshoot, not N of them. The loop
-is self-limiting, which is a property worth knowing and was not designed in.
+floor is the 83.3 ms budget plus roughly *one* overshoot, not N of them. The
+loop is self-limiting, which is a property worth knowing and was not designed
+in.
 
 **What the runs actually found is not a timer problem.** Under load all four
-sleep methods converge — at `--busy 24`: `Sleep()` 101.9 ms, `Sleep()+tbp`
-98.9 ms, timer 98.8 ms, timer+tbp 99.1 ms. The waitable timer is never *worse*,
-so the port's choice stands, but its advantage shrinks from decisive to ~3 ms
+sleep methods converge — at `--busy 24`: `Sleep()` 101.9 ms, `Sleep()+tbp` 98.9
+ms, timer 98.8 ms, timer+tbp 99.1 ms. The waitable timer is never *worse*, so
+the port's choice stands, but its advantage shrinks from decisive to ~3 ms
 because the binding constraint has changed. The min column proves which: at
 `--busy 24` the timer still fires a 0.1 ms sleep in **0.84 ms**, where
 `Sleep()+timeBeginPeriod(1)`'s best case is 10.99 ms. The timer's resolution is
@@ -789,9 +794,9 @@ points hard at the first.
 **Targeting the Windows binary discards the entire project.** Every address,
 struct layout, vtable offset and patch in `docs/` was derived against
 `theocracy.real` and `libmvos.so`. A PE build is a different compilation of a
-different codebase: `guestlink.cpp` would need a PE/COFF sibling, and none of the
-year's findings — the save-format fix, the frame limiter at `0x81da52a`, the GD
-vtable slots — would carry.
+different codebase: `guestlink.cpp` would need a PE/COFF sibling, and none of
+the year's findings — the save-format fix, the frame limiter at `0x81da52a`, the
+GD vtable slots — would carry.
 
 **The Windows build also would not run as shipped.** `tex.pck` holds `Setup.exe`
 and `theocracy-*.exe/.icd`, and the CD root carries `secdrv.sys`, `clokspl.exe`,
@@ -809,24 +814,24 @@ linked and run directly, and it is a large part of why the macOS port exists.
 is the part worth recording, because it is the argument someone will otherwise
 re-run. The output would still be a *different compilation of a different
 codebase*: none of this repo's addresses apply to it, so the reverse-engineering
-starts from zero. And every improvement worth shipping — the save-corruption fix,
-the 30 Hz cursor, sharp-bilinear presentation, `THEOC_PROVINCE_MS` — exists only
-as work against the Linux binaries. A native Windows build would be the original
-game with its original defects, including the one that ends a campaign at 51
-saves.
+starts from zero. And every improvement worth shipping — the save-corruption
+fix, the 30 Hz cursor, sharp-bilinear presentation, `THEOC_PROVINCE_MS` — exists
+only as work against the Linux binaries. A native Windows build would be the
+original game with its original defects, including the one that ends a campaign
+at 51 saves.
 
 **So: run the Linux binary on Windows.** One guest ABI across all three hosts,
 one set of RE, one set of fixes. The Windows work stays what the section above
-describes — a host-side OS shim — which is the whole reason this architecture was
-chosen ([guest-libmvos.md](guest-libmvos.md)).
+describes — a host-side OS shim — which is the whole reason this architecture
+was chosen ([guest-libmvos.md](guest-libmvos.md)).
 
 ## The development environment: containers, not a VM
 
 Initial Linux work needs **no VM, no target machine and no SSH**. A
 `linux/arm64` container builds at native speed on Apple Silicon and can run the
-headless verification too, because the port's diagnostics are text
-(`THEOC_FPS`, the trap report, `THEOC_WATCHDOG`) and its pixel checks are BMP
-dumps (`SDL_VIDEODRIVER=dummy` + `THEOC_SHOT_EVERY`/`THEOC_SHOT_DIR`) — the same
+headless verification too, because the port's diagnostics are text (`THEOC_FPS`,
+the trap report, `THEOC_WATCHDOG`) and its pixel checks are BMP dumps
+(`SDL_VIDEODRIVER=dummy` + `THEOC_SHOT_EVERY`/`THEOC_SHOT_DIR`) — the same
 technique that verified sharp-bilinear on macOS with no display
 ([upscale-filtering.md](upscale-filtering.md)).
 
@@ -850,8 +855,8 @@ into a VM if you need to watch it, and keep judgement calls on real hardware.
 
 ## First Linux build — 2026-08-03
 
-It builds and runs, and the prediction above held almost exactly: **two
-compile errors, both BSD-isms, nothing else.**
+It builds and runs, and the prediction above held almost exactly: **two compile
+errors, both BSD-isms, nothing else.**
 
 - `sockaddr_in::sin_len` — a BSD-only leading length byte.
 - `SO_NOSIGPIPE` — per-socket SIGPIPE suppression; Linux uses `MSG_NOSIGNAL`
@@ -895,11 +900,11 @@ no display. Run on both platforms under `SDL_VIDEODRIVER=dummy`:
 | `THEOC_START_SEC` | **never fires** | fires |
 | unimplemented traps | — | **0** |
 
-**The port behaves identically where it matters.** Guest blocks per frame, blocks
-per second and live heap all match, so the emulation is doing the same work;
-`heartbeat ~30/s` with ~4 `usleep` calls per frame means the re-entrant sleep and
-its tick-delivering splice work on Linux exactly as designed. Province renders
-correctly (verified from a BMP dump).
+**The port behaves identically where it matters.** Guest blocks per frame,
+blocks per second and live heap all match, so the emulation is doing the same
+work; `heartbeat ~30/s` with ~4 `usleep` calls per frame means the re-entrant
+sleep and its tick-delivering splice work on Linux exactly as designed. Province
+renders correctly (verified from a BMP dump).
 
 Two differences, one of them real:
 
@@ -1012,9 +1017,10 @@ province differential already gives above.
 
 `tools/package-linux.sh [amd64|arm64]` builds and packages in one step, entirely
 in a container so `ldd` sees the *target* architecture. Output is
-`dist/theoc-linux-<arch>-<version>/` — a launcher, `bin/theoc`, `lib/`, and a README.
-Verified self-contained by running it in a bare `debian:bookworm-slim` with no
-development packages installed: 0 loader errors, 215/215 constructors, video up.
+`dist/theoc-linux-<arch>-<version>/` — a launcher, `bin/theoc`, `lib/`, and a
+README. Verified self-contained by running it in a bare `debian:bookworm-slim`
+with no development packages installed: 0 loader errors, 215/215 constructors,
+video up.
 
 **What is bundled, and the mistake that decided it.** The first attempt used a
 hand-written denylist that kept X11, GL, ALSA and PulseAudio on the host, on the
@@ -1025,11 +1031,12 @@ loader is the oracle.**
 
 The graph turns out to contain no `libGL`/`libEGL` at all, because SDL2 really
 does load GL at runtime. So the one group that would be genuinely dangerous to
-ship is absent by construction, and **the host GPU stack is always used no matter
-what we bundle**. That leaves only client libraries speaking stable protocols to
-host daemons, so the denylist shrank to just glibc and libstdc++/libgcc — the
-same trade-off the Steam runtime makes. `THEOC_SYSTEM_LIBS=1` ignores the bundle
-if it ever bites on an unusual driver stack.
+ship is absent by construction, and **the host GPU stack is always used no
+matter what we bundle**. That leaves only client libraries speaking stable
+protocols to host daemons, so the denylist shrank to just glibc and
+libstdc++/libgcc — the same trade-off the Steam runtime makes.
+`THEOC_SYSTEM_LIBS=1` ignores the bundle if it ever bites on an unusual driver
+stack.
 
 Two consequences worth knowing:
 
@@ -1068,12 +1075,12 @@ never touches ffmpeg; that is guest code decoding into the LFB.
 
 **And that measurement, on its own, produced a shipped bug — 2026-08-21.** It
 covered `mpeg.cpp` and stopped there, but the port has a *second* libav
-consumer: `port/src/cdaudio.cpp` hands ripped CD audio to
-`avformat_open_input`, and its `audio_ext()` whitelist accepts ten container
-extensions. The minimal build could decode none of them, so **every released
-bundle played no CD music at all** while the development build played it
-perfectly — because the dev build links Homebrew's full ffmpeg. No amount of
-playing the game on the machine that built it could have shown this.
+consumer: `port/src/cdaudio.cpp` hands ripped CD audio to `avformat_open_input`,
+and its `audio_ext()` whitelist accepts ten container extensions. The minimal
+build could decode none of them, so **every released bundle played no CD music
+at all** while the development build played it perfectly — because the dev build
+links Homebrew's full ffmpeg. No amount of playing the game on the machine that
+built it could have shown this.
 
 `.mp3` is the instructive case: it looked supported and was not. The `mp3`
 *demuxer* was enabled, because libavformat needs it to probe MPEG-PS elementary
@@ -1092,8 +1099,8 @@ broken.
 
 ### How it was verified, with no display
 
-Headless in the container, both architectures, reading the decode log rather than
-the screen:
+Headless in the container, both architectures, reading the decode log rather
+than the screen:
 
 ```
 [mpeg] decoded 'data/cd/movie/ubi_logo.mpg' 480x360 249 frames @ 24.0 fps, audio 198144 samp (9.0s)
@@ -1141,15 +1148,16 @@ library.
 correct on POSIX, where `in_addr` is `{ in_addr_t s_addr; }`, and wrong on
 Windows, where it is a **union whose first member is four `u_char`s** — the
 initialiser lands in `s_b1` and the log printed `192.0.0.0` for `192.168.1.10`.
-Confined to the diagnostic; the address the guest receives comes from the `m.w32`
-above it. `s_addr` is the one member name both platforms spell identically.
+Confined to the diagnostic; the address the guest receives comes from the
+`m.w32` above it. `s_addr` is the one member name both platforms spell
+identically.
 
 **No build stamp at all, arm64 only.** The bundle carried the CMakeLists
 fallback `000000`/`00000000`. `package-linux.sh` resolved `THEOC_VERSION` on the
 host precisely because git fails `detected dubious ownership` against a
 bind-mounted `.git` owned by another uid — but left `THEOC_STAMP_DATE` and
-`THEOC_COMMIT` to `execute_process` calls that run *inside* the container and hit
-exactly that failure. Why amd64 got real values anyway is unexplained, and
+`THEOC_COMMIT` to `execute_process` calls that run *inside* the container and
+hit exactly that failure. Why amd64 got real values anyway is unexplained, and
 chasing it is beside the point: a stamp that varies by architecture and by run
 cannot do the job it exists for. All three are now resolved on the host and
 passed in.
@@ -1168,16 +1176,16 @@ finds nothing is not evidence of a missing stamp.
 2. **Then Windows**, ~~with the seam already proven by two implementations~~ —
    but see below: step 1 did not in fact produce a seam.
 
-**Step 1's second reason did not hold, and Windows should not assume otherwise.**
-Linux was expected to force `port/src/platform/` into existence; it needed *two
-`#if` guards* and nothing more, because the socket layer turned out to be
-portable by construction. So Windows arrives with **no seam already proven** —
-it has to build the first one, against the harder target, which is the opposite
-of the leverage this ordering was meant to buy. The ordering was still right for
-its other two reasons (the native-ABI oracle, and subtraction being cheap), and
-Linux is the reference implementation that makes any Windows divergence
-diagnosable. But the estimate for Windows should not be discounted on the
-strength of a seam that does not exist.
+**Step 1's second reason did not hold, and Windows should not assume
+otherwise.** Linux was expected to force `port/src/platform/` into existence; it
+needed *two `#if` guards* and nothing more, because the socket layer turned out
+to be portable by construction. So Windows arrives with **no seam already
+proven** — it has to build the first one, against the harder target, which is
+the opposite of the leverage this ordering was meant to buy. The ordering was
+still right for its other two reasons (the native-ABI oracle, and subtraction
+being cheap), and Linux is the reference implementation that makes any Windows
+divergence diagnosable. But the estimate for Windows should not be discounted on
+the strength of a seam that does not exist.
 
 ~~**Introduce `port/src/platform/` rather than sprinkling `#ifdef`s**~~ — at
 Winsock, which is where it finally earns its keep. The macOS-isms are
@@ -1216,17 +1224,17 @@ The bundles were cut by hand until now, which is how the 2026-08-19 re-cut
 shipped three defects out of three green builds. `.github/workflows/release.yml`
 moves the cutting onto GitHub Actions. Four decisions in it are load-bearing.
 
-**One workflow, not two.** The obvious split — build on tag, publish on a
-GitHub Release event — does not survive contact with this repo's topology.
-`origin` is Gitea with Actions disabled; it push-mirrors to GitHub, tags
-included. A mirror pushes *git objects*, and a Release is an API object, so
-`on: release` could only ever be fired by hand in the web UI. Worse, the split
-puts the build in one workflow run and the publish in another, and artefacts do
-not cross runs without a token, an explicit `run-id`, and a race against the
-retention window. Hanging the release job off the build jobs with `needs:` keeps
-the artefacts inside one run, and **`--draft`** supplies the human gate the
-two-trigger design was reaching for: the tag builds and uploads, a person
-decides whether it becomes a release.
+**One workflow, not two.** The obvious split — build on tag, publish on a GitHub
+Release event — does not survive contact with this repo's topology. `origin` is
+Gitea with Actions disabled; it push-mirrors to GitHub, tags included. A mirror
+pushes *git objects*, and a Release is an API object, so `on: release` could
+only ever be fired by hand in the web UI. Worse, the split puts the build in one
+workflow run and the publish in another, and artefacts do not cross runs without
+a token, an explicit `run-id`, and a race against the retention window. Hanging
+the release job off the build jobs with `needs:` keeps the artefacts inside one
+run, and **`--draft`** supplies the human gate the two-trigger design was
+reaching for: the tag builds and uploads, a person decides whether it becomes a
+release.
 
 **Tag-only, with a dispatch escape hatch.** Nothing runs on an ordinary commit
 push — deliberate, and cheap given the 2000-minute budget. The cost is real and
@@ -1267,27 +1275,28 @@ Two details that decide whether the test is worth anything:
   `tools/fix_save.py`.
 
 The test was checked in both directions before being trusted, which matters more
-than it sounds: a smoke test that cannot fail is worse than none. Against a build
-tree configured before the current commit it reports the stale stamp and exits 1
-(`binary says 8f4b26081906e44ee+ma00 / git says 8f4b260820b3bd06e0`); against a
-freshly configured build it passes. That stale-configure case is not contrived —
-build identity resolves at *configure* time, so a build directory that survives a
-commit produces exactly this, and it is why both packaging scripts `rm -rf` theirs.
+than it sounds: a smoke test that cannot fail is worse than none. Against a
+build tree configured before the current commit it reports the stale stamp and
+exits 1 (`binary says 8f4b26081906e44ee+ma00 / git says 8f4b260820b3bd06e0`);
+against a freshly configured build it passes. That stale-configure case is not
+contrived — build identity resolves at *configure* time, so a build directory
+that survives a commit produces exactly this, and it is why both packaging
+scripts `rm -rf` theirs.
 
 The job also fails if the bundle exceeds 80 MB. `package-linux.sh` degrades
-gracefully when the minimal ffmpeg is missing, using the distro one instead, so a
-cache miss that also failed to build would otherwise ship a ~190 MB bundle
+gracefully when the minimal ffmpeg is missing, using the distro one instead, so
+a cache miss that also failed to build would otherwise ship a ~190 MB bundle
 quietly rather than failing.
 
 **The first container run of it found a defect in the commit before.** Adding
 the SPDX headers rewrote each file through a temp file and `mv`, which handed
-four scripts the temp file's `644` — `package-linux.sh` and `build-ffmpeg-min.sh`
-among them, both invoked directly by the workflow. Nothing on macOS noticed,
-because nothing had run them since; the failure would have been the first CI
-run's packaging step. Worth recording as a pattern rather than an incident: a
-mechanical pass over many files preserves content and quietly drops mode, and
-`git ls-tree -r <ref> --format='%(objectmode) %(path)'` is how you see it,
-because `git diff` shows the mode change only in `--summary`.
+four scripts the temp file's `644` — `package-linux.sh` and
+`build-ffmpeg-min.sh` among them, both invoked directly by the workflow. Nothing
+on macOS noticed, because nothing had run them since; the failure would have
+been the first CI run's packaging step. Worth recording as a pattern rather than
+an incident: a mechanical pass over many files preserves content and quietly
+drops mode, and `git ls-tree -r <ref> --format='%(objectmode) %(path)'` is how
+you see it, because `git diff` shows the mode change only in `--summary`.
 
 Verified end to end on 2026-08-20: `package-linux.sh arm64` at a clean HEAD
 produced a 37 MB bundle, and `smoke-test.sh` run against it *inside* the
@@ -1337,10 +1346,10 @@ Two bugs the first runs found, both worth keeping:
 
 That second one, and the root-owned `dist/` before it, are the same root cause:
 **running as root locally verifies behaviour and not permissions.** Everything a
-container proves about architecture, linking and output stays true; everything it
-appears to prove about who may write where does not. A related local-only trap:
-wine in an arm64 container cannot run an x86-64 `.exe` and hangs rather than
-failing, so verification runs need `--platform linux/amd64`.
+container proves about architecture, linking and output stays true; everything
+it appears to prove about who may write where does not. A related local-only
+trap: wine in an arm64 container cannot run an x86-64 `.exe` and hangs rather
+than failing, so verification runs need `--platform linux/amd64`.
 
 ### macOS joins CI, signed and notarised — 2026-08-21
 
@@ -1357,7 +1366,8 @@ be stapled.
 
 The Linux bundle needs a hand-tuned denylist; macOS does not. Display, audio and
 GPU are reached through `/System/Library` frameworks and libc++ lives in
-`/usr/lib`, so the rule is simply *bundle everything outside those two prefixes*.
+`/usr/lib`, so the rule is simply *bundle everything outside those two
+prefixes*.
 
 What does not fall out is SDL. **Homebrew's `sdl2` is `sdl2-compat`, a shim over
 SDL3, and it dlopens SDL3 rather than linking it** — first candidate
@@ -1412,11 +1422,11 @@ off.
 #### Notarised, not stapled
 
 `notarytool` accepts `.zip`, `.pkg` and `.dmg`, never `.tar.gz`, so the job zips
-the bundle with `ditto` purely as transport. The ticket is keyed on each binary's
-cdhash, so the same files then ship in the `.tar.gz` and Gatekeeper recognises
-them. But `stapler` writes tickets only into `.app`, `.dmg` and `.pkg`, so
-**first launch checks with Apple online**, and the README gives the offline
-escape (`xattr -dr com.apple.quarantine .`).
+the bundle with `ditto` purely as transport. The ticket is keyed on each
+binary's cdhash, so the same files then ship in the `.tar.gz` and Gatekeeper
+recognises them. But `stapler` writes tickets only into `.app`, `.dmg` and
+`.pkg`, so **first launch checks with Apple online**, and the README gives the
+offline escape (`xattr -dr com.apple.quarantine .`).
 
 CI submits and does not wait — Apple's queue outran a 30-minute timeout once and
 the job was killed holding a runner. The submission id goes into the draft
@@ -1453,8 +1463,8 @@ guest runs under the hardened runtime.
 
 **`THEOC_SERVER=1` closes that without a display.** The dedicated server is the
 shipped `server` binary driven by the same emulator, so pointing a released
-bundle at a data tree and booting it exercises the whole risk in one command.
-On v1.0.1-rc3:
+bundle at a data tree and booting it exercises the whole risk in one command. On
+a released bundle:
 
     mvos .ctors done: 10 ok, 0 aborted, 0 no-return, 0 faulted (of 10)
     calling Start__12cApplication @ 0x804b210 ...
@@ -1481,9 +1491,9 @@ bundle it described shipped months ago.
 
 For Linux it runs *inside the packaging container*, which is the only place the
 package database that produced those 52 files exists. Two things made that
-harder than it sounds, both found by the first run marking 42 of 52 as
-`UNKNOWN ORIGIN` — a failure mode worth naming, because an unattributed entry in
-a compliance document is worse than useless: it looks like an answer.
+harder than it sounds, both found by the first run marking 42 of 52 as `UNKNOWN
+ORIGIN` — a failure mode worth naming, because an unattributed entry in a
+compliance document is worse than useless: it looks like an answer.
 
 - **usrmerge.** `ldconfig -p` reports `/lib/<triplet>/libX11.so.6`; dpkg's
   database records `/usr/lib/<triplet>/libX11.so.6`; and `dpkg -S` does no path
@@ -1509,7 +1519,7 @@ libraries. That is fine, and it is exactly the sort of thing a generated
 manifest records and a written one gets wrong.
 
 
-### The v1.0.1-rc3 release, verified end to end — 2026-08-21
+### The first four-bundle release, verified end to end — 2026-08-21
 
 The first tag to build all four bundles. Each was re-verified from its
 downloaded tarball rather than from `dist/`, so the check covers packaging and
@@ -1527,6 +1537,6 @@ and the `0` clean-tree suffix.
 
 Two things about the method are worth repeating on any future release. Test in a
 **stock** base image, not the build image — a bundle tested where it was built
-can pass by inheriting the builder's libraries, which is the property under test.
-And test the **downloaded tarball**, since the build tree cannot show a
+can pass by inheriting the builder's libraries, which is the property under
+test. And test the **downloaded tarball**, since the build tree cannot show a
 permission bit lost in `tar` or a signature broken by the round trip.

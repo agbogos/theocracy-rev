@@ -70,8 +70,8 @@ allocation. The simulation ticking is not what allocates.
 ### 3 — the window mode is free, and the province view has a price
 
 45 toggles. Six over ~6 min on the map (pinned at 28.10 MB) and five over ~5 min
-in province (pinned at 30.75 MB) moved nothing, in either direction. The +1.08 MB
-step that ended trial 2 was therefore *not* the toggle as such.
+in province (pinned at 30.75 MB) moved nothing, in either direction. The +1.08
+MB step that ended trial 2 was therefore *not* the toggle as such.
 
 What the trial did catch is the province view being **torn down and rebuilt**
 inside a fast-toggling burst:
@@ -96,8 +96,8 @@ what settles it — live at the end of each map visit:
 ```
 
 **+4.45 MB of the 6.28 is the first province visit.** The remaining +1.83 MB
-decays across the other 19 cycles, and the last six average **+8.3 KB each**.
-It settles at 30.72 MB. The ±~2.5 MB sawtooth is present on every cycle and is
+decays across the other 19 cycles, and the last six average **+8.3 KB each**. It
+settles at 30.72 MB. The ±~2.5 MB sawtooth is present on every cycle and is
 fully reclaimed. Two minutes idle afterwards: flat — nothing released late,
 nothing gained.
 
@@ -147,8 +147,8 @@ The session ended flat — 8 consecutive samples at 47.80 MB, 0 moves, and the
 frontier unmoved at 53.39 MB for the last six minutes. Nothing was released
 late. Exit was clean: `0 unimplemented`, no watchdog stall, and **23.1 MB live /
 53.4 MB frontier / 1529 free blocks** — the first session ever to have an
-end-of-run trap report in its log, because that had been going to stdout
-(defect 2).
+end-of-run trap report in its log, because that had been going to stdout (defect
+2).
 
 **Two side results.** Guest work peaked at **9.694M blocks/frame at 2.4 fps**,
 against 0.016M on the map and 0.21–0.86M in province — 11–45× province work per
@@ -172,10 +172,11 @@ Costs, for reading any future log:
 
 Guest work per frame, same save: map **0.016M**, province **0.21–0.86M**.
 
-**ESP identifies the screen.** `0x6fffee5c` is the map, `0x6fffc240` is province;
-the 2026-07-31 session showed six recurring values, and they are game states, not
-stack drift. The `[health]` line's `esp` field is therefore a free record of
-which screen each sample was taken on — used above to split trial 6 into visits.
+**ESP identifies the screen.** `0x6fffee5c` is the map, `0x6fffc240` is
+province; the 2026-07-31 session showed six recurring values, and they are game
+states, not stack drift. The `[health]` line's `esp` field is therefore a free
+record of which screen each sample was taken on — used above to split trial 6
+into visits.
 
 ## Where this landed
 
@@ -190,9 +191,9 @@ Both are comfortable against a 128 MB arena, and the frontier — which is what
 actually runs into the end of it — was flat at 53.39 MB for the last six minutes
 of the battle session.
 
-**The honest residual.** The two multi-hour sessions measured +7.2 and
-+7–11 MB/h, and the 2026-07-27 figure was dead linear across 117 samples. That
-has never been reproduced under controlled conditions, and 30 minutes of battles
+**The honest residual.** The two multi-hour sessions measured +7.2 and +7–11
+MB/h, and the 2026-07-27 figure was dead linear across 117 samples. That has
+never been reproduced under controlled conditions, and 30 minutes of battles
 does not produce it. Three readings are consistent with the evidence and this
 work cannot choose between them:
 
@@ -269,14 +270,14 @@ produce plausible wrong numbers rather than obvious failures.
    derive from a sampled series, because the derivation fails silently and
    quietly rewrites what the session was.
 
-The stream defects (#2, #3) were finally fixed as a class rather than one site at
-a time — all 115 host `printf` sites in `port/src` now go to stderr, and only
+The stream defects (#2, #3) were finally fixed as a class rather than one site
+at a time — all 115 host `printf` sites in `port/src` now go to stderr, and only
 guest output stays on stdout. See [diagnostics.md](diagnostics.md), "Which
 stream: stdout is the guest's, stderr is ours".
 
-The general lesson, which is [diagnostics.md](diagnostics.md)'s lesson again from
-the other side: an instrument that reads *exactly zero* deserves suspicion, and
-so does one that reads a confident, plausible number the first time it is
+The general lesson, which is [diagnostics.md](diagnostics.md)'s lesson again
+from the other side: an instrument that reads *exactly zero* deserves suspicion,
+and so does one that reads a confident, plausible number the first time it is
 pointed at something real.
 
 ## Open threads

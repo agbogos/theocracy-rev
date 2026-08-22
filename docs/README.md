@@ -1,19 +1,20 @@
 # Theocracy RE — docs
 
 Reverse-engineering notes for Theocracy (Philos Laboratories, 2000) — the Linux
-binaries: `libmvos.so` engine + game executable + device plugins. **Project goal:
-run Theocracy natively on modern machines.** It started as macOS-only and reached
-macOS, Linux and Windows from one source tree; the ports are described in
-[porting/other-os-ports.md](porting/other-os-ports.md). The second goal is this
-doc set: the port is as much archaeology as restoration, and what was learned
-about these binaries should outlive the port.
+binaries: `libmvos.so` engine + game executable + device plugins. **Project
+goal: run Theocracy natively on modern machines.** It started as macOS-only and
+reached macOS, Linux and Windows from one source tree; the ports are described
+in [porting/other-os-ports.md](porting/other-os-ports.md). The second goal is
+this doc set: the port is as much archaeology as restoration, and what was
+learned about these binaries should outlive the port.
 
 **Current architecture — [porting/guest-libmvos.md](porting/guest-libmvos.md)
 (playable):** map **both** `theocracy.real` and the real `libmvos.so` under
 Unicorn and HLE-only the finite OS/library boundary (libc / pthread / dl /
 sockets / SMPEG). Single-player is playable end to end. The earlier *pure-HLE
-native-replace* plan is **superseded** — it hit an unbounded GUI-reimplementation
-wall; kept as historical record and as a source of RE'd layouts.
+native-replace* plan is **superseded** — it hit an unbounded
+GUI-reimplementation wall; kept as historical record and as a source of RE'd
+layouts.
 
 ## Why this boundary works
 
@@ -69,12 +70,48 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 
 ## The port — current
 
-- [porting/guest-libmvos.md](porting/guest-libmvos.md) — **★ the architecture, told chronologically.** The dual-image linker, the OS-boundary HLE surface, then the milestone log G1→G21: render, input, audio, MPEG, the heap rewrite, cutscene skip, cursor trails, fullscreen, sockets, the dedicated server, the netgame lobby. The later entries are full debugging narratives — symptom, wrong theories, root cause.
-- [porting/host-architecture.md](porting/host-architecture.md) — **the same system told structurally.** What each `port/src` unit owns, the guest memory map, the exact call paths (import trap, host→guest call, the `redirect_guest` green run, native overrides of real libmvos functions, in-memory guest patches, x87 float returns), where to add a new HLE function, and the invariants that a contributor would otherwise break.
-- [porting/diagnostics.md](porting/diagnostics.md) — every `THEOC_*` instrument, what symptom each answers, and the lessons the instruments encode.
-- [porting/frame-timing.md](porting/frame-timing.md) — **★ crucial finding.** Province view was not slow, its clock was stalled: a present-coupled heartbeat, a frame-tied simulation, and an fps-coupled audio mixer. The general lesson — under this emulator, wall-clock bugs masquerade as performance bugs — and how to tell them apart in one line. Also **what the 30Hz heartbeat actually drives** (the cursor, not the simulation — a correction that closed the "real threads / signal delivery" item as a non-issue).
-- [porting/heap-growth-trials.md](porting/heap-growth-trials.md) — **the leak hunt, by elimination — closed 2026-08-02.** Why a fifth mixed-activity long session would answer nothing, the one-activity-per-run protocol built on `Alt+M` markers, and five trials in which **every activity saturates**: idling, the window mode, the realm↔province sawtooth (~8 KB/cycle) and finally nine battles with save reloads (a plateau at ~43.6 MB, converging to 30 KB per reload). Nothing measured threatens the 128 MB arena; the +7–11 MB/h of the two long sessions was never reproduced, and the three readings that remain consistent with the evidence are stated rather than chosen between. Reference costs for reading any future log, and the nine instrument defects the trials exposed — five of which produced plausible wrong numbers rather than obvious failures.
-- [porting/upscale-filtering.md](porting/upscale-filtering.md) — **done 2026-08-02.** Why there is no true AA to be had here (no geometry, no higher-res art) and why the complaint is really "no CRT". Sharp-bilinear shipped — guest → 3× intermediate nearest → screen linear, which keeps edges crisp without the mush plain linear gives, fits fractionally (recovering the ~5% the integer floor cost) and makes scanlines free (`THEOC_SCANLINES`). Includes the two options deliberately rejected, and how a render change was geometry-tested with no display.
+- [porting/guest-libmvos.md](porting/guest-libmvos.md) — **★ the architecture,
+  told chronologically.** The dual-image linker, the OS-boundary HLE surface,
+  then the milestone log G1→G21: render, input, audio, MPEG, the heap rewrite,
+  cutscene skip, cursor trails, fullscreen, sockets, the dedicated server, the
+  netgame lobby. The later entries are full debugging narratives — symptom,
+  wrong theories, root cause.
+- [porting/host-architecture.md](porting/host-architecture.md) — **the same
+  system told structurally.** What each `port/src` unit owns, the guest memory
+  map, the exact call paths (import trap, host→guest call, the `redirect_guest`
+  green run, native overrides of real libmvos functions, in-memory guest
+  patches, x87 float returns), where to add a new HLE function, and the
+  invariants that a contributor would otherwise break.
+- [porting/diagnostics.md](porting/diagnostics.md) — every `THEOC_*` instrument,
+  what symptom each answers, and the lessons the instruments encode.
+- [porting/frame-timing.md](porting/frame-timing.md) — **★ crucial finding.**
+  Province view was not slow, its clock was stalled: a present-coupled
+  heartbeat, a frame-tied simulation, and an fps-coupled audio mixer. The
+  general lesson — under this emulator, wall-clock bugs masquerade as
+  performance bugs — and how to tell them apart in one line. Also **what the
+  30Hz heartbeat actually drives** (the cursor, not the simulation — a
+  correction that closed the "real threads / signal delivery" item as a
+  non-issue).
+- [porting/heap-growth-trials.md](porting/heap-growth-trials.md) — **the leak
+  hunt, by elimination — closed 2026-08-02.** Why a fifth mixed-activity long
+  session would answer nothing, the one-activity-per-run protocol built on
+  `Alt+M` markers, and five trials in which **every activity saturates**:
+  idling, the window mode, the realm↔province sawtooth (~8 KB/cycle) and finally
+  nine battles with save reloads (a plateau at ~43.6 MB, converging to 30 KB per
+  reload). Nothing measured threatens the 128 MB arena; the +7–11 MB/h of the
+  two long sessions was never reproduced, and the three readings that remain
+  consistent with the evidence are stated rather than chosen between. Reference
+  costs for reading any future log, and the nine instrument defects the trials
+  exposed — five of which produced plausible wrong numbers rather than obvious
+  failures.
+- [porting/upscale-filtering.md](porting/upscale-filtering.md) — **done
+  2026-08-02.** Why there is no true AA to be had here (no geometry, no
+  higher-res art) and why the complaint is really "no CRT". Sharp-bilinear
+  shipped — guest → 3× intermediate nearest → screen linear, which keeps edges
+  crisp without the mush plain linear gives, fits fractionally (recovering the
+  ~5% the integer floor cost) and makes scanlines free (`THEOC_SCANLINES`).
+  Includes the two options deliberately rejected, and how a render change was
+  geometry-tested with no display.
 
 ## The port — what's next
 
@@ -82,85 +119,346 @@ Open tasks are in **[`todo.md`](../todo.md)** at the repo root. It holds tasks
 only; the reasoning stays in these docs. (It replaces `task_fifo.md`, retired
 2026-08-03.)
 
-**As of 2026-08-04 the port is a release candidate, tagged `v1.0.0`.** All three
-hosts are playable and verified by play. One task is outstanding — a bare-metal
-Windows timing run, blocked on hardware until ~2026-08-18 — and it qualifies a
-measurement rather than blocking anything. Beyond it,
-[native-rewrite.md](porting/native-rewrite.md) is the one remaining *direction*
-and what is still unknown lives in each doc's own **"Open threads"** section.
-The second entry below is kept here rather than moved because it is the record
-of how a host port is done in this project, not a plan.
+**The port is a release candidate.** All three hosts are playable and verified
+by play. One task is outstanding — a bare-metal Windows timing run, blocked on
+hardware — and it qualifies a measurement rather than blocking anything. Beyond
+it, [native-rewrite.md](porting/native-rewrite.md) is the one remaining
+*direction* and what is still unknown lives in each doc's own **"Open threads"**
+section. The second entry below is kept here rather than moved because it is the
+record of how a host port is done in this project, not a plan.
 
-- [porting/native-rewrite.md](porting/native-rewrite.md) — **the long game.** Replace the emulated engine with native C++ one function at a time, game playable at every step, until Unicorn has nothing left to run. Why this is not the superseded pure-HLE plan (we now have a running system to check each piece against), the seam that already exists (`blit.cpp`'s five native LFB16 overrides), what makes a good candidate, and the hard parts — shared guest memory, the GUI toolkit, and knowing when to stop.
-- [porting/other-os-ports.md](porting/other-os-ports.md) — **Windows and Linux hosts — both done.** Structured from an audit of `port/src` rather than porting lore. The reusable core (four of seven units already travel; all of `docs/` transfers); three things that look like blockers and are not (`fork`/`execlp` are stubs, one host thread, no host `mmap`); why **Linux is a subtraction** — the BSD translations are written host-macro → guest-constant, so on Linux they are the identity and there is nothing to neutralise (measured on both platforms, correcting an earlier inference that they would be *actively wrong*) — and the one thing that must stay; Windows' real risk order, led by sub-millisecond sleep against a ~15.6 ms scheduler — probed standalone before a line of `traps.cpp` was touched, then fixed with a waitable timer and re-measured in-game; the prediction that Windows would force a `port/src/platform/` directory into existence, and **why it was wrong** (three platforms build from two adjacent `#if` blocks); and **which binary Windows should run** — the Linux one, since the Linux binaries ship unprotected while the Windows build does not run as shipped on modern Windows, and a Windows executable would be a different compilation to which none of this repo's addresses apply.
+- [porting/native-rewrite.md](porting/native-rewrite.md) — **the long game.**
+  Replace the emulated engine with native C++ one function at a time, game
+  playable at every step, until Unicorn has nothing left to run. Why this is not
+  the superseded pure-HLE plan (we now have a running system to check each piece
+  against), the seam that already exists (`blit.cpp`'s five native LFB16
+  overrides), what makes a good candidate, and the hard parts — shared guest
+  memory, the GUI toolkit, and knowing when to stop.
+- [porting/other-os-ports.md](porting/other-os-ports.md) — **Windows and Linux
+  hosts — both done.** Structured from an audit of `port/src` rather than
+  porting lore. The reusable core (four of seven units already travel; all of
+  `docs/` transfers); three things that look like blockers and are not
+  (`fork`/`execlp` are stubs, one host thread, no host `mmap`); why **Linux is a
+  subtraction** — the BSD translations are written host-macro → guest-constant,
+  so on Linux they are the identity and there is nothing to neutralise (measured
+  on both platforms, correcting an earlier inference that they would be
+  *actively wrong*) — and the one thing that must stay; Windows' real risk
+  order, led by sub-millisecond sleep against a ~15.6 ms scheduler — probed
+  standalone before a line of `traps.cpp` was touched, then fixed with a
+  waitable timer and re-measured in-game; the prediction that Windows would
+  force a `port/src/platform/` directory into existence, and **why it was
+  wrong** (three platforms build from two adjacent `#if` blocks); and **which
+  binary Windows should run** — the Linux one, since the Linux binaries ship
+  unprotected while the Windows build does not run as shipped on modern Windows,
+  and a Windows executable would be a different compilation to which none of
+  this repo's addresses apply.
 
 ## Reference & method
 
-- [reference/re-methodology.md](reference/re-methodology.md) — how to read these binaries without being wrong: address-space confusion, decompiler pointer-arithmetic scaling, fragment addresses, Ghidra's bogus-noreturn analyzer, why guessed struct layouts are this port's dominant bug class, the evidence discipline that came out of three failed diagnoses in a row, and **§12 — how a plausible *name* for an unread function became a fact in four docs, survived the findings audit, and was caught only when a second doc read the same address properly**.
-- [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) — **M0 deliverable**: the GNU-v2 demangling problem and its solution, the full API (252 classes / 2400 exports / the 232-symbol boundary), and the honest limits of symbol-derived headers. Artifacts in `data/`, tooling in `tools/`.
-- [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS** archive format, byte-exact, plus the `RSA4096` XOR joke-cipher over config/text files. Extractor: `tools/phls_extract.py`.
-- [reference/game-data-census.md](reference/game-data-census.md) — survey of the extracted tree (7191 files): formats ↔ engine structs, what feeds the simulation (`selap.txt` balance) vs. what is front-end.
-- [reference/original-os-setup.md](reference/original-os-setup.md) — **running the shipped binaries on their intended OS**, in a VM: why Debian Woody and not Windows XP, the 16-bit-or-nothing colour depth, the fullscreen-and-CD launch ritual, and OSS audio via AC97 + `i810_audio`. The configuration in which the game is *entirely* original code, and therefore the reference the port is judged against — with each workaround tied to the finding that later explained it, or marked as still unexplained.
-- [reference/reconf-tool.md](reference/reconf-tool.md) — **`reconf`, Philos' post-release reconfiguration tool — read 2026-08-15.** Not on the CD; recovered from a holarse.de mirror of the dead dlh.net download, and the only surviving Philos code that writes `mvos.cfg`. Unstripped, 78 KB, ~10 original functions. **Dated to 2000-09-21 by the tarball's stored mtimes — seven months after the CD master.** The doc keeps the case built *before* the archive arrived (the shipped installer says "To reconfigure please **edit** %s", this says "please **run reconf**"; nothing on the CD mentions it; its compiler package is two months newer than `inst.linux`'s), because that reasoning is all that will be available for the next artifact that turns up without its container — and because the `.comment` stamp, the piece that looked most like a date, was the weakest of the four. The five keys it manages (`[vmachine]` soundcard / cdrom_device / fullscreen / cdrom_mountpoint, `[game]` language), and the fstab → mtab → symlink-chase mount-point detection behind the launch ritual. **Then what it exposed:** our hand-authored `data/game/mvos.cfg` had **five of its seven lines read by no code in either binary** — the engine's video key is `video` not `device`, its sound key is `[vmachine] soundcard` not `[sound] card`, and the strings `fullscreen` and `network` occur nowhere in `libmvos.so` or `theocracy.real`. The two live keys were already at their defaults, so the file was functionally empty and worked for that reason. Replaced with what `inst.linux` demonstrably writes, recovered from the installer's own `printf` formats. `fullscreen` turns out to be **inert in the original game**, not just under this port. Also a free cross-check on `cString` (12 bytes) and `cConfigEntry` (`0x24`, is-section flag at `+0x20`), which it links **statically and with a `.symtab`**.
-- [overview.md](overview.md) — libmvos technical report: binary facts, the CD distribution inventory, the **AmigaOS-heritage argument**, and the ~200-class map by subsystem.
-- [history.md](history.md) — **Philos Laboratories, and how the game came to exist.** Not read off the binaries, and explicitly held to a lower standard of evidence than the rest of `docs/` so the two can never be confused. The studio; the publishing chain (Interactive Magic → **bought back by Philos** → Ubi Soft) and the materially different 1999 build it produced; the July 2000 raid and the 2003 custodial sentence; why the seized drives are **not** a lost source cache; the sequel that was being considered. And **the one place the history explains the code**: `overview.md` argues AmigaOS heritage from the idioms alone, and the 1997 hire of the *Perihelion: The Prophecy* team — an Amiga title — supplies the mechanism.
+- [reference/re-methodology.md](reference/re-methodology.md) — how to read these
+  binaries without being wrong: address-space confusion, decompiler
+  pointer-arithmetic scaling, fragment addresses, Ghidra's bogus-noreturn
+  analyzer, why guessed struct layouts are this port's dominant bug class, the
+  evidence discipline that came out of three failed diagnoses in a row, and
+  **§12 — how a plausible *name* for an unread function became a fact in four
+  docs, survived the findings audit, and was caught only when a second doc read
+  the same address properly**.
+- [reference/mvos-api-inventory.md](reference/mvos-api-inventory.md) — **M0
+  deliverable**: the GNU-v2 demangling problem and its solution, the full API
+  (252 classes / 2400 exports / the 232-symbol boundary), and the honest limits
+  of symbol-derived headers. Artifacts in `data/`, tooling in `tools/`.
+- [reference/phls-format.md](reference/phls-format.md) — the `*.pck` **PHLS**
+  archive format, byte-exact, plus the `RSA4096` XOR joke-cipher over
+  config/text files. Extractor: `tools/phls_extract.py`.
+- [reference/game-data-census.md](reference/game-data-census.md) — survey of the
+  extracted tree (7191 files): formats ↔ engine structs, what feeds the
+  simulation (`selap.txt` balance) vs. what is front-end.
+- [reference/original-os-setup.md](reference/original-os-setup.md) — **running
+  the shipped binaries on their intended OS**, in a VM: why Debian Woody and not
+  Windows XP, the 16-bit-or-nothing colour depth, the fullscreen-and-CD launch
+  ritual, and OSS audio via AC97 + `i810_audio`. The configuration in which the
+  game is *entirely* original code, and therefore the reference the port is
+  judged against — with each workaround tied to the finding that later explained
+  it, or marked as still unexplained.
+- [reference/reconf-tool.md](reference/reconf-tool.md) — **`reconf`, Philos'
+  post-release reconfiguration tool — read 2026-08-15.** Not on the CD;
+  recovered from a holarse.de mirror of the dead dlh.net download, and the only
+  surviving Philos code that writes `mvos.cfg`. Unstripped, 78 KB, ~10 original
+  functions. **Dated to 2000-09-21 by the tarball's stored mtimes — seven months
+  after the CD master.** The doc keeps the case built *before* the archive
+  arrived (the shipped installer says "To reconfigure please **edit** %s", this
+  says "please **run reconf**"; nothing on the CD mentions it; its compiler
+  package is two months newer than `inst.linux`'s), because that reasoning is
+  all that will be available for the next artifact that turns up without its
+  container — and because the `.comment` stamp, the piece that looked most like
+  a date, was the weakest of the four. The five keys it manages (`[vmachine]`
+  soundcard / cdrom_device / fullscreen / cdrom_mountpoint, `[game]` language),
+  and the fstab → mtab → symlink-chase mount-point detection behind the launch
+  ritual. **Then what it exposed:** our hand-authored `data/game/mvos.cfg` had
+  **five of its seven lines read by no code in either binary** — the engine's
+  video key is `video` not `device`, its sound key is `[vmachine] soundcard` not
+  `[sound] card`, and the strings `fullscreen` and `network` occur nowhere in
+  `libmvos.so` or `theocracy.real`. The two live keys were already at their
+  defaults, so the file was functionally empty and worked for that reason.
+  Replaced with what `inst.linux` demonstrably writes, recovered from the
+  installer's own `printf` formats. `fullscreen` turns out to be **inert in the
+  original game**, not just under this port. Also a free cross-check on
+  `cString` (12 bytes) and `cConfigEntry` (`0x24`, is-section flag at `+0x20`),
+  which it links **statically and with a `.symtab`**.
+- [overview.md](overview.md) — libmvos technical report: binary facts, the CD
+  distribution inventory, the **AmigaOS-heritage argument**, and the ~200-class
+  map by subsystem.
+- [history.md](history.md) — **Philos Laboratories, and how the game came to
+  exist.** Not read off the binaries, and explicitly held to a lower standard of
+  evidence than the rest of `docs/` so the two can never be confused. The
+  studio; the publishing chain (Interactive Magic → **bought back by Philos** →
+  Ubi Soft) and the materially different 1999 build it produced; the July 2000
+  raid and the 2003 custodial sentence; why the seized drives are **not** a lost
+  source cache; the sequel that was being considered. And **the one place the
+  history explains the code**: `overview.md` argues AmigaOS heritage from the
+  idioms alone, and the 1997 hire of the *Perihelion: The Prophecy* team — an
+  Amiga title — supplies the mechanism.
 
 ## Game internals (`theocracy.real`)
 
 Approach-independent: these describe the game itself, and would survive the port
 being rewritten or abandoned.
 
-- [subsystems/game-flow-and-main-loop.md](subsystems/game-flow-and-main-loop.md) — `cApplication::Init`/`Start` as a top-level state machine: single-instance lock, intro movies, the menu-id → action table, `SetupGame`, `OpenRealmScreen`.
-- [subsystems/game-loop-and-simulation.md](subsystems/game-loop-and-simulation.md) — `RealmGameLoop` and `SimulationUpdate`'s fixed timestep with bounded catch-up; the dev-console gating.
-- [subsystems/simulation-step.md](subsystems/simulation-step.md) — one deterministic tick; the `ALLIED_JOIN_YEARS` alliance mechanic; and the argument for lockstep **as weakened on 2026-08-06** — the command queue it rested on was the game date misread, so lockstep is now a hypothesis with the command channel still unfound.
-- [subsystems/population-and-births.md](subsystems/population-and-births.md) — **how a province makes people.** `cProvince::EatHealBirth` decompiled: an accumulator in *person-days* (`FUCK_PER_BIRTH` = 7120 of them per child, the developers' own name), eligibility across all 11 tribes in the province, and eating/starving in the same pass. Hospitals are a **maximum, not a stack** — a second one contributes nothing, HOSPITAL1 does nothing for births at all, and HOSPITAL3 is identical to HOSPITAL2, so the whole hospital contribution is one flat +30% unlocked at level 2. And **the birth rate does not taper, it stops**: above `MAX_FUCKER` (500) the eligible count is set to *zero* rather than clamped, confirmed against the instruction stream at both sites. Also the reusable method — `selap.txt` key → `LoadConfigVar` → global → xref → code — which turns any balance number a player can see into the code that consumes it.
-- [subsystems/mana-and-sacrifice.md](subsystems/mana-and-sacrifice.md) — **pyramids, mana and what sacrifice actually does.** `cPyramidBuilding` decompiled: passive mana as a carry-nothing-lost accumulator (1/day big, 1/2 days small, via a one-line virtual per subclass), and sacrifice as a **42-entry queue indexed by man type** — the victims die instantly and the mana is paid out three per in-game day, one man at a time, at a flat rate. A man is worth a per-type base plus a share of his experience. And **the taper players see is the gauge, not the game**: `MANA_GRADIENT` drives an 11-frame indicator that reads full at 10,000 while the cap is 70,000, so a constant payout looks like a burst that fades. Includes why Ghidra's `ROUND()` is truncation, and the out-of-bounds bug that fact deleted.
-- [subsystems/heroes.md](subsystems/heroes.md) — **what a hero actually is.** Not a unit type but a `cMan` carrying a hero id in one byte at `+0x27c`; `cHero::SetHeroId` decompiled, with a two-tier design (three generic hero *man types* — swordsman/spearman/archer — under nineteen named heroes). Every named hero is four `selap.txt` modifiers (HP/ST/ATT/DEF) plus, for some, one of **five magic-school immunity slots** at `+0x88..0x90` — Sun, Moon, Star, Nature, Soul, named by the heroes' own descriptions and agreeing across nine of them. Chimoki alone gets all five, at 90 rather than 100, which is precisely the "*partial* immunity" his description claims. Also: the Kathapi↔Jarakhi rivalry that exists as two symmetric config keys; `hero.cfg` decoded as a **placement** table (17-byte records, 8 columns in a different order from the fields, up to two magic items each) that places only 11 of the 19; and three pieces of unfinished content — **Umochi, whose description is the string `Umochi`**, six dead `TEAMREG` keys whose names appear nowhere in the binary, and eight heroes never placed.
-- [subsystems/magic-items.md](subsystems/magic-items.md) — **the fifty magic items, and the answer to "why do some have no lore".** `Item_CreateById` is a closed switch over ids 1–50, each item its own class; behaviour lives in five vtable slots (equip/unequip, tick, attack, defence) and is named by `selap.txt` keys that sit immediately before the spell tables. **Thirteen items ship with a description that is just their own name — identically in all six languages, so a writing gap and not a localisation one — and ten of those thirteen are fully implemented.** Only three are inert: the two Ring Pieces (which read as quest tokens for the working Ring of Concordance) and **Mask of the Brave**, the item equivalent of Umochi. Also the `mitem.cfg` record layout, the equip-restriction field, and the trap that nearly buried the whole finding — every one of the 50 vtables differs from the default, but seven overrides are no-ops that just call it.
-- [subsystems/missions.md](subsystems/missions.md) — **the scripted layer, and the wall heroes and magic items both hit.** Twenty `cMission_*` classes over one base vtable (`Start`/`Activate`/`Check`/`Finish`, a three-value state byte), their own encrypted five-column `.man` spawn files, and the four province virtuals they drive. The trap first: `Item_CreateById` is *not* the only way an item is made — mission code calls the fifty constructors directly, so xref'ing the factory says "no mission places an item", which is false. Xref the constructors instead and the whole quest layer appears. **The Two Rings chain end to end**: the mission drops both halves, a building virtual nobody had read (`+0xd4`, "a man entered", overridden by exactly two classes) destroys them when one man carries both and hands him the Ring of Concordance. **Five of the eight unplaced heroes are mission rewards**; three more are assigned by no code path, and 14 items likewise. **Then the fourth channel, found the same day and corrected in place**: every `init.dat` is a `theosg42` savegame, so the starting world is *loaded*, and `cHero` has a stream constructor that writes the id byte straight from file data — reached through a caste function-pointer table, so it appears in no xref. Jarakhi is the campaign's player character and ships that way. "Created by nothing" is everywhere narrowed to "created by no code path"; the doc keeps the wrong version visible next to the right one.
-- [subsystems/starting-world.md](subsystems/starting-world.md) — **what ships in `init.dat`, the campaign builder recovered, and what the Spanish cost.** Every map's opening state is a `theosg42` savegame, so heroes and items reach the game as *data* and no code audit can see them. The load chain decompiled end to end — `LoadGame` → `cGameSession` → `iScenario` → `cWorld` → `cProvince` → `cManList` → `CreateMan_fromStream`, with `LoadRegistredObject`'s class-name labels making the format self-describing, and the 42-entry caste table whose creator pointers are written at *runtime* (the indirect call that hid the hero constructor from every xref). Then the part that made it cheap: rather than re-implement ~150 stream constructors, the port **watches the game's own loader** (`THEOC_DUMP_WORLD`, four passive hooks, nine headless runs). The census of all nine worlds: **Jarakhi (11) is in the campaign file**, **Tlechlal (19) is in `scn6`**, **Umochi (9) is in nothing anywhere**, and **Mask of the Brave is in none of the nine** — so "dead in the shipped game" is restored, while **four of the fourteen no-code-path items do ship** and were placed with an editor. Also the evidence that the campaign world was *generated* from `hero.cfg`/`mitem.cfg` and then edited: its heroes are exactly `hero.cfg`'s eleven plus Jarakhi, and the only two items appearing twice are the only two ids both config files place. Then the **generator**: `SetupGame`'s three modes ("init"/"edit"/"normal") where the menu only ever sends "normal", the `world+0x5b4` load-vs-generate fork, and the two config files that ship as plain text when `cTextFile` accepts only `RSA4096` — so the builder could not read its own inputs. Recovered as `THEOC_NEW_WORLD` and **played**: half the campaign length, fewer AI provinces, a different unit mix, no player character and **no slaves** — a scaffold, not a campaign. And the Spanish: `SPAIN_ENTER_YEAR=1519` is an **absolute** date, so the start date *is* the campaign length — the shipped 1419 leaves 99 years, the generator's 1323 leaves 195.
-- [subsystems/multiplayer-and-factions.md](subsystems/multiplayer-and-factions.md) — the 11-faction roster, the `+0x2c` battle-mode flag, the netgame session lifecycle, and the decoded team-info packet.
-- [subsystems/save-format.md](subsystems/save-format.md) — **the `.tsg` save format and the bug that kills long campaigns.** Every save appends a byte-identical group to each of 44 province lists whose length is a *single byte* counting 17-byte units, so the counter dies at 255 — after 51 saves. Also the **header**: a save name, a 23–55 byte hole of uninitialised stack carrying live guest pointers, and the `theosg42` magic at `+0x40` that bounds it — so two saves of one game state never compared equal (14 of 72 bytes), which is what made a playtester's save hard to triage. Both are normalised at the same file boundary, and the window now carries a 22-byte stamp naming the commit, host and settings that wrote the file. Also why the save-name dialog's 40-character cap is what keeps an unbounded `strcpy` out of reach. The fix, why it is anchored on the counter rather than the repetition, and why it refuses files it does not fully recognise.
-- [subsystems/calendar.md](subsystems/calendar.md) — **the in-game calendar**, decompiled: the `cDate` object at `g_World+0x83c`, the seven functions that make it work, and the two ratios in `InitTimeUnitConstants` that fix a month at 20 days and a year at 365. Answers the three things hex-editing a save could not — the field is a plain 4-byte `int` (the old "3 bytes" was its low three), it has **no fixed file offset** because it follows variable-length data in `cWorld::Save`, and the 5 days a year that fall outside 18 months get **no special case at all**: they decode to month index 18 and display as a short 19th month.
-- [subsystems/music-and-redbook.md](subsystems/music-and-redbook.md) — **the music: gone since the port began, working since 2026-08-08.** Theocracy's score is Redbook CD audio — the analogue tracks on the disc — so there is no music file anywhere in the data tree. The `cVCDThread` manager decompiled: four moods, the **track table** (menu=3, realm=8, battle={6,7} or {2,5}), the deterministic "random" chooser, and the 5-second polling thread that is the only thing that starts the next track. Why the failure was silent for so long (the driver ran fine; the host's blanket `ioctl` stub told it *success*), and the fix: a virtual CD drive in the `ioctl` trap plus a streaming decoder summed into the host mixer, with `cVCDThread`/`cVCD`/`cCD_Linux` all still running as original guest code.
-- [subsystems/dev-console.md](subsystems/dev-console.md) — the developer console: never compiled out, gated behind one never-taken branch in single-player, and **half-wired even in multiplayer** (the command console is never given a `cShell`, so a typed command is dropped). The Alt+key dispatcher and eKey matrix, all four writers of the battle-mode flag, why the realm screen has no opener at any address, and how `THEOC_CONSOLE=1` opens it without patching the game.
-- [structs/cGameSession.md](structs/cGameSession.md) — the session struct, full `0x58` layout with per-field evidence.
-- [structs/cTribe.md](structs/cTribe.md) — the faction struct (`0x84`): diplomacy relation codes, resources, the roster template.
+- [subsystems/game-flow-and-main-loop.md](subsystems/game-flow-and-main-loop.md)
+  — `cApplication::Init`/`Start` as a top-level state machine: single-instance
+  lock, intro movies, the menu-id → action table, `SetupGame`,
+  `OpenRealmScreen`.
+-
+  [subsystems/game-loop-and-simulation.md](subsystems/game-loop-and-simulation.md)
+  — `RealmGameLoop` and `SimulationUpdate`'s fixed timestep with bounded
+  catch-up; the dev-console gating.
+- [subsystems/simulation-step.md](subsystems/simulation-step.md) — one
+  deterministic tick; the `ALLIED_JOIN_YEARS` alliance mechanic; and the
+  argument for lockstep **as weakened on 2026-08-06** — the command queue it
+  rested on was the game date misread, so lockstep is now a hypothesis with the
+  command channel still unfound.
+- [subsystems/population-and-births.md](subsystems/population-and-births.md) —
+  **how a province makes people.** `cProvince::EatHealBirth` decompiled: an
+  accumulator in *person-days* (`FUCK_PER_BIRTH` = 7120 of them per child, the
+  developers' own name), eligibility across all 11 tribes in the province, and
+  eating/starving in the same pass. Hospitals are a **maximum, not a stack** — a
+  second one contributes nothing, HOSPITAL1 does nothing for births at all, and
+  HOSPITAL3 is identical to HOSPITAL2, so the whole hospital contribution is one
+  flat +30% unlocked at level 2. And **the birth rate does not taper, it
+  stops**: above `MAX_FUCKER` (500) the eligible count is set to *zero* rather
+  than clamped, confirmed against the instruction stream at both sites. Also the
+  reusable method — `selap.txt` key → `LoadConfigVar` → global → xref → code —
+  which turns any balance number a player can see into the code that consumes
+  it.
+- [subsystems/mana-and-sacrifice.md](subsystems/mana-and-sacrifice.md) —
+  **pyramids, mana and what sacrifice actually does.** `cPyramidBuilding`
+  decompiled: passive mana as a carry-nothing-lost accumulator (1/day big, 1/2
+  days small, via a one-line virtual per subclass), and sacrifice as a
+  **42-entry queue indexed by man type** — the victims die instantly and the
+  mana is paid out three per in-game day, one man at a time, at a flat rate. A
+  man is worth a per-type base plus a share of his experience. And **the taper
+  players see is the gauge, not the game**: `MANA_GRADIENT` drives an 11-frame
+  indicator that reads full at 10,000 while the cap is 70,000, so a constant
+  payout looks like a burst that fades. Includes why Ghidra's `ROUND()` is
+  truncation, and the out-of-bounds bug that fact deleted.
+- [subsystems/heroes.md](subsystems/heroes.md) — **what a hero actually is.**
+  Not a unit type but a `cMan` carrying a hero id in one byte at `+0x27c`;
+  `cHero::SetHeroId` decompiled, with a two-tier design (three generic hero *man
+  types* — swordsman/spearman/archer — under nineteen named heroes). Every named
+  hero is four `selap.txt` modifiers (HP/ST/ATT/DEF) plus, for some, one of
+  **five magic-school immunity slots** at `+0x88..0x90` — Sun, Moon, Star,
+  Nature, Soul, named by the heroes' own descriptions and agreeing across nine
+  of them. Chimoki alone gets all five, at 90 rather than 100, which is
+  precisely the "*partial* immunity" his description claims. Also: the
+  Kathapi↔Jarakhi rivalry that exists as two symmetric config keys; `hero.cfg`
+  decoded as a **placement** table (17-byte records, 8 columns in a different
+  order from the fields, up to two magic items each) that places only 11 of the
+  19; and three pieces of unfinished content — **Umochi, whose description is
+  the string `Umochi`**, six dead `TEAMREG` keys whose names appear nowhere in
+  the binary, and eight heroes never placed.
+- [subsystems/magic-items.md](subsystems/magic-items.md) — **the fifty magic
+  items, and the answer to "why do some have no lore".** `Item_CreateById` is a
+  closed switch over ids 1–50, each item its own class; behaviour lives in five
+  vtable slots (equip/unequip, tick, attack, defence) and is named by
+  `selap.txt` keys that sit immediately before the spell tables. **Thirteen
+  items ship with a description that is just their own name — identically in all
+  six languages, so a writing gap and not a localisation one — and ten of those
+  thirteen are fully implemented.** Only three are inert: the two Ring Pieces
+  (which read as quest tokens for the working Ring of Concordance) and **Mask of
+  the Brave**, the item equivalent of Umochi. Also the `mitem.cfg` record
+  layout, the equip-restriction field, and the trap that nearly buried the whole
+  finding — every one of the 50 vtables differs from the default, but seven
+  overrides are no-ops that just call it.
+- [subsystems/missions.md](subsystems/missions.md) — **the scripted layer, and
+  the wall heroes and magic items both hit.** Twenty `cMission_*` classes over
+  one base vtable (`Start`/`Activate`/`Check`/`Finish`, a three-value state
+  byte), their own encrypted five-column `.man` spawn files, and the four
+  province virtuals they drive. The trap first: `Item_CreateById` is *not* the
+  only way an item is made — mission code calls the fifty constructors directly,
+  so xref'ing the factory says "no mission places an item", which is false. Xref
+  the constructors instead and the whole quest layer appears. **The Two Rings
+  chain end to end**: the mission drops both halves, a building virtual nobody
+  had read (`+0xd4`, "a man entered", overridden by exactly two classes)
+  destroys them when one man carries both and hands him the Ring of Concordance.
+  **Five of the eight unplaced heroes are mission rewards**; three more are
+  assigned by no code path, and 14 items likewise. **Then the fourth channel,
+  found the same day and corrected in place**: every `init.dat` is a `theosg42`
+  savegame, so the starting world is *loaded*, and `cHero` has a stream
+  constructor that writes the id byte straight from file data — reached through
+  a caste function-pointer table, so it appears in no xref. Jarakhi is the
+  campaign's player character and ships that way. "Created by nothing" is
+  everywhere narrowed to "created by no code path"; the doc keeps the wrong
+  version visible next to the right one.
+- [subsystems/starting-world.md](subsystems/starting-world.md) — **what ships in
+  `init.dat`, the campaign builder recovered, and what the Spanish cost.** Every
+  map's opening state is a `theosg42` savegame, so heroes and items reach the
+  game as *data* and no code audit can see them. The load chain decompiled end
+  to end — `LoadGame` → `cGameSession` → `iScenario` → `cWorld` → `cProvince` →
+  `cManList` → `CreateMan_fromStream`, with `LoadRegistredObject`'s class-name
+  labels making the format self-describing, and the 42-entry caste table whose
+  creator pointers are written at *runtime* (the indirect call that hid the hero
+  constructor from every xref). Then the part that made it cheap: rather than
+  re-implement ~150 stream constructors, the port **watches the game's own
+  loader** (`THEOC_DUMP_WORLD`, four passive hooks, nine headless runs). The
+  census of all nine worlds: **Jarakhi (11) is in the campaign file**,
+  **Tlechlal (19) is in `scn6`**, **Umochi (9) is in nothing anywhere**, and
+  **Mask of the Brave is in none of the nine** — so "dead in the shipped game"
+  is restored, while **four of the fourteen no-code-path items do ship** and
+  were placed with an editor. Also the evidence that the campaign world was
+  *generated* from `hero.cfg`/`mitem.cfg` and then edited: its heroes are
+  exactly `hero.cfg`'s eleven plus Jarakhi, and the only two items appearing
+  twice are the only two ids both config files place. Then the **generator**:
+  `SetupGame`'s three modes ("init"/"edit"/"normal") where the menu only ever
+  sends "normal", the `world+0x5b4` load-vs-generate fork, and the two config
+  files that ship as plain text when `cTextFile` accepts only `RSA4096` — so the
+  builder could not read its own inputs. Recovered as `THEOC_NEW_WORLD` and
+  **played**: half the campaign length, fewer AI provinces, a different unit
+  mix, no player character and **no slaves** — a scaffold, not a campaign. And
+  the Spanish: `SPAIN_ENTER_YEAR=1519` is an **absolute** date, so the start
+  date *is* the campaign length — the shipped 1419 leaves 99 years, the
+  generator's 1323 leaves 195.
+-
+  [subsystems/multiplayer-and-factions.md](subsystems/multiplayer-and-factions.md)
+  — the 11-faction roster, the `+0x2c` battle-mode flag, the netgame session
+  lifecycle, and the decoded team-info packet.
+- [subsystems/save-format.md](subsystems/save-format.md) — **the `.tsg` save
+  format and the bug that kills long campaigns.** Every save appends a
+  byte-identical group to each of 44 province lists whose length is a *single
+  byte* counting 17-byte units, so the counter dies at 255 — after 51 saves.
+  Also the **header**: a save name, a 23–55 byte hole of uninitialised stack
+  carrying live guest pointers, and the `theosg42` magic at `+0x40` that bounds
+  it — so two saves of one game state never compared equal (14 of 72 bytes),
+  which is what made a playtester's save hard to triage. Both are normalised at
+  the same file boundary, and the window now carries a 22-byte stamp naming the
+  commit, host and settings that wrote the file. Also why the save-name dialog's
+  40-character cap is what keeps an unbounded `strcpy` out of reach. The fix,
+  why it is anchored on the counter rather than the repetition, and why it
+  refuses files it does not fully recognise.
+- [subsystems/calendar.md](subsystems/calendar.md) — **the in-game calendar**,
+  decompiled: the `cDate` object at `g_World+0x83c`, the seven functions that
+  make it work, and the two ratios in `InitTimeUnitConstants` that fix a month
+  at 20 days and a year at 365. Answers the three things hex-editing a save
+  could not — the field is a plain 4-byte `int` (the old "3 bytes" was its low
+  three), it has **no fixed file offset** because it follows variable-length
+  data in `cWorld::Save`, and the 5 days a year that fall outside 18 months get
+  **no special case at all**: they decode to month index 18 and display as a
+  short 19th month.
+- [subsystems/music-and-redbook.md](subsystems/music-and-redbook.md) — **the
+  music: gone since the port began, working since 2026-08-08.** Theocracy's
+  score is Redbook CD audio — the analogue tracks on the disc — so there is no
+  music file anywhere in the data tree. The `cVCDThread` manager decompiled:
+  four moods, the **track table** (menu=3, realm=8, battle={6,7} or {2,5}), the
+  deterministic "random" chooser, and the 5-second polling thread that is the
+  only thing that starts the next track. Why the failure was silent for so long
+  (the driver ran fine; the host's blanket `ioctl` stub told it *success*), and
+  the fix: a virtual CD drive in the `ioctl` trap plus a streaming decoder
+  summed into the host mixer, with `cVCDThread`/`cVCD`/`cCD_Linux` all still
+  running as original guest code.
+- [subsystems/dev-console.md](subsystems/dev-console.md) — the developer
+  console: never compiled out, gated behind one never-taken branch in
+  single-player, and **half-wired even in multiplayer** (the command console is
+  never given a `cShell`, so a typed command is dropped). The Alt+key dispatcher
+  and eKey matrix, all four writers of the battle-mode flag, why the realm
+  screen has no opener at any address, and how `THEOC_CONSOLE=1` opens it
+  without patching the game.
+- [structs/cGameSession.md](structs/cGameSession.md) — the session struct, full
+  `0x58` layout with per-field evidence.
+- [structs/cTribe.md](structs/cTribe.md) — the faction struct (`0x84`):
+  diplomacy relation codes, resources, the roster template.
 
 ## Engine internals (`libmvos.so`)
 
-- [subsystems/memory-and-containers.md](subsystems/memory-and-containers.md) — `cSystemMemory` as a 32 MB budgeted, evictable **asset cache**; `cMemBlock`; `cString` *is* a memory block; Exec-style `cList`.
-- [subsystems/application-bootstrap.md](subsystems/application-bootstrap.md) — the framework inversion (**libmvos owns `main()`**), the decompiled 10-step boot, `OpenSubsystems` order, the requirement flags, and the platform-dependency table.
-- [subsystems/platform-audio-threads.md](subsystems/platform-audio-threads.md) — OSS audio + software mixer, `cThread` (pthread+pipe), `cTask` (fork/execlp).
-- [porting/vvc_x-backend.md](porting/vvc_x-backend.md) — the X11 + MIT-SHM display/input plugin, fully decompiled. The backend seam, the input entry points, the depth table, and the plugin `dlopen` handshake — i.e. the contract the SDL traps implement. Also explains why the original needed a 16-bit X server.
+- [subsystems/memory-and-containers.md](subsystems/memory-and-containers.md) —
+  `cSystemMemory` as a 32 MB budgeted, evictable **asset cache**; `cMemBlock`;
+  `cString` *is* a memory block; Exec-style `cList`.
+- [subsystems/application-bootstrap.md](subsystems/application-bootstrap.md) —
+  the framework inversion (**libmvos owns `main()`**), the decompiled 10-step
+  boot, `OpenSubsystems` order, the requirement flags, and the
+  platform-dependency table.
+- [subsystems/platform-audio-threads.md](subsystems/platform-audio-threads.md) —
+  OSS audio + software mixer, `cThread` (pthread+pipe), `cTask` (fork/execlp).
+- [porting/vvc_x-backend.md](porting/vvc_x-backend.md) — the X11 + MIT-SHM
+  display/input plugin, fully decompiled. The backend seam, the input entry
+  points, the depth table, and the plugin `dlopen` handshake — i.e. the contract
+  the SDL traps implement. Also explains why the original needed a 16-bit X
+  server.
 
 ## Historical — the superseded pure-HLE approach
 
 Each carries a banner at the top. Kept because the RE facts in them are still
 accurate and still cited; the *approach* is not current.
 
-- [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) — the original plan. Still the best single writeup of the game↔engine **ABI contract** (232 imports / 348 exports / copy relocs) and the risk list.
-- [porting/m1-loader.md](porting/m1-loader.md) — the single-image loader. Confirmed ELF facts, relocation counts, the trap mechanism, the nine flag addresses — all of which carried into `guestlink`.
-- [porting/m2-core.md](porting/m2-core.md) — the native MVOS layer. Source of RE'd struct layouts (vtables, singletons, `cTextFile`, the render boundary), the from-scratch `sscanf`, and the x87 float-return trick that is still in use.
+- [porting/macos-hle-emulator.md](porting/macos-hle-emulator.md) — the original
+  plan. Still the best single writeup of the game↔engine **ABI contract** (232
+  imports / 348 exports / copy relocs) and the risk list.
+- [porting/m1-loader.md](porting/m1-loader.md) — the single-image loader.
+  Confirmed ELF facts, relocation counts, the trap mechanism, the nine flag
+  addresses — all of which carried into `guestlink`.
+- [porting/m2-core.md](porting/m2-core.md) — the native MVOS layer. Source of
+  RE'd struct layouts (vtables, singletons, `cTextFile`, the render boundary),
+  the from-scratch `sscanf`, and the x87 float-return trick that is still in
+  use.
 
 ## The binaries
 
-- **libmvos.so** (Ghidra base `0x00010000`; file addr = Ghidra − `0x10000`) — the engine.
-- **theocracy.real** (base `0x08048000`) — the game. `.symtab`-stripped, but 348 dynamic exports (incl. 64 vtables), RTTI, and rich assert strings.
-- **libmvos_vvc_x.so** (+ keyboard/mouse/pointer plugins) — dlopen'd device backends, unstripped.
-- **server** (47 KB) — the shipped dedicated server; boots under the same host (`THEOC_SERVER=1`), which is why the netgame wire protocol never had to be reversed.
-- **inst.linux** — unstripped installer. No longer needed: the pack format was cracked directly (see phls-format).
-- **reconf** — **not a CD binary.** Philos' post-release reconfiguration tool, recovered 2026-08-15 from a holarse.de mirror; unstripped, and the only surviving code that writes `mvos.cfg`. See [reference/reconf-tool.md](reference/reconf-tool.md).
-- Full inventory: [overview.md](overview.md#distribution-inventory-linux-folder--the-linux-cd-install-set).
+- **libmvos.so** (Ghidra base `0x00010000`; file addr = Ghidra − `0x10000`) —
+  the engine.
+- **theocracy.real** (base `0x08048000`) — the game. `.symtab`-stripped, but 348
+  dynamic exports (incl. 64 vtables), RTTI, and rich assert strings.
+- **libmvos_vvc_x.so** (+ keyboard/mouse/pointer plugins) — dlopen'd device
+  backends, unstripped.
+- **server** (47 KB) — the shipped dedicated server; boots under the same host
+  (`THEOC_SERVER=1`), which is why the netgame wire protocol never had to be
+  reversed.
+- **inst.linux** — unstripped installer. No longer needed: the pack format was
+  cracked directly (see phls-format).
+- **reconf** — **not a CD binary.** Philos' post-release reconfiguration tool,
+  recovered 2026-08-15 from a holarse.de mirror; unstripped, and the only
+  surviving code that writes `mvos.cfg`. See
+  [reference/reconf-tool.md](reference/reconf-tool.md).
+- Full inventory:
+  [overview.md](overview.md#distribution-inventory-linux-folder--the-linux-cd-install-set).
 
 ## Conventions
 
-- Addresses are Ghidra addresses of the binary the doc covers (libmvos docs: base `0x10000`; game docs: `0x08048000`). Host log lines and `include/mvos_api.hpp` use libmvos **file** offsets instead — always say which. See [reference/re-methodology.md](reference/re-methodology.md) §1.
-- The Ghidra MCP shows **one program at a time**; ask the user to switch the active program to match the doc you are working in.
-- Findings are written back into the Ghidra DB as decompiler comments / renames as we go, and mirrored here. Don't leave a durable result only in a commit message.
-- Naming: `c…` class, `s…` on-disk/wire struct, `t…<T>` template instantiation, `_Linux`/`_X` = platform backend.
-- Symbols in the Ghidra DBs are still mangled (GNU v2 — Ghidra can't demangle it): use `tools/gnuv2_demangle.py` or `data/mvos_exports.tsv`.
-- A lot of this project's findings were first written as commit messages. `python3 tools/dump_commit_log.py` flattens the whole history into `data/commit-log.md` so it can be read as one narrative and audited for anything that never reached a doc. The output is untracked — regenerate it, don't commit it.
+- Addresses are Ghidra addresses of the binary the doc covers (libmvos docs:
+  base `0x10000`; game docs: `0x08048000`). Host log lines and
+  `include/mvos_api.hpp` use libmvos **file** offsets instead — always say
+  which. See [reference/re-methodology.md](reference/re-methodology.md) §1.
+- The Ghidra MCP shows **one program at a time**; ask the user to switch the
+  active program to match the doc you are working in.
+- Findings are written back into the Ghidra DB as decompiler comments / renames
+  as we go, and mirrored here. Don't leave a durable result only in a commit
+  message.
+- Naming: `c…` class, `s…` on-disk/wire struct, `t…<T>` template instantiation,
+  `_Linux`/`_X` = platform backend.
+- Symbols in the Ghidra DBs are still mangled (GNU v2 — Ghidra can't demangle
+  it): use `tools/gnuv2_demangle.py` or `data/mvos_exports.tsv`.
+- A lot of this project's findings were first written as commit messages.
+  `python3 tools/dump_commit_log.py` flattens the whole history into
+  `data/commit-log.md` so it can be read as one narrative and audited for
+  anything that never reached a doc. The output is untracked — regenerate it,
+  don't commit it.
 
 ## Status
 
@@ -188,7 +486,7 @@ accurate and still cited; the *approach* is not current.
 | **Windows port** | **DONE 2026-08-04 — playable, verified by play**: a full session, save/load, a netgame and cutscene playback. Three hosts run the same i386 binaries from the same source, with no `#ifdef` outside `traps.cpp`. Two things mattered beyond the build, and both are written up in [porting/other-os-ports.md](porting/other-os-ports.md): **sub-millisecond sleep** (the risk ranked first, and the only one that was real — a waitable timer fixed it, and contention runs to 2× oversubscription closed the question), and **two implicit initialisations the port was relying on without having chosen to** — POSIX's auto-binding `listen()`, and a `WSAStartup` that a third-party DLL happened to make. Both were latent on every platform. One item outstanding: a bare-metal timing run (~2026-08-18), which qualifies a measurement rather than blocking anything. |
 | **Windows port — build** | **BUILDS 2026-08-03.** `tools/package-windows.sh` cross-builds from macOS with mingw-w64 — no Windows machine is involved — producing a 7.3 MB bundle of seven DLLs taken from the real import closure, timing probe included. `traps.cpp` needed 11 fixes; the load-bearing ones were that Winsock SOCKETs are a **separate namespace from CRT fds** (libmvos polls sockets through plain `read`/`write`), `O_BINARY` everywhere (CRLF translation would silently corrupt saves and packs), and a `WSAGetLastError`→Linux-errno table. Cross-compiling also found a **real latent bug in the working macOS build** — `video.cpp` used `std::floor` without `<cmath>`. It runs the *Linux* binary. See [porting/other-os-ports.md](porting/other-os-ports.md) |
 | **macOS port — next** | **Nothing outstanding.** Playability closed 2026-08-02; the modernisation list closed 2026-08-03, two of its last three items as *won't-do* once their premises were checked. Province stays at its designed 12fps and [porting/frame-timing.md](porting/frame-timing.md) says why with evidence; `THEOC_PROVINCE_MS` is the one pacing control the engine admits. Next direction: [porting/native-rewrite.md](porting/native-rewrite.md). |
-| **Release engineering** | **`v1.0.0` tagged 2026-08-04; CI complete 2026-08-21.** Every run prints its `git describe` identity as its first log line, and every packaging script names the bundle from the same string, so a bundle and its banner cannot disagree. `.github/workflows/release.yml` builds all four bundles — Linux amd64/arm64, macOS arm64, Windows x64 — on a `v*` tag push and drafts a GitHub release from them; `workflow_dispatch` runs the builds and stops. Tag-only because `origin` is Gitea with Actions disabled and push-mirrors here. Each job checks the *artefact*, not the build log: `tools/smoke-test.sh` runs the packaged binary under `THEOC_FIX_SAVE` and asserts the save-header stamp it writes against git, with wine as the runner for the cross-built `.exe`. macOS is signed with a Developer ID, notarised and deliberately unstapled (it is a `.tar.gz`, not an `.app`, and `stapler` will not write a ticket into a plain directory). Bundles are `dist/theoc-{linux-amd64,linux-arm64,macos-arm64,windows-x64}-<version>/` at 37 / 37 / 21 / 7.4 MB. See [porting/diagnostics.md](porting/diagnostics.md), "The first line names the build", and [porting/other-os-ports.md](porting/other-os-ports.md), "CI: building the bundles on GitHub". |
+| **Release engineering** | **CI complete 2026-08-21.** Every run prints its `git describe` identity as its first log line, and every packaging script names the bundle from the same string, so a bundle and its banner cannot disagree. `.github/workflows/release.yml` builds all four bundles — Linux amd64/arm64, macOS arm64, Windows x64 — on a `v*` tag push and drafts a GitHub release from them; `workflow_dispatch` runs the builds and stops. Tag-only because `origin` is Gitea with Actions disabled and push-mirrors here. Each job checks the *artefact*, not the build log: `tools/smoke-test.sh` runs the packaged binary under `THEOC_FIX_SAVE` and asserts the save-header stamp it writes against git, with wine as the runner for the cross-built `.exe`. macOS is signed with a Developer ID, notarised and deliberately unstapled (it is a `.tar.gz`, not an `.app`, and `stapler` will not write a ticket into a plain directory). Bundles are `dist/theoc-{linux-amd64,linux-arm64,macos-arm64,windows-x64}-<version>/` at 37 / 37 / 21 / 7.4 MB. See [porting/diagnostics.md](porting/diagnostics.md), "The first line names the build", and [porting/other-os-ports.md](porting/other-os-ports.md), "CI: building the bundles on GitHub". |
 | Starting world (`init.dat`) | **done 2026-08-09** — the fourth channel, closed the day it was found. All nine world files read **by the game's own loader** rather than by a re-implemented parser: four passive Unicorn watches (`THEOC_DUMP_WORLD`) and nine headless runs, against a load chain ~150 stream constructors deep. **Jarakhi (11) ships in `data/campaign/init.dat`** — confirmed, not inferred; **Tlechlal (19) ships in `scn6/init.dat`**, which is the last unexplained hero answered; **Umochi (9) is in nothing at all**, the only hero of whom that is true; and **Mask of the Brave (1) is in none of the nine**, so `magic-items.md`'s withdrawn "dead in the shipped game" is **restored**. Of the fourteen no-code-path items, **four (9, 32, 44, 47) do ship** in the campaign world and ten are genuinely in nothing. The campaign world reads as *generated* from the config placers and then edited — its heroes are exactly `hero.cfg`'s eleven plus Jarakhi, and items 16 and 36 appear twice because they are the only two ids in both config files. Method written up as [re-methodology.md](reference/re-methodology.md) §16. **Then the campaign builder, recovered the same day.** `SetupGame` takes a three-way mode — "init"/"edit"/"normal" — and the menu only ever sends "normal"; "init" runs the non-stream `cWorld` ctor, leaving `world+0x5b4` at zero, which is the entire load-vs-generate fork. It also could not have worked as shipped: `hero.cfg` and `mitem.cfg` are two of only four files in the tree with no `RSA4096` magic, and `cTextFile` accepts nothing else. `THEOC_NEW_WORLD` selects the mode and serves converted copies in memory, leaving the tree as-shipped; `save` is redirected off `init.dat` so it cannot destroy the shipped campaign. **Generated and played**: date 1323/07/04 against the shipped 1419/07/04, fewer AI provinces, a different unit mix, no Jarakhi and **no slaves** — a scaffold a designer was meant to finish, which is what the shipped world is. Also **the Spanish**: `SPAIN_ENTER_YEAR=1519` is absolute, so the start date is the campaign length — 99 years shipped against 195 generated — while the mission deadlines are relative and were never retuned — [starting-world.md](subsystems/starting-world.md) |
 | RE findings audit | DONE (2026-07-26) — every address `docs/` cites re-checked against the noreturn-repaired Ghidra DBs; 5 claims corrected, 1 open question closed. Method distilled into [reference/re-methodology.md](reference/re-methodology.md) |
 | `reconf` (post-release tool) | **done 2026-08-15** — a new artifact, not a CD binary: found on a holarse.de mirror of the dead dlh.net download and read end to end the same day. **Dated 2000-09-21 10:11:37 UTC** by the tarball's tar and gzip timestamps, against a CD mastered 23–25 Feb 2000 — so post-release by seven months, and by measurement rather than inference. The case built *before* the archive arrived is kept in the doc and all of it agrees: `inst.linux` tells the user to *edit* the config by hand while `reconf` tells them to *run reconf*, nothing anywhere on the CD mentions it, and its compiler package (gcc 2.95.2 20000116) is two months newer than the installer's (19991109) while the game and engine are older egcs-2.91.60. The lesson kept with it is that the `.comment` stamp — the piece that most looked like a date — was the weakest, giving only a lower bound that fell eight months short. Decompiled: `main`, `CreateConfig` (all 2444 lines of it), `FindMountPoint`, `SearchInSysTab`, `GetAnswer`, the static init. It edits `~/.theocracy/mvos.cfg`, falls back to `/usr/games/theocracy_base/mvos.cfg`, and **aborts rather than writing a file from nothing**. Section names had to be read off the instruction stream at `0x0804af3f`/`0x0804b455` because Ghidra drops the string arguments to the inlined `cString` constructors. **Then it paid for itself**: chasing its five keys into `libmvos.so` showed that **five of the seven lines in our hand-authored `data/game/mvos.cfg` are read by nothing** (`device` should be `video`; `[sound] card` should be `[vmachine] soundcard`; `fullscreen` and `network` appear in neither binary), while the two live keys sat at their defaults — so the config we shipped for a year was functionally empty, and worked for exactly that reason. The engine's real vocabulary is five keys, each with a hardcoded fallback, now tabulated in [application-bootstrap.md](subsystems/application-bootstrap.md), whose own "config vocabulary" line was wrong in the same two places. `data/game/mvos.cfg` was replaced with what `inst.linux` provably writes — recovered from the installer's `printf` format strings, every value equal to the engine's default, so the change is behaviour-neutral by construction. `fullscreen` is **inert in the shipped game**, not merely under this port — [reconf-tool.md](reference/reconf-tool.md) |
@@ -216,9 +514,9 @@ That is the licence branch, stated by the rights-holder on the article itself:
 **Ubi Soft was the licensee, not the owner.** Ubisoft never acquired the IP.
 
 This is direct observation of the physical release rather than a secondary
-account, which makes it better-evidenced than most of
-[history.md](history.md) — and it decides a question that has apparently been
-open in public for twenty-five years.
+account, which makes it better-evidenced than most of [history.md](history.md) —
+and it decides a question that has apparently been open in public for
+twenty-five years.
 
 What it settles:
 
@@ -259,7 +557,8 @@ maintained deliberately rather than incidentally. Audited 2026-08-03:
   installer, and since 2026-08-15 it reproduces what `inst.linux` writes — five
   key-value pairs and two section headers, every value the engine's own default.
   Facts about an interface, with no expressive content to own.
-- **Every tool here is our own implementation.** Nothing third-party is vendored.
+- **Every tool here is our own implementation.** Nothing third-party is
+  vendored.
 - **The port never decrypts anything.** The engine's real `cTextFile` runs as
   guest code and decrypts on read exactly as it did in 2000; the host only serves
   bytes, and the canonical data tree stays as-shipped.
@@ -271,8 +570,8 @@ file we wrote carries an SPDX header). The choice is forced rather than
 preferred: Unicorn 2.x declares `GPL-2.0-only AND GPL-2.0-or-later` — it carries
 QEMU-derived v2-only files — which makes AGPLv3 binaries undistributable. "or
 later" rather than v2-only keeps an AGPL move open if
-[porting/native-rewrite.md](porting/native-rewrite.md) ever retires Unicorn.
-The rest of the bundle is compatible: ffmpeg is LGPL-2.1+ built **without**
+[porting/native-rewrite.md](porting/native-rewrite.md) ever retires Unicorn. The
+rest of the bundle is compatible: ffmpeg is LGPL-2.1+ built **without**
 `--enable-gpl`/`--enable-nonfree`, SDL2 is zlib, libwinpthread is the permissive
 mingw-w64 runtime.
 

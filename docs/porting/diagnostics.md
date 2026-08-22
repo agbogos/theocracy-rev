@@ -6,8 +6,8 @@ knobs at all, and the debugging method the whole set exists to serve.
 
 Everything here was read out of `port/src/` (`traps.cpp`, `main.cpp`,
 `machine.cpp`, `video.cpp`, `guestlink.cpp`, `blit.cpp`, `mvos.cpp`) and
-cross-checked against the commit history (`python3 tools/dump_commit_log.py`
-→ `data/commit-log.md`, which is untracked and regenerated on demand). Defaults
+cross-checked against the commit history (`python3 tools/dump_commit_log.py` →
+`data/commit-log.md`, which is untracked and regenerated on demand). Defaults
 and units are taken from the code, not from prose. Almost nothing here was
 verified by running the game — it needs a display and the copyrighted data tree.
 The exceptions are `THEOC_CONSOLE` and `THEOC_EDIT`, both exercised live.
@@ -27,14 +27,14 @@ a rock-steady 11.9fps; the native LFB16 rasteriser removed real per-frame CPU
 cost and *did not change the frame rate at all*, because the bottleneck was a
 stalled game clock, not the renderer. The decisive question is never "what's
 hot?" but "is the emulator busy?" — if it is idle while slow, the cause is a
-host-side wait we synthesised (a sleep, a signal we failed to deliver, a clock we
-advanced too slowly), not the guest's compute. `THEOC_FPS=1` prints guest basic
-blocks per second next to the frame rate and answers it in one line. See
+host-side wait we synthesised (a sleep, a signal we failed to deliver, a clock
+we advanced too slowly), not the guest's compute. `THEOC_FPS=1` prints guest
+basic blocks per second next to the frame rate and answers it in one line. See
 [frame-timing.md](frame-timing.md).
 
 **2. On a hang: is the guest still executing?** A freeze is ambiguous only until
-you know which side is stuck. `THEOC_WATCHDOG` is the first thing to reach for on
-any "it froze": it watches the present counter from a host thread, and when
+you know which side is stuck. `THEOC_WATCHDOG` is the first thing to reach for
+on any "it froze": it watches the present counter from a host thread, and when
 frames stop it samples guest blocks *and* trap calls over half a second and says
 which side is wedged — **still running (spinning)** with the guest EIP that is
 spinning, or **not executing (stuck host-side)** with the name of the last trap
@@ -43,10 +43,10 @@ the watchdog says *that* we are stuck host-side, `THEOC_SLOWLOG` says *which
 handler*.
 
 **3. Am I measuring, or inferring?** The map-selection crash cost three
-confident wrong diagnoses in a row — a stack slot read as a return address, a GOT
-value read from the file on disk instead of guest memory, and a truncated grep
-taken as proof of a missing export — before an instrument found the real cause in
-one run. When a claim is about guest state, read guest state.
+confident wrong diagnoses in a row — a stack slot read as a return address, a
+GOT value read from the file on disk instead of guest memory, and a truncated
+grep taken as proof of a missing export — before an instrument found the real
+cause in one run. When a claim is about guest state, read guest state.
 
 ---
 
@@ -100,8 +100,8 @@ it: a config a player scrolls past is one they do not read.
 only, so `THEOC_WATCHDOG=0` still turns the watchdog on. The only three that
 inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
 leading `0`), `THEOC_FULLSCREEN` and `THEOC_NO_HIDPI` (off when unset, empty, or
-exactly `"0"`). Numeric knobs parse with `atoi`/`atof`, so garbage reads as 0 and
-then falls into whatever that variable's zero case is.
+exactly `"0"`). Numeric knobs parse with `atoi`/`atof`, so garbage reads as 0
+and then falls into whatever that variable's zero case is.
 
 ### Instruments
 
@@ -283,8 +283,8 @@ was installed by `THEOC_FPS` alone. Three instruments read the counter:
   problem. No stall has fired on such a run yet, so nothing was misdiagnosed;
   the bug was found by reading the code, not by being burned by it.
 
-`THEOC_LONGRUN` and `THEOC_WATCHDOG` now arm the counter themselves. It costs one
-relaxed increment per basic block, and that does cost frames — which is the
+`THEOC_LONGRUN` and `THEOC_WATCHDOG` now arm the counter themselves. It costs
+one relaxed increment per basic block, and that does cost frames — which is the
 standing reason growth is reported per 1k frames as well as per hour.
 
 **The lesson to carry:** a shared instrument reads state that something *else*
@@ -302,21 +302,21 @@ failures nobody thought to switch an instrument on for.
 `R_386_JMP_SLOT`/`R_386_GLOB_DAT` relocation in both images and reports any slot
 still holding 0, by symbol name, then prints the total. A zero slot means a call
 through it jumps to address 0 and faults with `EIP=0` and no frame pointer — one
-of the least diagnosable failures possible, and easy to mistake for a null vtable
-or a smashed stack. It exists because `resolve()` only warns for STRONG undefined
-symbols, so weak ones could land there silently. Its first run reported zero
-slots, which definitively killed a GOT hypothesis that had already been retracted
-once on inference.
+of the least diagnosable failures possible, and easy to mistake for a null
+vtable or a smashed stack. It exists because `resolve()` only warns for STRONG
+undefined symbols, so weak ones could land there silently. Its first run
+reported zero slots, which definitively killed a GOT hypothesis that had already
+been retracted once on inference.
 
 **EBP-chain guest backtrace on fault (`main.cpp`, `print_guest_backtrace`).**
 `Machine` captures EBP at fault time; the fault site walks the g++ 2.95 frame
 chain (up to 24 frames, bailing when frame pointers stop ascending) and labels
 each return address `game 0x08…` for `theocracy.real` or `mvos+0x…` for libmvos
-file offsets, so every frame drops straight into the right Ghidra DB. It replaced
-a dump of 16 raw stack words that left the reader to pick out a return address by
-eye — a guess that sent one investigation down a completely wrong path. The same
-walk is what `THEOC_LOUD_ABORT` prints. When it says "(no frame pointer)", that
-is itself the finding: go to `THEOC_TRACE`.
+file offsets, so every frame drops straight into the right Ghidra DB. It
+replaced a dump of 16 raw stack words that left the reader to pick out a return
+address by eye — a guess that sent one investigation down a completely wrong
+path. The same walk is what `THEOC_LOUD_ABORT` prints. When it says "(no frame
+pointer)", that is itself the finding: go to `THEOC_TRACE`.
 
 **Trap report at exit (`TrapLayer::report`).** Counts imports that were actually
 hit, split into implemented (with total calls) and **UNIMPLEMENTED** (with total
@@ -325,25 +325,25 @@ frontier MB, arena MB and free-block count. `0 unimplemented` is the standing
 regression bar for every commit. **On stderr**, like every other instrument — it
 was on stdout until 2026-08-01, which meant the documented `2>session.log`
 capture recipe dropped it: the 2026-07-31 two-hour session exited normally and
-still has no end-of-run allocator state, because it went to a terminal. `Mvos::report` adds a vtable-slots-hit line in
-the legacy layer. `main` prints the matching `.ctors` tally (ok / aborted /
-no-return / faulted).
+still has no end-of-run allocator state, because it went to a terminal.
+`Mvos::report` adds a vtable-slots-hit line in the legacy layer. `main` prints
+the matching `.ctors` tally (ok / aborted / no-return / faulted).
 
 **The log lines.** `[fps]` is the per-second frame instrument above. `[video]`
 reports the real geometry — guest size, renderer output in pixels *and* window
 size in points, `hidpi on/off`, crisp/smooth, scale factor, pillarbox and
-letterbox bar widths, depth code — so "why are there bars" and "why is it blurry"
-are answerable from the log rather than from the screen; equal px and pt is the
-tell that HiDPI silently did not engage. `[heap] OUT OF MEMORY` prints the
-request size against live, frontier and arena. `[slow]`, `[soak]`, `[watchdog]`,
-`[link]`, `[click]`, `[net]`, `[smpeg]` and `[HLE]` mark their own subsystems;
-the soak driver switches stdout to line buffering on start so guest prints and
-our stderr diagnostics interleave in the right order.
+letterbox bar widths, depth code — so "why are there bars" and "why is it
+blurry" are answerable from the log rather than from the screen; equal px and pt
+is the tell that HiDPI silently did not engage. `[heap] OUT OF MEMORY` prints
+the request size against live, frontier and arena. `[slow]`, `[soak]`,
+`[watchdog]`, `[link]`, `[click]`, `[net]`, `[smpeg]` and `[HLE]` mark their own
+subsystems; the soak driver switches stdout to line buffering on start so guest
+prints and our stderr diagnostics interleave in the right order.
 
 ### The first line names the build — 2026-08-04
 
 ```
-=== Theocracy guest-libmvos host v1.0.0 ===
+=== Theocracy guest-libmvos host vX.Y.Z ===
 ```
 
 `git describe --tags --always --dirty`, resolved at **configure** time and
@@ -351,8 +351,8 @@ compiled into `main.cpp` alone.
 
 Examples:
 
-- **`v1.0.0`** — a tagged build, clean.
-- **`v1.0.0-7-g1a2b3c4`** — seven commits past the tag, with commit sha.
+- **`vX.Y.Z`** — a tagged build, clean.
+- **`vX.Y.Z-7-g1a2b3c4`** — seven commits past the tag, with commit sha.
 - **`-dirty`** — built from an uncommitted tree.
 - **`unknown`** — built with no git and no override
 
@@ -403,58 +403,62 @@ never touches the present counter the watchdog reads — so "no frames + guest n
 executing" fired on a process that was simply exiting. A captured stack showed
 `~TrapLayer`. `main` now calls `stop_watchdog()` before the wind-down, with the
 comment "frames stop legitimately now". The same commit closed the mirror-image
-gap: `dispatch_plugin` was not updating the watchdog counters at all, yet it hosts
-the heaviest host-side work in the port (`OpenDisplay`, `SwapBuffers`/present), so
-"stuck inside present" was indistinguishable from "stuck nowhere".
+gap: `dispatch_plugin` was not updating the watchdog counters at all, yet it
+hosts the heaviest host-side work in the port (`OpenDisplay`,
+`SwapBuffers`/present), so "stuck inside present" was indistinguishable from
+"stuck nowhere".
 
 **A silently rejected input is unfalsifiable from the log, so failure paths must
 dump their raw bytes.** The engine never sets `sin_family` — the single-instance
 lock binds `{family=0, port=5043, INADDR_ANY}`. Linux tolerates `AF_UNSPEC` on a
 socket already created `AF_INET`; BSD returns `EAFNOSUPPORT`. The first cut of
 `guest_to_host_sin` returned −1 silently, which surfaced as an unexplained
-`Fatal` three layers up in guest code and cost a debugging cycle. The failure path
-now always dumps the raw guest sockaddr. The same lesson recurs in the linker:
-`R_386_JMP_SLOT` used to be `m.w32(P, S)` with no check, so an unresolved symbol
-silently wrote 0 to the GOT and the trap report kept reporting 0 unimplemented
-while the game died on a missing import — which is why the zero-GOT scan exists.
+`Fatal` three layers up in guest code and cost a debugging cycle. The failure
+path now always dumps the raw guest sockaddr. The same lesson recurs in the
+linker: `R_386_JMP_SLOT` used to be `m.w32(P, S)` with no check, so an
+unresolved symbol silently wrote 0 to the GOT and the trap report kept reporting
+0 unimplemented while the game died on a missing import — which is why the
+zero-GOT scan exists.
 
-**`eip=0` with `EBP=0` is a smashed frame, not a null call.** Linux/i386
-`struct stat` (`_STAT_VER_LINUX`) is exactly 88 bytes and callers put it on the
-stack; `__xstat` was writing 96 zeroed bytes with a guessed layout, so every call
-ran 8 bytes past the caller's local and zeroed the saved EBP and return address
-sitting immediately after it. The victim was `cDirent::cDirent` (`mvos+0x4c030`),
-which calls `__xstat` twice: it completed normally and then `ret`-ed to 0 with EBP
-popped as 0 — a fault several frames from the actual damage, and only on the
-netgame map dialog, the one path that constructs a `cDirent`. Three inferences had
-already been stated more confidently than the evidence supported. What found it
-was instruments: the zero-GOT scan reported 0 slots and killed the GOT theory, and
-the `THEOC_TRACE` ring then showed that `mvos+0x4c1e8` was a function *epilogue*
-rather than a call site — which reframed the whole thing — with two trap slots in
-the trace decoding to `strrchr` and `__xstat`. Look for who wrote past a buffer,
-not for an unresolved symbol.
+**`eip=0` with `EBP=0` is a smashed frame, not a null call.** Linux/i386 `struct
+stat` (`_STAT_VER_LINUX`) is exactly 88 bytes and callers put it on the stack;
+`__xstat` was writing 96 zeroed bytes with a guessed layout, so every call ran 8
+bytes past the caller's local and zeroed the saved EBP and return address
+sitting immediately after it. The victim was `cDirent::cDirent`
+(`mvos+0x4c030`), which calls `__xstat` twice: it completed normally and then
+`ret`-ed to 0 with EBP popped as 0 — a fault several frames from the actual
+damage, and only on the netgame map dialog, the one path that constructs a
+`cDirent`. Three inferences had already been stated more confidently than the
+evidence supported. What found it was instruments: the zero-GOT scan reported 0
+slots and killed the GOT theory, and the `THEOC_TRACE` ring then showed that
+`mvos+0x4c1e8` was a function *epilogue* rather than a call site — which
+reframed the whole thing — with two trap slots in the trace decoding to
+`strrchr` and `__xstat`. Look for who wrote past a buffer, not for an unresolved
+symbol.
 
 **A self-driver's clicks must be paced across frames.** At the 12fps province
 cadence a frame is 83ms and the game samples the pointer once per
 `ProcessInputs`. The soak driver's first cut did aim+press in one frame and
 released 80ms later — under one frame — so the press was never observed, and the
 shakedown timed out having never left the menu. Clicks are now aim → press →
-release, three frames apart. The related rule is that steps wait on an observable
-transition, not a stopwatch: the active `cScreen*` at `Intuition+0x24` changes on
-every screen change, so "click, then wait for that pointer to differ" survives a
-slow load, where a wall-clock script would desync every later click onto the
-wrong screen. Every step still carries a deadline, because a step that never
-completes is a bug to report loudly, not a driver that hangs silently.
+release, three frames apart. The related rule is that steps wait on an
+observable transition, not a stopwatch: the active `cScreen*` at
+`Intuition+0x24` changes on every screen change, so "click, then wait for that
+pointer to differ" survives a slow load, where a wall-clock script would desync
+every later click onto the wrong screen. Every step still carries a deadline,
+because a step that never completes is a bug to report loudly, not a driver that
+hangs silently.
 
 **A harness with a blind spot is worse than no harness where the bugs live.**
 Frame capture originally ran only from the normal present path, but cutscenes
 present from `SMPEG_playvideoframe` — so the harness was blind over exactly the
 frames a video-scaling bug shows up in. `shot_tick` was split out of
-`render_probe_tick` so the cutscene path can drive capture *without* the click and
-sweep drivers, which would skip the cutscene being photographed.
+`render_probe_tick` so the cutscene path can drive capture *without* the click
+and sweep drivers, which would skip the cutscene being photographed.
 
 **Deliberate waits must be credited out of a "slow" measure.** The frame cap
-sleeps up to 83ms on purpose. Without `slow_credit_ms_`, every capped frame would
-report as an 83ms `[slow]` section and bury the real ones.
+sleeps up to 83ms on purpose. Without `slow_credit_ms_`, every capped frame
+would report as an 83ms `[slow]` section and bury the real ones.
 
 ---
 

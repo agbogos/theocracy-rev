@@ -121,9 +121,9 @@ constants:
 The identification of the tiers as the three hospitals rests on the *config
 variables the tier selects* — `HOSPITAL1_Heals` / `HOSPITAL2_Heals` /
 `HOSPITAL3_Heals` / `NO_HOSPITAL_HEAL`, chosen by tier 1 / 2 / 3 / 0
-respectively — which is about as direct as naming gets. The building **type ids**
-`0x0a`/`0x10`/`0x25` are not independently confirmed; the binary carries no
-plain building-name table, only the `HOSPITALn_STONE`-style config keys.
+respectively — which is about as direct as naming gets. The building **type
+ids** `0x0a`/`0x10`/`0x25` are not independently confirmed; the binary carries
+no plain building-name table, only the `HOSPITALn_STONE`-style config keys.
 
 Two balance consequences fall out of the table, and both look like oversights
 rather than design:

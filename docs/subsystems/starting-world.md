@@ -83,11 +83,12 @@ if (caste > 0x29) Fatal("CreateMan : Unknown caste");
 ```
 
 `caste_props` is `PTR_DAT_084c9ee0`, 42 pointers into `.bss`. **The creator
-function pointers are written at runtime** — `FUN_08254570` stores `FUN_082543b0`
-into `0x0866d828`, which is caste `0x21` + `0xc` — so this is an indirect call
-with no rel32 anywhere. That is precisely why the man classes appear in no xref
-sweep, and it is the mechanical cause of the "hero X is created by nothing"
-error. Castes 9, 11 and 12 have a NULL entry and cannot be loaded at all.
+function pointers are written at runtime** — `FUN_08254570` stores
+`FUN_082543b0` into `0x0866d828`, which is caste `0x21` + `0xc` — so this is an
+indirect call with no rel32 anywhere. That is precisely why the man classes
+appear in no xref sweep, and it is the mechanical cause of the "hero X is
+created by nothing" error. Castes 9, 11 and 12 have a NULL entry and cannot be
+loaded at all.
 
 Of the 42 castes, **only 33, 34 and 35 read an extra byte** — checked against
 every caste constructor, not assumed. Those are the three hero man types from
@@ -109,7 +110,8 @@ many times, which reads one id byte and hands it to `Item_CreateById`
 
 The load chain above is roughly 150 stream constructors deep, and a
 re-implementation would have to be complete before it could be trusted at all.
-The game already contains a correct parser, so the port watches that one instead.
+The game already contains a correct parser, so the port watches that one
+instead.
 
 `THEOC_DUMP_WORLD=1` installs three **passive** watches — `Machine::add_watch`,
 which observes one guest instruction and changes nothing:
@@ -133,9 +135,9 @@ else is counted separately rather than filtered away, because "who else creates
 items" is the same question one level up.
 
 **The caste watch is the control.** Men are the one thing a world file certainly
-contains in bulk, so a run reporting zero men means the instrument is not firing,
-not that the world is empty. Without it, "0 heroes" and "instrument broken" look
-identical — and on the first run of this instrument they did.
+contains in bulk, so a run reporting zero men means the instrument is not
+firing, not that the world is empty. Without it, "0 heroes" and "instrument
+broken" look identical — and on the first run of this instrument they did.
 
 `THEOC_WORLD_FILE=<path>` serves one chosen file for every `init.dat` the guest
 opens. Which map's world gets loaded is otherwise decided by a menu the
@@ -153,8 +155,8 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
 ```
 
 Note the `LoadGame(...)` line prints the **guest** path, so under
-`THEOC_WORLD_FILE` it still says `data/campaign/init.dat`; the redirect itself is
-logged once as `[world] THEOC_WORLD_FILE: '<guest>' -> '<host>'`.
+`THEOC_WORLD_FILE` it still says `data/campaign/init.dat`; the redirect itself
+is logged once as `[world] THEOC_WORLD_FILE: '<guest>' -> '<host>'`.
 
 ## The census
 
@@ -193,9 +195,9 @@ placeholder reading in [heroes.md](heroes.md) is as strong as it can get.
 
 ### Four of the fourteen "no code path" items do ship
 
-Of the fourteen items [magic-items.md](magic-items.md) found no construction site
-for — 1, 2, 7, 9, 12, 17, 18, 29, 32, 41, 44, 47, 49, 50 — **four are in the
-campaign world**: 9 (Immortal Shield), 32 (Grappling Spears), 44 (Earring of
+Of the fourteen items [magic-items.md](magic-items.md) found no construction
+site for — 1, 2, 7, 9, 12, 17, 18, 29, 32, 41, 44, 47, 49, 50 — **four are in
+the campaign world**: 9 (Immortal Shield), 32 (Grappling Spears), 44 (Earring of
 Balance) and 47 (Symbol of Power). They were placed with an editor and saved.
 
 **Ten are in nothing**: 1, 2, 7, 12, 17, 18, 29, 41, 49, 50. Nine of the ten are
@@ -269,9 +271,9 @@ Generation dies immediately on `Fatal:Unknown textfile format! data/mitem.cfg`.
 tree with no magic at all (the others are `mvos.cfg`, which is ours, and
 `servers.txt`). 4473 shipped files are `RSA4096`.
 
-Beware the misread this doc originally made: `theocracy sux` and
-`mutant technology` sit next to the magic in libmvos and look like two more
-formats. They are the two **XOR keys**, periods 13 and 17
+Beware the misread this doc originally made: `theocracy sux` and `mutant
+technology` sit next to the magic in libmvos and look like two more formats.
+They are the two **XOR keys**, periods 13 and 17
 ([phls-format.md](../reference/phls-format.md)). Three adjacent strings, one
 format.
 
@@ -295,7 +297,8 @@ THEOC_WORLD_FILE=$PWD/data/game/data/campaign/init.generated.dat ./port/build/th
 anonymous temp file, so the tree stays as shipped and the plain text stays
 editable. `save` is redirected to `init.generated.dat` beside the original —
 `THEOC_WORLD_OUT` names another target, and pointing it at the original path is
-the explicit opt-in to overwriting. Nothing is patched; the guest runs unchanged.
+the explicit opt-in to overwriting. Nothing is patched; the guest runs
+unchanged.
 
 ### Shipped versus generated
 
@@ -321,8 +324,8 @@ settle what "generated" actually means:
 That is the finding. Generation produces a *scaffold* — a legal world, not a
 designed one — and the designer's job was everything between it and
 `data/campaign/init.dat`: the population, the balance of provinces, the player
-character, and four items placed by hand. It also makes the "empty start"
-a genuinely interesting basis for a new campaign, which is what the recovered
+character, and four items placed by hand. It also makes the "empty start" a
+genuinely interesting basis for a new campaign, which is what the recovered
 builder is now for.
 
 ## The Spanish, and what the start date costs
@@ -342,26 +345,27 @@ Then reinforcements every `SPAIN_TIME_OFFSET_DAY` = 90 days,
 four sites this pass did not follow — a player reports the arrival is slightly
 randomised, which those sites presumably explain.
 
-Because the arrival is absolute, **the start date is the campaign length**:
-1419 leaves 99 years 8 months, 1323 leaves 195 years 8 months. The shipped
-campaign is very close to exactly half the one the generator builds.
+Because the arrival is absolute, **the start date is the campaign length**: 1419
+leaves 99 years 8 months, 1323 leaves 195 years 8 months. The shipped campaign
+is very close to exactly half the one the generator builds.
 
 Whether that was a rush or a decision is not settled by anything here, and both
 readings survive: 1419 → a historically exact 1519 is a clean century, while
 1323 sits on the founding of Tenochtitlan. What *is* established is that the
-change was made in the data, late, and the code still carries the longer default.
+change was made in the data, late, and the code still carries the longer
+default.
 
-**The mission deadlines are relative and were not retuned.** They are
-`current date + N`, so halving the campaign did not tighten any individual
-mission — it removed the slack around all of them:
+**The mission deadlines are relative and were not retuned.** They are `current
+date + N`, so halving the campaign did not tighten any individual mission — it
+removed the slack around all of them:
 
 ```
 MISSION_001/002_YEARLEFT=5      MISSION_003_MONTHLEFT=2     MISSION_007_YEARLEFT=1
 MISSION_004/006/010_YEARLEFT=10
 ```
 
-plus two deadlines hardcoded rather than configured — `cDate_ctor_YMD(&d, 0, 0, 15)`,
-**fifteen days**, gated on holding 6+ and 5+ provinces.
+plus two deadlines hardcoded rather than configured — `cDate_ctor_YMD(&d, 0, 0,
+15)`, **fifteen days**, gated on holding 6+ and 5+ provinces.
 
 The console's `date <year> <month> <day>` command sets the world date directly,
 so the shipped world can be played at its original length without the generator

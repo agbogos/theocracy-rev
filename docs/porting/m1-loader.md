@@ -7,12 +7,12 @@
 > — see **[guest-libmvos.md](guest-libmvos.md)**. The ELF facts, trap mechanism,
 > and Unicorn setup below carried over; the single-image approach did not.
 
-The first executable milestone of the [macOS HLE emulator](macos-hle-emulator.md):
-load `theocracy.real`, wire the 232-import trap boundary, run the game's own
-C++ global constructors under emulation, call `cApplication::Init`, and read
-back the 9 subsystem flags. **Result: all 9 flags go `0 → 1`, set by the game's
-own `Init` — we execute the game's code and reach its first callback.** No
-Ghidra and no CD data were needed.
+The first executable milestone of the [macOS HLE
+emulator](macos-hle-emulator.md): load `theocracy.real`, wire the 232-import
+trap boundary, run the game's own C++ global constructors under emulation, call
+`cApplication::Init`, and read back the 9 subsystem flags. **Result: all 9 flags
+go `0 → 1`, set by the game's own `Init` — we execute the game's code and reach
+its first callback.** No Ghidra and no CD data were needed.
 
 Code lives in [`port/`](../../port) (C++17, Unicorn 2). Build & run:
 

@@ -21,15 +21,15 @@ one of two things, and this port has neither:
   pre-rendered at 800×600 and the UI layout is hard-coded to that mode. You
   cannot supersample detail that was never authored.
 
-So every option below is **upscale filtering**: making the pixels we already have
-look less like hard squares. Framing it as AA would send us hunting for something
-that cannot exist.
+So every option below is **upscale filtering**: making the pixels we already
+have look less like hard squares. Framing it as AA would send us hunting for
+something that cannot exist.
 
-Also note *what* the aged look actually is. The art was authored for a CRT, which
-blurred adjacent pixels, bled phosphor, and laid scanlines over everything. We
-currently present integer-scaled nearest, which is the *opposite* — perfectly
-square, perfectly hard pixels that never existed on the original display. The
-complaint is less "no AA" than "no CRT".
+Also note *what* the aged look actually is. The art was authored for a CRT,
+which blurred adjacent pixels, bled phosphor, and laid scanlines over
+everything. We currently present integer-scaled nearest, which is the *opposite*
+— perfectly square, perfectly hard pixels that never existed on the original
+display. The complaint is less "no AA" than "no CRT".
 
 ## Options, by effort
 
@@ -69,10 +69,11 @@ brightness.
 ### 3. hq3x / xBRZ pixel-art scalers — half a day to a day. Skip.
 
 Recorded so it does not get re-proposed. These are tuned for chunky low-res
-sprite art (SNES-era, 256×224). Theocracy is **800×600 pre-rendered 3D**, already
-high enough resolution that these produce a smeary, over-smoothed cartoon look —
-they invent curves the source art never had. Wrong tool for this art style. Also
-the good implementations carry copyleft licences worth checking before use.
+sprite art (SNES-era, 256×224). Theocracy is **800×600 pre-rendered 3D**,
+already high enough resolution that these produce a smeary, over-smoothed
+cartoon look — they invent curves the source art never had. Wrong tool for this
+art style. Also the good implementations carry copyleft licences worth checking
+before use.
 
 ### 4. Real CRT shader — days. Genuinely modernisation-track.
 
@@ -87,9 +88,9 @@ Options 1 (+2 as a knob) are roughly **1–2 hours total** — not a track item,
 despite it having been filed as one. Option 1 alone is probably enough. It does
 not block anything and nothing blocks it.
 
-Cutscenes probably keep their current smooth/fractional path either way: they are
-video, `MpegMovie::fit_frame` has already bilinear-resampled them, and none of
-the pixel-preservation arguments apply.
+Cutscenes probably keep their current smooth/fractional path either way: they
+are video, `MpegMovie::fit_frame` has already bilinear-resampled them, and none
+of the pixel-preservation arguments apply.
 
 > **All three predictions held.** Both options shipped on 2026-08-02 inside the
 > estimate; cutscenes did keep the smooth path, and a unified path was
@@ -124,8 +125,8 @@ would be three rows. It is restored before pass 2.
 
 **The integer floor is off on this path, deliberately.** The intermediate has
 already done the pixel-exact part, so the final blit is free to fit fractionally
-— which recovers the ~5% of image area the floor was throwing away (3.00× against
-3.08× on a 2940×1846 panel), exactly as the assessment predicted.
+— which recovers the ~5% of image area the floor was throwing away (3.00×
+against 3.08× on a 2940×1846 panel), exactly as the assessment predicted.
 
 **`THEOC_SCANLINES=N`** darkens one row in every three *of the intermediate*,
 i.e. one dark line per guest pixel row, whatever the window is doing. `N` is a

@@ -181,9 +181,9 @@ with `SNDCTL_DSP_SETFRAGMENT`, with no ALSA, no daemon and no fallback — see
 [../subsystems/platform-audio-threads.md](../subsystems/platform-audio-threads.md).
 Everything below follows from that.
 
-**"Permission denied" or "no such device".** OSS does not share a device
-between clients, and KDE's `artsd` holds it. Kill it, or turn it off for good in
-Control Centre → Sound & Multimedia → Sound System:
+**"Permission denied" or "no such device".** OSS does not share a device between
+clients, and KDE's `artsd` holds it. Kill it, or turn it off for good in Control
+Centre → Sound & Multimedia → Sound System:
 
 ```sh
 killall artsd

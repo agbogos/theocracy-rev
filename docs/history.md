@@ -92,8 +92,8 @@ French, German, Italian and Hungarian.
 
 Two CDs carrying **both the Windows and the Linux build**, with SafeDisc
 protection on the Windows side that stopped working on Windows Vista and later.
-The Linux side ships unprotected, which is
-[why this project runs the Linux binaries on all three hosts](porting/other-os-ports.md).
+The Linux side ships unprotected, which is [why this project runs the Linux
+binaries on all three hosts](porting/other-os-ports.md).
 
 Tux Games, which sold it, claimed at the time that Theocracy was **the first
 game released with the Windows and Linux versions on the same disc**, against

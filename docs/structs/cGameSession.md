@@ -1,6 +1,9 @@
 # struct cGameSession
 
-The single-player/multiplayer session controller. Global **`g_GameSession`** @ `0x84c9610` (game binary). Allocated `new(0x58)` and built by **`GameSession_Construct`** (`0x817af70`, formerly `FUN_0817af70`). *Not* the world/map — that's `g_World` (`0x85c0b74`).
+The single-player/multiplayer session controller. Global **`g_GameSession`** @
+`0x84c9610` (game binary). Allocated `new(0x58)` and built by
+**`GameSession_Construct`** (`0x817af70`, formerly `FUN_0817af70`). *Not* the
+world/map — that's `g_World` (`0x85c0b74`).
 
 ## Layout (0x58 bytes)
 
@@ -38,6 +41,14 @@ struct cGameSession {          // 0x58
 ```
 
 ## Notes
-- The MCP can't create a Ghidra struct type; this layout is mirrored in a decompiler comment on `GameSession_Construct`. Apply it as a real struct in the Ghidra UI (Data Type Manager) if desired, then retype `g_GameSession`.
-- **`cTribe`** side-finding: relationship state is a per-other-tribe array at `cTribe + 8 + otherId*4` (`cTribe_CloseBorders` writes `1` = borders open/known; Fatal `"These tribes ain't known by each other"`). Worth its own struct pass later.
-- Consumers worth knowing: `cProvince_Do` (`0x81da420`) reads `bMultiplayerBattle`/`localTribe`/`scenarioID`/`bEditMode`; `SimulationStep`/`SimulationUpdate` gate on `bEditMode`; `InGame_HandleKeyCommand` gates the console on `bMultiplayerBattle`.
+- The MCP can't create a Ghidra struct type; this layout is mirrored in a
+  decompiler comment on `GameSession_Construct`. Apply it as a real struct in
+  the Ghidra UI (Data Type Manager) if desired, then retype `g_GameSession`.
+- **`cTribe`** side-finding: relationship state is a per-other-tribe array at
+  `cTribe + 8 + otherId*4` (`cTribe_CloseBorders` writes `1` = borders
+  open/known; Fatal `"These tribes ain't known by each other"`). Worth its own
+  struct pass later.
+- Consumers worth knowing: `cProvince_Do` (`0x81da420`) reads
+  `bMultiplayerBattle`/`localTribe`/`scenarioID`/`bEditMode`;
+  `SimulationStep`/`SimulationUpdate` gate on `bEditMode`;
+  `InGame_HandleKeyCommand` gates the console on `bMultiplayerBattle`.

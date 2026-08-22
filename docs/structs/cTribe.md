@@ -1,6 +1,8 @@
 # struct cTribe
 
-A faction/realm. `new(0x84)` (132 bytes), one per slot in `cGameSession::tribes[11]`. Built by `cTribe_Construct(this, template)` then `cTribe_SetId(this, id)`. Game binary.
+A faction/realm. `new(0x84)` (132 bytes), one per slot in
+`cGameSession::tribes[11]`. Built by `cTribe_Construct(this, template)` then
+`cTribe_SetId(this, id)`. Game binary.
 
 ## Layout (0x84 bytes)
 
@@ -35,21 +37,33 @@ struct cTribe {                 // 0x84
 
 ## Tribe roster (11 slots)
 From `cTribe_SetId`'s initial-relations logic:
-- **0–5** — the playable/competing realms (start `unknown` to each other; must meet; full diplomacy).
+- **0–5** — the playable/competing realms (start `unknown` to each other; must
+  meet; full diplomacy).
 - **6, 7, 8** — minor factions (6 starts at relation `1`; 7/8 default `3`).
 - **9, 10** — always **allied** (`5`) to everyone → nature/neutral/independent.
 
 ## Diplomacy API (named)
-`cTribe_IsKnown` (`relations[x]!=0`), `cTribe_IsAllied` (`==5`), `cTribe_CheckValidTribe` (`x<6 && id<6`), `cTribe_CloseBorders`, `cTribe_Modification` / `cTribe_GetAllyDate` (allyDate), `cTribe_AddResource`.
+`cTribe_IsKnown` (`relations[x]!=0`), `cTribe_IsAllied` (`==5`),
+`cTribe_CheckValidTribe` (`x<6 && id<6`), `cTribe_CloseBorders`,
+`cTribe_Modification` / `cTribe_GetAllyDate` (allyDate), `cTribe_AddResource`.
 
 ## Roster template (`cTribe::template`, 16 bytes)
 Filled once by `InitTribeRoster` (`0x817bdd0`) via `TribeTemplate_Set4(entry, a, b, c, d)`. Each of the 11 entries (`DAT_08645240 + id*0x10`) is **four `int32`s**:
-- **Tribes 0–7:** values from compile-time `.data` constants at `DAT_084c817c` (8 × 4 = 32 ints, `0x84c817c..0x84c81fb`) — distinct per tribe.
+- **Tribes 0–7:** values from compile-time `.data` constants at `DAT_084c817c`
+  (8 × 4 = 32 ints, `0x84c817c..0x84c81fb`) — distinct per tribe.
 - **Tribes 8–10** (nature/neutral): literal `100, 100, 100, 100` (baseline).
 
-So the four ints are **per-tribe balance/difficulty parameters** (percent-style; neutrals = 100% baseline). Exact meaning of each of the 4 not yet pinned — needs the raw `.data` values (visible directly in Ghidra at `0x84c817c`) or a `tribe->template` reader. (`InitTribeRoster` also sets up the `flyinghelp1/2` tooltip locale entries and the `small_1pix` font — it's the general game-data init, not tribes only.)
+So the four ints are **per-tribe balance/difficulty parameters** (percent-style;
+neutrals = 100% baseline). Exact meaning of each of the 4 not yet pinned — needs
+the raw `.data` values (visible directly in Ghidra at `0x84c817c`) or a
+`tribe->template` reader. (`InitTribeRoster` also sets up the `flyinghelp1/2`
+tooltip locale entries and the `small_1pix` font — it's the general game-data
+init, not tribes only.)
 
 ## Still open
-- `+0x01..+0x07`, `flag0`/`_flags`, and the `+0x6e..+0x83` tail (~22 bytes) — likely population/AI bookkeeping. Trace resource getters and `controller` (`+0x48`) users next.
-- The **16-byte roster template** at `DAT_08645240` (name/color/type per tribe) — decode for the human-readable faction identities.
+- `+0x01..+0x07`, `flag0`/`_flags`, and the `+0x6e..+0x83` tail (~22 bytes) —
+  likely population/AI bookkeeping. Trace resource getters and `controller`
+  (`+0x48`) users next.
+- The **16-byte roster template** at `DAT_08645240` (name/color/type per tribe)
+  — decode for the human-readable faction identities.
 - Confirm relation codes `1` vs `3` (neutral vs war).

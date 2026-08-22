@@ -42,8 +42,8 @@ The decompiler prints pointer arithmetic in units of the pointee. An offset read
 off an `int *` parameter is **four times** the byte offset you want.
 
 **The incident.** `simulation-step.md` gave a province sub-object as `+0x103a1`,
-taken from `param_1 + 0x103a1` on an `int *`. The real byte offset is
-`0x103a1 × 4 = 0x40e84`, and the raw instruction says so outright:
+taken from `param_1 + 0x103a1` on an `int *`. The real byte offset is `0x103a1 ×
+4 = 0x40e84`, and the raw instruction says so outright:
 
 ```
 081d69f3  ADD EBX, 0x40e84
@@ -111,16 +111,16 @@ exercises are where a wrong layout hides.** Mechanically-derived facts (the trap
 boundary, the copy-reloc inventory, `tools/elf_facts.py` output) need no
 re-checking at all.
 
-**A third artifact of the same family: `ROUND()` is not rounding.** Ghidra prints
-every x87 float→int conversion as `ROUND(...)`, which reads as round-to-nearest.
-g++ 2.x implements a C cast to integer by *changing the rounding mode first* —
-`fnstcw` / `mov bh,0xc` (RC = 11, toward zero) / `fldcw` / `fistp` / restore — so
-it is **truncation**, and the decompiler shows none of that. The difference is
-not cosmetic: on the mana gauge (`0x0815a0a0`) the expression approaches 11 from
-below without reaching it, so truncation keeps a sprite index inside `0..10`
-while round-to-nearest would drive it to `-1` above 21000 mana. An
-out-of-bounds-array finding was written up on the strength of the decompiler's
-`ROUND` and then deleted once the bytes were read
+**A third artifact of the same family: `ROUND()` is not rounding.** Ghidra
+prints every x87 float→int conversion as `ROUND(...)`, which reads as
+round-to-nearest. g++ 2.x implements a C cast to integer by *changing the
+rounding mode first* — `fnstcw` / `mov bh,0xc` (RC = 11, toward zero) / `fldcw`
+/ `fistp` / restore — so it is **truncation**, and the decompiler shows none of
+that. The difference is not cosmetic: on the mana gauge (`0x0815a0a0`) the
+expression approaches 11 from below without reaching it, so truncation keeps a
+sprite index inside `0..10` while round-to-nearest would drive it to `-1` above
+21000 mana. An out-of-bounds-array finding was written up on the strength of the
+decompiler's `ROUND` and then deleted once the bytes were read
 ([../subsystems/mana-and-sacrifice.md](../subsystems/mana-and-sacrifice.md), "A
 note on `ROUND`"). Any threshold, index or comparison that depends on a
 float→int conversion needs the instruction stream.
@@ -169,8 +169,8 @@ suspicion was a function *epilogue* rather than a call site — reframing the
 whole problem as "the function returned to 0". See
 [porting/diagnostics.md](../porting/diagnostics.md).
 
-**Generalisable:** `eip=0` with `EBP=0` is a **smashed frame, not a null call** —
-nothing has pushed a frame pointer yet. Look for who wrote past a buffer, not
+**Generalisable:** `eip=0` with `EBP=0` is a **smashed frame, not a null call**
+— nothing has pushed a frame pointer yet. Look for who wrote past a buffer, not
 for an unresolved symbol.
 
 ## 8. Reading the symbols at all
@@ -230,20 +230,21 @@ Two ways this bites:
 
 Layout, once resolved: GNU v2 vtables are **8-byte entries**, `{short delta;
 short index; void *pfn}`, so entry *i*'s function pointer is at `vt + i*8 + 4`.
-Entry 0 is the `__tf…` type-info function; the first real virtual is at `vt+0xc`.
-Walking past the last real slot runs into the adjacent `__ti…` type-info nodes
-and the mangled type-name string — which is the marker that you have reached the
-end, not a slot full of garbage.
+Entry 0 is the `__tf…` type-info function; the first real virtual is at
+`vt+0xc`. Walking past the last real slot runs into the adjacent `__ti…`
+type-info nodes and the mangled type-name string — which is the marker that you
+have reached the end, not a slot full of garbage.
 
 The same caution applies to `theocracy.real`, which resolves its vtables through
-`.rel.got`/`.rel.bss`; the host's `guestlink` applies all of this at load, so the
-*running* image is correct and only static file reads are exposed.
+`.rel.got`/`.rel.bss`; the host's `guestlink` applies all of this at load, so
+the *running* image is correct and only static file reads are exposed.
 
-**Use `tools/elfq.py vtable <addr>` rather than re-deriving this.** It scans every
-`.rel*` section, resolves each word to its symbol, and prints raw offsets instead
-of assuming an entry stride — g++ 2.x emits either 4-byte pointer arrays or
-8-byte `{delta, index, pfn}` structs depending on `-fvtable-thunks`, and these two
-binaries do not agree, so a hardcoded stride reads a delta as a function pointer.
+**Use `tools/elfq.py vtable <addr>` rather than re-deriving this.** It scans
+every `.rel*` section, resolves each word to its symbol, and prints raw offsets
+instead of assuming an entry stride — g++ 2.x emits either 4-byte pointer arrays
+or 8-byte `{delta, index, pfn}` structs depending on `-fvtable-thunks`, and
+these two binaries do not agree, so a hardcoded stride reads a delta as a
+function pointer.
 
 ---
 
@@ -309,8 +310,9 @@ work lands in a doc, grep the other docs for the addresses it touches.
 `g_World+0x1f394`, which three docs called **the units manager** — and
 `simulation-step.md` ranked "the units manager and the virtual it dispatches" as
 the biggest remaining piece of the simulation. There is no units manager at that
-address. It is the `iMissionHandler`, and what step 2 actually does is advance the
-campaign's scripted layer by one day ([missions.md](../subsystems/missions.md)).
+address. It is the `iMissionHandler`, and what step 2 actually does is advance
+the campaign's scripted layer by one day
+([missions.md](../subsystems/missions.md)).
 
 Everything about the first instance repeats, which is the point of recording it
 twice:
@@ -397,12 +399,12 @@ item's own constructor. It reads like a chokepoint, so the mission task's
 cheapest first move was to xref it. Eight call sites came back: two config-file
 placers, save-load, and the developer console. **No mission.**
 
-Every one of those eight is real, and the conclusion they invite —
-"missions don't place items, so the Ring Pieces are unreachable" — is false.
-Mission code does `new(0x18)` and calls `cMagicItem_RingPiece1_ctor` **directly**,
-skipping the switch. Xref'ing the fifty constructors instead of the one factory
-turns up 25 with a non-factory caller, and with them the entire quest-reward
-layer: the ring combination, five hero rewards, and 25 item placements.
+Every one of those eight is real, and the conclusion they invite — "missions
+don't place items, so the Ring Pieces are unreachable" — is false. Mission code
+does `new(0x18)` and calls `cMagicItem_RingPiece1_ctor` **directly**, skipping
+the switch. Xref'ing the fifty constructors instead of the one factory turns up
+25 with a non-factory caller, and with them the entire quest-reward layer: the
+ring combination, five hero rewards, and 25 item placements.
 
 - **A factory is a convenience for its callers, not a gate on construction.** In
   C++ it cannot be one: any code with the class definition can call the
@@ -467,13 +469,13 @@ plan, and it was started — the load chain in
 [../subsystems/starting-world.md](../subsystems/starting-world.md) is its
 output. It was abandoned three hours in, correctly.
 
-The reason is the shape of the cost curve. A savegame parser is **all-or-nothing**:
-it produces no partial answer, because a single wrong field size desynchronises
-everything after it, and the chain here is ~150 stream constructors deep —
-provinces, 58 building classes, 42 man castes, roads, towns, unit commands,
-message queues. Every one of them has to be right before the first hero id can
-be read. Meanwhile the game contains a parser that is right by construction, and
-the port already runs it.
+The reason is the shape of the cost curve. A savegame parser is
+**all-or-nothing**: it produces no partial answer, because a single wrong field
+size desynchronises everything after it, and the chain here is ~150 stream
+constructors deep — provinces, 58 building classes, 42 man castes, roads, towns,
+unit commands, message queues. Every one of them has to be right before the
+first hero id can be read. Meanwhile the game contains a parser that is right by
+construction, and the port already runs it.
 
 So the answer came from four passive `UC_HOOK_CODE` watches — `LoadGame`, the
 caste read in `CreateMan_fromStream`, the hero-id read, and `Item_CreateById` —
@@ -516,8 +518,8 @@ Reported, confidently, as "`cTextFile` accepts three formats". They are **one**
 magic and **two XOR keys**, periods 13 and 17 — which
 [phls-format.md](phls-format.md) has documented since the format was cracked, in
 this repo, unread. The census that "confirmed" the reading (4473 files with
-`RSA4096`, zero with either other string) is exactly what two keys would produce,
-and it was quoted as evidence *for* the wrong model.
+`RSA4096`, zero with either other string) is exactly what two keys would
+produce, and it was quoted as evidence *for* the wrong model.
 
 The conclusion happened to survive — plain text is not a format either way — but
 the reasoning did not, and this is §12 with a different surface: a *name* was
@@ -533,27 +535,29 @@ project has already reverse-engineered.**
 Xrefs answer "who calls this function" and "who touches this global". Neither
 question is "who touches `this+0x27c`", and that is the question a struct claim
 actually rests on. Ghidra will not enumerate it, and sweeping decompiles for the
-offset is how [§15](#15-a-factory-tells-you-who-uses-the-factory-not-who-builds-the-type)'s
+offset is how
+[§15](#15-a-factory-tells-you-who-uses-the-factory-not-who-builds-the-type)'s
 mistake gets made a level down — a decompile shows the accesses the decompiler
-chose to render, and an address-take (`lea 0x27c(%ebx), %edx`) does not look like
-a field access at all. That is exactly how `heroes.md` first got a "sole writer"
-claim wrong.
+chose to render, and an address-take (`lea 0x27c(%ebx), %edx`) does not look
+like a field access at all. That is exactly how `heroes.md` first got a "sole
+writer" claim wrong.
 
-The instruction stream has no such gaps. On x86 a field access carries the offset
-as a literal disp32, so:
+The instruction stream has no such gaps. On x86 a field access carries the
+offset as a literal disp32, so:
 
 1. Scan `.text` for the four bytes of the offset, little-endian.
 2. Classify each hit by the **one or two opcode bytes in front of it** —
    `8a`/`80`/`8b` are reads, `88`/`c6`/`89` writes, `8d`/`81` address-takes, and
    `0f 84`, `e8`, `68` are the false positives (`jcc` rel32, `call` rel32, `push
    imm32`) that make an unclassified count meaningless.
-3. Map each surviving address to its containing function and see how they cluster.
+3. Map each surviving address to its containing function and see how they
+   cluster.
 
 Done for `+0x27c` on 2026-08-10: 43 raw hits, 10 false positives, and the
 remaining 33 fell into exactly two translation units plus one subclass method.
 The clustering *was* the finding — a field used by two classes and nothing else
-is a field the two classes each declared, which is what
-`sizeof(cMan) == 0x27c` then confirmed from the allocators.
+is a field the two classes each declared, which is what `sizeof(cMan) == 0x27c`
+then confirmed from the allocators.
 
 Two things this technique makes cheap and nothing else does:
 
@@ -572,15 +576,15 @@ the ModRM byte matched instead, which is more work but the same idea.
 
 Run against `+0x8a` — a hero's Moon magic-resistance slot — the scan found a
 write in `cHero_SetHeroId` and **no read anywhere in the image**, twice, the
-second time with a deliberately wide opcode net. The conclusion sitting there for
-the taking was "a hero's Moon immunity is never consulted", which is the kind of
-dead-content finding this project has published before and would have published
-again.
+second time with a deliberately wide opcode net. The conclusion sitting there
+for the taking was "a hero's Moon immunity is never consulted", which is the
+kind of dead-content finding this project has published before and would have
+published again.
 
-It is false. The slot *is* read, by `cMan_GetMagicResistance` — as
-`[reg + school*2 + 0x88]`. **An array field is addressed from its base**, so the
-displacement in the instruction is `0x88` and the other four offsets never appear
-in the instruction stream at all.
+It is false. The slot *is* read, by `cMan_GetMagicResistance` — as `[reg +
+school*2 + 0x88]`. **An array field is addressed from its base**, so the
+displacement in the instruction is `0x88` and the other four offsets never
+appear in the instruction stream at all.
 
 Two rules follow, and the second is the general one:
 

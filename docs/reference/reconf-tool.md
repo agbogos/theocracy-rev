@@ -3,8 +3,8 @@
 A 78 KB i386 ELF that is **not on the CD**, found in 2026-08-15 on a
 [holarse.de](https://files.holarse.de/native/Spiele/Theocracy/) mirror of the
 long-dead dlh.net download, described there as an official Philos-released
-reconfiguration script. It is not a script: it is a small unstripped C++
-console program that rewrites `mvos.cfg` by asking five questions.
+reconfiguration script. It is not a script: it is a small unstripped C++ console
+program that rewrites `mvos.cfg` by asking five questions.
 
 It matters to this repo for one concrete reason: `data/game/mvos.cfg` is
 hand-authored by us because the installer normally writes it, and this is the
@@ -29,9 +29,9 @@ Not in git — copyrighted like the rest of the distribution, and covered by
 `.gitignore`. Supply it out of band.
 
 The tarball carries one member and its SHA-256 matches the loose binary exactly,
-so the extracted copy is faithful. Keep the **archive**, not just the binary: the
-extracted file's mtime is only the extraction date, and the timestamps above are
-the whole dating argument.
+so the extracted copy is faithful. Keep the **archive**, not just the binary:
+the extracted file's mtime is only the extraction date, and the timestamps above
+are the whole dating argument.
 
 `blkhfc` is presumably a Philos developer's account on the machine that built or
 packed it. It appears nowhere else in this project.
@@ -39,16 +39,16 @@ packed it. It appears nowhere else in this project.
 ## Is it really post-release?
 
 Yes — **by seven months, and it is dated rather than argued.** The tarball's
-stored timestamps put the binary at **2000-09-21**, against a CD mastered
-23–25 Feb 2000.
+stored timestamps put the binary at **2000-09-21**, against a CD mastered 23–25
+Feb 2000.
 
 The rest of this section is the case as it stood *before* the archive turned up,
 kept because it was built independently and every piece of it agrees with the
 answer. That is worth something: the same reasoning is all that will be
 available for the next artifact that arrives without its container.
 
-The website's claim was not self-evidently true, and this project has been burned
-before by a plausible attribution hardening into a documented fact
+The website's claim was not self-evidently true, and this project has been
+burned before by a plausible attribution hardening into a documented fact
 ([re-methodology.md](re-methodology.md) §12). So it was tested rather than
 repeated. Four pieces of evidence, in descending strength:
 
@@ -83,8 +83,8 @@ them with 2.95.2. `reconf`'s package is ~2 months newer than the installer's.
 package, not of the build. It gives a lower bound only — `reconf` was built on
 or after 2000-01-16 — and that bound falls *before* the CD's own 23–25 Feb file
 dates, so on its own it was equally consistent with a tool made during the
-run-up to the master. Points 1 and 2 carried the conclusion; point 4 only
-failed to contradict it.
+run-up to the master. Points 1 and 2 carried the conclusion; point 4 only failed
+to contradict it.
 
 The archive settles it at 2000-09-21, which is consistent with all four and
 sharper than any of them. Note what the compiler stamp did *not* say: eight
@@ -93,11 +93,10 @@ build, so on a stamp alone the honest answer was always going to be a range.
 
 ## What it writes
 
-`main` is a shell: install `SIGINT`/`SIGTERM` handlers, print
-`Theocracy setup for Linux version`, build `HomeDir + "/mvos.cfg"`, call
-`CreateConfig`, then print `Good luck!` / `To reconfigure please run reconf!`
-or `Error: Setup aborted.`. Everything is in `CreateConfig` (`0x0804af10`),
-one ~17 KB function.
+`main` is a shell: install `SIGINT`/`SIGTERM` handlers, print `Theocracy setup
+for Linux version`, build `HomeDir + "/mvos.cfg"`, call `CreateConfig`, then
+print `Good luck!` / `To reconfigure please run reconf!` or `Error: Setup
+aborted.`. Everything is in `CreateConfig` (`0x0804af10`), one ~17 KB function.
 
 Two globals, both built in `__static_initialization_and_destruction_0`:
 
@@ -173,10 +172,11 @@ Given the CD device node, it:
 4. On total failure, `Calculation of the mount point failed!` and it returns the
    fallback it was handed.
 
-`SearchInSysTab` (`0x08049bc0`) is the parser both steps share: `fopen(…, "rt")`,
-512-byte lines into a static buffer, truncate at the newline, skip leading
-spaces and tabs, ignore `#` comment lines, split the first whitespace-delimited
-field and compare it to the target, and on a match return the second field.
+`SearchInSysTab` (`0x08049bc0`) is the parser both steps share: `fopen(…,
+"rt")`, 512-byte lines into a static buffer, truncate at the newline, skip
+leading spaces and tabs, ignore `#` comment lines, split the first
+whitespace-delimited field and compare it to the target, and on a match return
+the second field.
 
 ## What this says about our `mvos.cfg`
 

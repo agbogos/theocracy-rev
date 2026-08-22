@@ -25,10 +25,11 @@ with a clamp at `MAX_MANA`. **There are no diminishing returns on stored mana.**
 
 ## The class
 
-**`cPyramidBuilding`** — the RTTI name at `0x083857eb`, in the same vtable region
-as the two vtables its constructor installs (`0x08385200`, then `0x08384c60`).
-Ten concrete subclasses, `cBld_Pyramid{A,B,C,D,E}{1,2}` — five spheres × small
-and big — which is why each pyramid constant below has exactly five read sites.
+**`cPyramidBuilding`** — the RTTI name at `0x083857eb`, in the same vtable
+region as the two vtables its constructor installs (`0x08385200`, then
+`0x08384c60`). Ten concrete subclasses, `cBld_Pyramid{A,B,C,D,E}{1,2}` — five
+spheres × small and big — which is why each pyramid constant below has exactly
+five read sites.
 
 | Address | Name | Does |
 |---|---|---|
@@ -103,8 +104,9 @@ this[+0x230] = (this[+0x385] < 42);
 
 `typeBase` and `typeFactor` are `+0x28` and `+0x2c` on the man's **type
 descriptor** (reached through `man→vt[0x20]`); `victim+0x80` is a per-instance
-value that behaves like experience. So a man is worth a flat per-type amount plus
-a share of what he has earned, and **a veteran is worth more than a slave**.
+value that behaves like experience. So a man is worth a flat per-type amount
+plus a share of what he has earned, and **a veteran is worth more than a
+slave**.
 
 The divisor is `0x084c8639` (= 1000). It is *not* a registered config var — nine
 read sites, no `LoadConfigVar` binding — so unlike everything else here it
@@ -147,9 +149,9 @@ in the entire file**: its own registration `push`.
 
 Checked by scanning `.text` for *any* 4-byte operand landing anywhere in
 `0x084c8e70..0x084c8f10`, rather than for the 16 addresses individually — an
-array base at a neighbouring global would otherwise have been missed. All 68 hits
-are accounted for: the registration pushes, the 17 `_PRICE` reads, and a handful
-of variables past the end of the block.
+array base at a neighbouring global would otherwise have been missed. All 68
+hits are accounted for: the registration pushes, the 17 `_PRICE` reads, and a
+handful of variables past the end of the block.
 
 So editing `SUNPRIEST_VALUE=100` in `selap.txt` changes nothing, and `typeBase`
 at type-descriptor `+0x28` is loaded from somewhere else — the unit type table,
@@ -186,8 +188,8 @@ ascending *man-type* order, until it drains.
 It is a `while`, not an `if`, so fast-forwarding on the realm view settles
 everything the queue owes rather than dropping it. Two consequences worth
 knowing: a large sacrifice is a long slow annuity rather than a lump sum, and
-because the cursor walks type indices in order, a mixed batch pays out grouped by
-type rather than in the order the men were fed in.
+because the cursor walks type indices in order, a mixed batch pays out grouped
+by type rather than in the order the men were fed in.
 
 ## The taper is the gauge
 

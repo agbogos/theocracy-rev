@@ -9,8 +9,8 @@ answers all three of their questions.
 **Read off `theocracy.real` 2026-08-09**, and the layer above them —
 `iMissionHandler`, what constructs a mission, what binds it to a province and
 what starts it — **2026-08-10**. Addresses are Ghidra space, game base
-`0x08048000`. Findings are mirrored into the Ghidra DB as renames and
-decompiler comments.
+`0x08048000`. Findings are mirrored into the Ghidra DB as renames and decompiler
+comments.
 
 > **The 2026-08-10 pass also killed a claim three other docs carried.**
 > `g_World+0x1f394` was described everywhere as "the units manager", and
@@ -72,7 +72,8 @@ instruction that installs the vtable.
 The other eight are the campaign-scenario missions — `S1_0`, `S2_0`, `S4_0`,
 `S5_0`, `S5_1`, `S6_0`, `S6_1`, `S8_0` — each in its own translation unit with
 its vtable elsewhere (`cMission_S6_0` is at `0x083bc6a0`). They share the base
-layout: `cMission_S6_0::Check` sits at slot `+0x18` exactly as the named ones do.
+layout: `cMission_S6_0::Check` sits at slot `+0x18` exactly as the named ones
+do.
 
 ### Vtable layout
 
@@ -141,8 +142,8 @@ Five whitespace-separated integers per line, into a 14-byte record:
 
 `MissionCfg_PlaceMen` loops the count, resolving the position through province
 virtual `+0x1c` and creating each man through province virtual `+0xe4`. Its
-diagnostics are the developers' own: `"Add man[ TYPE:%d TRIBE:%d ]"`,
-`"Failed to place man becouse VOID_POS"`.
+diagnostics are the developers' own: `"Add man[ TYPE:%d TRIBE:%d ]"`, `"Failed
+to place man becouse VOID_POS"`.
 
 Six files ship, and the number in the filename is the mission number:
 
@@ -180,10 +181,10 @@ positioned by the province rather than by the file.
 
 ## Missions place heroes
 
-`cHero_SetHeroId` (`0x080b23d0`) is a virtual at slot `+0x58` of the hero
-vtable (`0x0831af20`, installed at `0x080b229b`). A non-hero man class has a
-different function in that slot, so the slot alone is not enough — every
-candidate was checked for a two-argument call. The inherited default is
+`cHero_SetHeroId` (`0x080b23d0`) is a virtual at slot `+0x58` of the hero vtable
+(`0x0831af20`, installed at `0x080b229b`). A non-hero man class has a different
+function in that slot, so the slot alone is not enough — every candidate was
+checked for a two-argument call. The inherited default is
 `Fatal("cMan::SetHeroId : I'm not a hero")` (`0x080ad270`), which is the
 developers' own name for the slot.
 
@@ -259,12 +260,12 @@ The one mission read all the way through, because it answers the question
 
 **1 — `cMission_TwoRings_Start` (`0x0821c5e0`, slot `+0x14`).** Loads
 `misi008.man`. Walks the province building list for the one whose flags have bit
-`2` (capture) set and stores it at `this+0x3c`, dying with
-`Fatal("!!! Nincs gyurus haz !!!")` — *"there is no ring house"* — if there
-isn't one. Then constructs **Ring Piece 1** (`0x081fdf20`, id 24) and drops it
-at map `(0x8f, 0xca)`, and **Ring Piece 2** (`0x081fdf90`, id 25) at
-`(0xc7, 0x162)`, through province virtual `+0xd8`. Both constructors are called
-directly; neither goes through `Item_CreateById`.
+`2` (capture) set and stores it at `this+0x3c`, dying with `Fatal("!!! Nincs
+gyurus haz !!!")` — *"there is no ring house"* — if there isn't one. Then
+constructs **Ring Piece 1** (`0x081fdf20`, id 24) and drops it at map `(0x8f,
+0xca)`, and **Ring Piece 2** (`0x081fdf90`, id 25) at `(0xc7, 0x162)`, through
+province virtual `+0xd8`. Both constructors are called directly; neither goes
+through `Item_CreateById`.
 
 **2 — a man picks both up.** A `cMan` carries at most two magic items, in
 pointers at `+0xd0` and `+0xd4` with the count at `+0xd8`.
@@ -296,9 +297,9 @@ Either order works. The two halves are destroyed, not merely unequipped, and the
 whole Ring lands on **the same man** who carried them.
 
 **5 — `cMission_TwoRings_Check` (`0x0821c7d0`, slot `+0x18`)** polls
-`building[0x178]` through `cBld_Ring_IsSolved` (`0x08295dd0`) and sets state `1`.
-It sets state `2` if no living man is left in the province —
-`"Nincs elo ember[%d] a provincian (mission fail)."`
+`building[0x178]` through `cBld_Ring_IsSolved` (`0x08295dd0`) and sets state
+`1`. It sets state `2` if no living man is left in the province — `"Nincs elo
+ember[%d] a provincian (mission fail)."`
 
 **6 — `cMission_TwoRings_Finish` (`0x0821c920`, slot `+0x2c`)** plays
 `tworings.mpg`, places **Kukurbuki (hero 5)** with items 45 and 28, and drops
@@ -322,8 +323,8 @@ That statement is exhaustive over *code*, and the exhaustiveness is real:
 `Item_CreateById`'s four callers plus 25 direct constructor calls, and no
 indirect call through a stored function pointer — scanning the image for the
 address of `Item_CreateById` and of each of those fourteen constructors finds
-exactly one occurrence each, all inside `.eh_frame`
-(`0x084e3be8`–`0x08597400`), i.e. unwind FDEs and not a dispatch table.
+exactly one occurrence each, all inside `.eh_frame` (`0x084e3be8`–`0x08597400`),
+i.e. unwind FDEs and not a dispatch table.
 
 The two gaps line up neatly, and this part survives: of the thirteen items whose
 description is just their own name, **ten are among the fourteen** (1, 2, 7, 12,
@@ -379,8 +380,7 @@ parsed, and they are a live channel for both heroes and items:
 
 `hero.cfg`'s load condition gains a likely meaning here too: it runs only when
 `*(int *)(g_GameSession + 0x4c) == 0` ([heroes.md](heroes.md)), which now reads
-as "a new game, rather than a loaded world" — untested, and stated as a
-reading.
+as "a new game, rather than a loaded world" — untested, and stated as a reading.
 
 ### Resolved the same day — all nine world files read
 
@@ -405,9 +405,9 @@ campaign start. See [starting-world.md](starting-world.md), "Open threads".
 
 ## What starts a mission — `iMissionHandler`
 
-**Read 2026-08-10.** The previous pass read the lifecycle from `Start` onward and
-stopped; this is the layer above it, and it turns out to be one object driven
-once per in-game day.
+**Read 2026-08-10.** The previous pass read the lifecycle from `Start` onward
+and stopped; this is the layer above it, and it turns out to be one object
+driven once per in-game day.
 
 `iMissionHandler` (RTTI `15iMissionHandler`, vtable `0x0839e780`) is a **plain
 static table of missions and timers**, not a registry anything registers with:
@@ -433,15 +433,15 @@ static table of missions and timers**, not a registry anything registers with:
 Six of those are **pure virtual** in the base (`0x082c8d90` in every slot), so
 each scenario supplies its own; only `Load`/`Save` are shared. Nine subclasses
 exist — the campaign plus the eight scenarios — found by xref'ing the base
-constructor `iMissionHandler_ctor` (`0x0820f420`), which has exactly nine callers.
-The campaign's is `cMissionHandler_Campaign_ctor` (`0x08215f00`), held by the
-`cScenario` subclass `"CampaignGame"` (`0x08229730`) at `scenario+0x08`.
+constructor `iMissionHandler_ctor` (`0x0820f420`), which has exactly nine
+callers. The campaign's is `cMissionHandler_Campaign_ctor` (`0x08215f00`), held
+by the `cScenario` subclass `"CampaignGame"` (`0x08229730`) at `scenario+0x08`.
 
 ### The array index is the mission number
 
-The constructor builds the whole campaign in one straight line: `new` each of the
-twelve mission classes into a 13-slot array, then the four timers. **Slot 0 is
-left `NULL`**, so the index is 1-based — and it lines up exactly with the
+The constructor builds the whole campaign in one straight line: `new` each of
+the twelve mission classes into a 13-slot array, then the four timers. **Slot 0
+is left `NULL`**, so the index is 1-based — and it lines up exactly with the
 `misiNNN.man` filenames and the `selap.txt` keys, which is what promotes this
 from a plausible ordering to a confirmed one:
 
@@ -461,14 +461,16 @@ from a plausible ordering to a confirmed one:
 | 12 | `cMission_WallChecker` | | — |
 
 `ForceActivate` (`0x08217500`) confirms the range from the other side: it opens
-with `if (missionId > 12) return;` and prints `"Force activated mission %d:(%s)."`
+with `if (missionId > 12) return;` and prints `"Force activated mission
+%d:(%s)."`
 
 ### A mission is bound to a province by a hardcoded switch
 
 Nothing on the mission or in any data file says which province it belongs to.
-`cMissionHandler_Campaign_GetProvinceMissions` (`0x08216310`) is a `switch` on the
-province **id** returning the missions to offer there, and the campaign handler
-carries two more copies of the same mapping in its `+0x1c` and `+0x20` predicates:
+`cMissionHandler_Campaign_GetProvinceMissions` (`0x08216310`) is a `switch` on
+the province **id** returning the missions to offer there, and the campaign
+handler carries two more copies of the same mapping in its `+0x1c` and `+0x20`
+predicates:
 
 | province | mission(s) |
 |---|---|
@@ -502,10 +504,11 @@ the entire scripted layer advances exactly once per game day.
 script — about 400 lines of decompile with no loop over missions at all, each
 mission written out by hand. Per mission it does two things: **arm** a due date
 when its precondition is met (`mission+0x0c = today + delay`, `+0x2f = 1`,
-printing `"Activating time condition on mission [%s] to (%s)"`), and **activate**
-it once that date arrives (printing `"Initializing [%s]"` and calling slot
-`+0x1c`). Which settles what the `selap.txt` keys mean: `MISSION_00N_YEARLEFT` is
-the **delay before the mission starts**, not a deadline to finish it.
+printing `"Activating time condition on mission [%s] to (%s)"`), and
+**activate** it once that date arrives (printing `"Initializing [%s]"` and
+calling slot `+0x1c`). Which settles what the `selap.txt` keys mean:
+`MISSION_00N_YEARLEFT` is the **delay before the mission starts**, not a
+deadline to finish it.
 
 | # | precondition | delay |
 |---|---|---|
@@ -527,13 +530,13 @@ the pair [starting-world.md](starting-world.md) had already spotted from the
 other end.
 
 **Mission 4 is the interesting one**: Scroll_lost is not an alternative the
-player picks, it is what the campaign runs *because* Scroll failed. Its
-one hero (the man placed with no id, above) is the consolation branch.
+player picks, it is what the campaign runs *because* Scroll failed. Its one hero
+(the man placed with no id, above) is the consolation branch.
 
 **Mission 12 is not a mission**, it is a poll. `cMission_WallChecker_Activate`
 (`0x0821ecc0`) sets active and started and **clears the state byte**, and the
-first thing `Update` does each day is call it whenever the state is non-zero — so
-it re-arms itself forever rather than completing.
+first thing `Update` does each day is call it whenever the state is non-zero —
+so it re-arms itself forever rather than completing.
 
 ### The four timers
 
@@ -566,10 +569,10 @@ for (i = 0; i < 4; i++)
 
 This closes [starting-world.md](starting-world.md)'s `SPAIN_RND_YEAR` thread.
 
-The default arrival is fixed: `Update` arms Spain0 at
-`cDate(SPAIN_ENTER_YEAR, 3, 7)` — an absolute date — and Spain1 at that date plus
-`SPAIN_TIME_OFFSET_DAY / 2`. **Two staggered waves, half a period apart**, which
-is already enough to make "the Spanish arrive" feel like more than one event.
+The default arrival is fixed: `Update` arms Spain0 at `cDate(SPAIN_ENTER_YEAR,
+3, 7)` — an absolute date — and Spain1 at that date plus `SPAIN_TIME_OFFSET_DAY
+/ 2`. **Two staggered waves, half a period apart**, which is already enough to
+make "the Spanish arrive" feel like more than one event.
 
 Each `Fire` picks a province, spawns a Spanish unit group (tribe 6) with
 `SPAIN_UNIT1_FORCE` / `SPAIN_UNIT2_FORCE`, then **re-arms itself**: date +=
@@ -582,8 +585,8 @@ whether mission 10 completed (`"A 10-es mission-t sikeresen teljesitetted."` —
 and plays `spain.mpg`.
 
 And the jitter a player remembers is real, but it is not jitter — it is a
-**difficulty response**. `SpainTimer_MaybeReroll` (`0x081fa6a0`), called once per
-`SimulationUpdate` that ran at least one tick, does:
+**difficulty response**. `SpainTimer_MaybeReroll` (`0x081fa6a0`), called once
+per `SimulationUpdate` that ran at least one tick, does:
 
 ```c
 if (scenario id == 0 && SpainTimer_IsAtDefaultDate(handler)) {
@@ -596,8 +599,8 @@ if (scenario id == 0 && SpainTimer_IsAtDefaultDate(handler)) {
 **When the player gets close to holding the map, the conquistadors are
 rescheduled to a random day inside the next `SPAIN_RND_YEAR` years** — printing
 `"Spanish date is reset to %d days..."` — and the guard means it happens at most
-once, since the timer is no longer at its default date afterwards. Campaign only:
-`g_GameSession+0x4c` (the scenario id) must be `0`.
+once, since the timer is no longer at its default date afterwards. Campaign
+only: `g_GameSession+0x4c` (the scenario id) must be `0`.
 
 ## The four missions the previous pass skipped
 
@@ -610,17 +613,18 @@ flags have bit `2` set — the same **capture** bit `cMission_TwoRings_Start` us
 to find its ring house — counts them into `+0x54`, and holds each in a `cNode`
 list at `+0x48`/`+0x4c`, printing `" - Capture Building flag:%d"`. `Check` fails
 the mission if the player has no living man left in the province (the shared
-`"Nincs elo ember[%d] a provincian (mission fail)."`), otherwise re-walks its list
-and, for each building now owned by the player and still flagged, clears the flag,
-prints `"You are captured a mission building."` and decrements `+0x54`. At zero:
-`"Mission complete"`. `Finish` hands the whole province to the player.
+`"Nincs elo ember[%d] a provincian (mission fail)."`), otherwise re-walks its
+list and, for each building now owned by the player and still flagged, clears
+the flag, prints `"You are captured a mission building."` and decrements
+`+0x54`. At zero: `"Mission complete"`. `Finish` hands the whole province to the
+player.
 
 The two bodies are instruction-for-instruction the same shape with different
 locale ids, **except for one thing**: MountainVillage's no-men-left branch is an
 `else` and returns immediately, HeavyArmory's is not, so HeavyArmory continues
 into the scan and can overwrite the failure with success in the same call if the
-last building was already taken. Recorded as observed; whether that is deliberate
-is not decidable from the code.
+last building was already taken. Recorded as observed; whether that is
+deliberate is not decidable from the code.
 
 **`cMission_Josda_Pre` (9) is a gift, not a task.** Its `Start` (`0x0821ce60`)
 shows one text, calls `FUN_081d7e10(prov)` and then hands the province to the
@@ -632,11 +636,12 @@ which is exactly how `Update` uses it.
 cell of the province's tile array and tests the low 12 bits of the `u16` at
 `tile+2` against `0x19E`; if it matches, it prints `"Ho-ho le lett rombolva a
 fal."` (*"Ho-ho, the wall has been destroyed."*) and reports complete. Read from
-the disassembly rather than the decompile, because the pointer arithmetic matters:
-the guard tests column `0x28` against the province width, while the address it
-then computes is `base + 15 × (width × 0x60 + 0x28 + 0x30)` — i.e. the **bounds
-check and the addressed cell disagree by 48 columns**. Stated as read; on the
-shipped province 2 both are in range, so nothing observable follows from it.
+the disassembly rather than the decompile, because the pointer arithmetic
+matters: the guard tests column `0x28` against the province width, while the
+address it then computes is `base + 15 × (width × 0x60 + 0x28 + 0x30)` — i.e.
+the **bounds check and the addressed cell disagree by 48 columns**. Stated as
+read; on the shipped province 2 both are in range, so nothing observable follows
+from it.
 
 ## How missions hold on to men
 
@@ -647,39 +652,40 @@ instead of creating its commander and hero:
 u16* Mission_FindManByFlag(cProvince* prov, u32 flagMask, int tribe, u32 manType);
 ```
 
-For one tribe or all 11, it walks three lists per tribe — leaders
-(`prov+0x40b98 + tribe*0x30`), each leader's inferiors, and "lonlies"
-(`prov+0x40bb0 + tribe*0x30`) — and returns the first living man matching the man
-type and having `man[0x28] & flagMask` set, printing `" - Found mission man in
+For one tribe or all 11, it walks three lists per tribe — leaders (`prov+0x40b98
++ tribe*0x30`), each leader's inferiors, and "lonlies" (`prov+0x40bb0 +
+tribe*0x30`) — and returns the first living man matching the man type and having
+`man[0x28] & flagMask` set, printing `" - Found mission man in
 {leaders,inferiors,lonlies}, flag:%d"`. **`man+0x28` is a bitmask of mission
-flags**, which is what the `flag:%d` diagnostics scattered through this layer are
-printing.
+flags**, which is what the `flag:%d` diagnostics scattered through this layer
+are printing.
 
-What it returns is not a `cMan*` but a freshly allocated **`u16` holding the man's
-id** (`man+0x96`), with `DAT_08601108[id]` incremented — a global refcount table.
-`MissionCfg_PlaceMen` does the same with its optional third argument: each man it
-spawns is appended to the caller's list as one of these 16-bit id handles, wrapped
-in a `cNode`. So **missions refer to men by id, not by pointer**, which is what
-lets mission state be serialised straight into the world file.
+What it returns is not a `cMan*` but a freshly allocated **`u16` holding the
+man's id** (`man+0x96`), with `DAT_08601108[id]` incremented — a global refcount
+table. `MissionCfg_PlaceMen` does the same with its optional third argument:
+each man it spawns is appended to the caller's list as one of these 16-bit id
+handles, wrapped in a `cNode`. So **missions refer to men by id, not by
+pointer**, which is what lets mission state be serialised straight into the
+world file.
 
 ### Where the flags come from: nowhere in code
 
-**Read 2026-08-10.** `man+0x28` has exactly two writers in the image, and they are
-the two constructors:
+**Read 2026-08-10.** `man+0x28` has exactly two writers in the image, and they
+are the two constructors:
 
 | path | what it does to `man+0x28` |
 |---|---|
 | `cMan` ctor (`0x08093df0`) | `= 0` |
 | `cMan` **stream** ctor (`0x08094730`) | reads **four bytes** straight from the world file |
 
-Nothing else touches it — established with the [§17](../reference/re-methodology.md)
-displacement scan over `.text`, then by checking every candidate write in the man
-code, all of which turned out to be `+0x28` on unrelated classes (`cVObject`'s
-ctor, `cMan::cCasteProperties`).
+Nothing else touches it — established with the
+[§17](../reference/re-methodology.md) displacement scan over `.text`, then by
+checking every candidate write in the man code, all of which turned out to be
+`+0x28` on unrelated classes (`cVObject`'s ctor, `cMan::cCasteProperties`).
 
-So the mission flags are **pure data**: authored in the map editor, shipped inside
-`init.dat`, never computed. Which has a consequence worth stating plainly, because
-it constrains how the campaign missions can possibly work:
+So the mission flags are **pure data**: authored in the map editor, shipped
+inside `init.dat`, never computed. Which has a consequence worth stating
+plainly, because it constrains how the campaign missions can possibly work:
 
 - Any man the **code** creates has flags `0` — including every man
   `MissionCfg_PlaceMen` spawns, since the five-column `.man` format has no flag
@@ -690,9 +696,10 @@ it constrains how the campaign missions can possibly work:
   up instead of spawning them are reading designer-placed men, and cannot be made
   to work any other way.
 
-This is the same channel as the hero id — [starting-world.md](starting-world.md)'s
-"fourth channel" — and the same reason it stayed invisible: a code audit sees the
-consumer and no producer, because the producer is a map editor nobody has.
+This is the same channel as the hero id —
+[starting-world.md](starting-world.md)'s "fourth channel" — and the same reason
+it stayed invisible: a code audit sees the consumer and no producer, because the
+producer is a map editor nobody has.
 
 ### The bits actually used
 
@@ -704,32 +711,33 @@ the argument order is `(prov, flagMask, tribe, manType)`:
 | `2` | nine | a specific tribe, and man types 10, 22, 26, 30, 31, 32, 33, 34 |
 | `3` | one, in `cMission_Vampire` (`0x0821a7f9`) | any tribe, any man type |
 
-**Only bits 0 and 1 exist in the shipped game.** Bit 1 is the general
-"this is a mission man" marker — every scenario site uses it alone; Vampire is the
-only caller that also accepts bit 0.
+**Only bits 0 and 1 exist in the shipped game.** Bit 1 is the general "this is a
+mission man" marker — every scenario site uses it alone; Vampire is the only
+caller that also accepts bit 0.
 
 The man types name the roles: **26 is `cMan_Comm1`**, the command unit (its own
 constructor seeds its subtype byte with 26 — see [heroes.md](heroes.md)), and
 **33/34 are the swordsman and spearman hero man types**. So the two lookups in
-`cMission_S4_0_Start` (`0x0822f28b`, `0x0822f2bd`) are exactly "find my commander"
-and "find my hero", which is what the previous pass suspected and could not show.
+`cMission_S4_0_Start` (`0x0822f28b`, `0x0822f2bd`) are exactly "find my
+commander" and "find my hero", which is what the previous pass suspected and
+could not show.
 
 So the campaign missions are content-driven the same way the named ones are: the
-men are already in the province — from `init.dat` — and the mission finds the ones
-the designer flagged.
+men are already in the province — from `init.dat` — and the mission finds the
+ones the designer flagged.
 
 ## Province virtual `+0xe0`
 
 Read, and it is not a predicate at all: `cProvince_GetPlaceModeFlag`
-(`0x081d03f0`) is `return *(char*)(prov + 0x400fb);` — one stored byte. When set,
-`MissionCfg_PlaceMen` resolves the record's `(x,y)` through virtual `+0x1c` before
-creating the man; when clear it passes the raw pair straight to `+0xe4`.
+(`0x081d03f0`) is `return *(char*)(prov + 0x400fb);` — one stored byte. When
+set, `MissionCfg_PlaceMen` resolves the record's `(x,y)` through virtual `+0x1c`
+before creating the man; when clear it passes the raw pair straight to `+0xe4`.
 
 Reading `+0x1c` (`0x081d0400`) at the same time sharpens this doc's earlier
 description of it: it is not a coordinate conversion but a **ring search** —
-expanding rings around the requested cell, testing each for a free walkable tile,
-returning `(-1,-1)` if none is found within the requested radius, which is the
-`"Failed to place man becouse VOID_POS"` path.
+expanding rings around the requested cell, testing each for a free walkable
+tile, returning `(-1,-1)` if none is found within the requested radius, which is
+the `"Failed to place man becouse VOID_POS"` path.
 
 Who writes `prov+0x400fb` is unread.
 

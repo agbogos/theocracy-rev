@@ -3,9 +3,9 @@
 A light survey of the extracted CD data (from `tdat.pck` — see
 [phls-format.md](phls-format.md)), to inform which loaders M2+ needs and in what
 priority. **7191 files / 489 dirs.** The `data/` tree is the game's runtime root
-(the launcher's `./data` symlink). Files are as-shipped: the config/text layer is
-XOR-encrypted and decrypted at runtime by `cTextFile` (do **not** pre-decrypt the
-canonical tree — see phls-format.md §1).
+(the launcher's `./data` symlink). Files are as-shipped: the config/text layer
+is XOR-encrypted and decrypted at runtime by `cTextFile` (do **not** pre-decrypt
+the canonical tree — see phls-format.md §1).
 
 ## Formats by count
 
@@ -51,8 +51,8 @@ Encrypted total: **4473** (all text-family: `.txt`/`.idx`/`.drn`/`.man`/`.cfg`/
 `data/help/` is the in-game encyclopedia: `help/config/*.cfg` (topic tree) +
 `help/texts/{english,french,german,italian,spanish,magyar}/…` prose. `.drn` map
 descriptions are likewise per-language. Six languages ship; Hungarian (`magyar`)
-dev comments appear in `.dsc` files (Philos was Hungarian — see the heritage note
-in [overview.md](../overview.md)).
+dev comments appear in `.dsc` files (Philos was Hungarian — see the heritage
+note in [overview.md](../overview.md)).
 
 ## To regenerate a decrypted dev tree (inspection only — never the canonical one)
 

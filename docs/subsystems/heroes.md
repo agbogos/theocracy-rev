@@ -14,9 +14,8 @@ A hero is not a separate unit — it is a **`cMan` with a hero id**, one byte at
 **`+0x27c`** — which, as of 2026-08-10, is known to be the byte `cHero` *adds*
 rather than a `cMan` field it borrows: `sizeof(cMan)` is exactly `0x27c`. See
 "What `+0x27c` actually is" below. `cHero` is a real class (RTTI `5cHero`), and
-the RTTI also carries
-`19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`, `16cMan_Archer_Hero`, plus the
-projectiles `10cHeroArrow` and `10cHeroSpear`.
+the RTTI also carries `19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`,
+`16cMan_Archer_Hero`, plus the projectiles `10cHeroArrow` and `10cHeroSpear`.
 
 That gives two tiers:
 
@@ -41,8 +40,8 @@ to the man type at `+0xb3` and returns one of three fixed locale entries;
 anything else indexes a 19-entry array at `0x085a41e0`, stride `0x18`. The array
 ends at `0x085a43a8`, which is precisely where the three generic entries begin —
 the bound is read, not assumed. `GetDescription` / `GetIcon` / `GetBigIcon`
-follow the same shape, and all four `Fatal` with `"I'm not a hero!"` when the man
-is neither.
+follow the same shape, and all four `Fatal` with `"I'm not a hero!"` when the
+man is neither.
 
 ## `cHero::SetHeroId` — `0x080b23d0`
 
@@ -50,8 +49,8 @@ The whole of a named hero's identity is applied here. It rejects anything
 outside `1..19` (`if (0x12 < (byte)(param_2 - 1U))`), refuses to run twice, then
 switches on the id.
 
-Every hero gets **four stat modifiers**, loaded from `selap.txt` into a
-19 × 16-byte table at `0x084c77a8` and copied into the man at `+0x40..0x4c`:
+Every hero gets **four stat modifiers**, loaded from `selap.txt` into a 19 ×
+16-byte table at `0x084c77a8` and copied into the man at `+0x40..0x4c`:
 
 | offset | key | meaning |
 |---|---|---|
@@ -104,9 +103,9 @@ instead of calling the accessor, each naming itself in RTTI:
 | 4 | `+0x90` | Soul | `cSpell_Soul6` (`0x08279340`) |
 
 Four are read off code. Moon is elimination over a **closed** set — the array is
-exactly five wide (the Chimoki loop runs `while (i < 5)`), four indices are named,
-so the fifth is determined — and it independently matches both the description
-evidence below and the RTTI ordering of the spell roster, which is
+exactly five wide (the Chimoki loop runs `while (i < 5)`), four indices are
+named, so the fifth is determined — and it independently matches both the
+description evidence below and the RTTI ordering of the spell roster, which is
 `cSpell_Sun/Moon/Stars/Nature/Soul`, six spells each, plus `cSpell_ChPriest` and
 `cSpell_Vampire1/2`.
 
@@ -122,17 +121,18 @@ The descriptions, which were the previous basis and are now corroboration:
 | `+0x8e` | Nature | Kukurbuki (5), Garkuna (10), Pocotli (14) |
 | `+0x90` | Soul | Shibiri (1), Akrisi (8) |
 
-Chimoki (6) is the only hero who gets all five, at **`HERO6_MAGICRESISTANCE=90`**
-rather than 100 — exactly what his description claims, "*partial* immunity to any
-form of magic". Read as a percentage that is now literally true: he takes 10% of
-all magic damage. A config value, a sentence and a formula written by different
-people, agreeing.
+Chimoki (6) is the only hero who gets all five, at
+**`HERO6_MAGICRESISTANCE=90`** rather than 100 — exactly what his description
+claims, "*partial* immunity to any form of magic". Read as a percentage that is
+now literally true: he takes 10% of all magic damage. A config value, a sentence
+and a formula written by different people, agreeing.
 
 ### It is not a hero field — every man has one
 
 **Added 2026-08-10.** The array is part of the base `cMan`, and heroes only
 *overwrite* entries in it. Two more paths write it, and both walk it as an array
-of five, which is now the third and fourth independent confirmation of the shape:
+of five, which is now the third and fourth independent confirmation of the
+shape:
 
 - **The plain `cMan` constructor** (`0x08093df0`) fills all five from the man's
   **caste properties** — bytes `+0x35..+0x39` of the caste struct, which
@@ -228,11 +228,11 @@ agree: `1` = Axocopan (Kathapi, Shaloc), `2` = Yaxuna (HuorMuah, Vatlar), `3` =
 Huatepec (Turmoth, Fakhuma), `4` = Iztahuacan (Koloth, Shibiri), `5` = Teotitlan
 (Chimoki, Morhamum), `7` = Pocotli alone.
 
-**`hero.cfg` places only 11 of the 19 heroes.** It is a starting-placement table,
-not the roster — the roster is the `1..19` range hard-coded in `SetHeroId`. The
-other eight must be introduced elsewhere; the mission code is the obvious
-suspect, since `cMission_S4_0::Start` carries the assert `"Hero not found."` (in
-Hungarian, and rude about a colleague). Unread — see Open threads.
+**`hero.cfg` places only 11 of the 19 heroes.** It is a starting-placement
+table, not the roster — the roster is the `1..19` range hard-coded in
+`SetHeroId`. The other eight must be introduced elsewhere; the mission code is
+the obvious suspect, since `cMission_S4_0::Start` carries the assert `"Hero not
+found."` (in Hungarian, and rude about a colleague). Unread — see Open threads.
 
 ## Unfinished content
 
@@ -272,10 +272,10 @@ Strings first, binary last, the same chain as
 4. The descriptions confirmed the parts the code could only hint at.
 
 One methodology lesson came out of it and is recorded in
-[re-methodology.md](../reference/re-methodology.md): grepping a shipped data file
-for a config key gives a **false negative**, because the file is encrypted. This
-cost a wrong intermediate conclusion ("`selap.txt` has no hero keys" — it has
-103).
+[re-methodology.md](../reference/re-methodology.md): grepping a shipped data
+file for a config key gives a **false negative**, because the file is encrypted.
+This cost a wrong intermediate conclusion ("`selap.txt` has no hero keys" — it
+has 103).
 
 ## Where the other eight enter — answered 2026-08-09
 
@@ -307,13 +307,14 @@ nothing" and moved them into the unfinished-content list. That was wrong, and
 
 `cHero` has a **second, stream constructor** (`0x080b22c0`) which runs the base
 `cMan` stream ctor, installs the hero vtable, and reads **one byte straight into
-`+0x27c`** from the file. It is reached through the per-man-type caste-properties
-table rather than by any direct call, so it appears in no xref sweep — and the
-original scan for writes to `+0x27c` missed it because the constructor takes the
-field's *address* (`leal 0x27c(%ebx), %edx`) instead of storing to it.
+`+0x27c`** from the file. It is reached through the per-man-type
+caste-properties table rather than by any direct call, so it appears in no xref
+sweep — and the original scan for writes to `+0x27c` missed it because the
+constructor takes the field's *address* (`leal 0x27c(%ebx), %edx`) instead of
+storing to it.
 
-And there is data for it to read: **every `init.dat` in the tree — the campaign's
-and all eight scenarios' — is a `theosg42` savegame**
+And there is data for it to read: **every `init.dat` in the tree — the
+campaign's and all eight scenarios' — is a `theosg42` savegame**
 ([save-format.md](save-format.md)). The starting world is loaded, not placed.
 
 **Jarakhi (11) is the campaign's player character**, which is why nothing spawns
@@ -352,20 +353,21 @@ A sixth site places a hero-type man and never assigns an id
 
 ## What `+0x27c` actually is
 
-**Settled 2026-08-10**, and the question as this doc posed it — *the* hero id, or
-a general subtype byte? — turns out to be a false choice. It is neither: it is
-**the first byte past the end of `cMan`**, so every subclass that adds one byte
-gets its own field at that offset.
+**Settled 2026-08-10**, and the question as this doc posed it — *the* hero id,
+or a general subtype byte? — turns out to be a false choice. It is neither: it
+is **the first byte past the end of `cMan`**, so every subclass that adds one
+byte gets its own field at that offset.
 
 `sizeof(cMan) == 0x27c`, read off the allocators rather than inferred from a
 struct guess. Six caste creators allocate a plain man with `new(0x27c)`
-(`0x08246280`, `0x08249530`, `0x0824a740`, …); every `cHero` subclass creator and
-`cMan_Comm1`'s allocate **`new(0x280)`** — `0x27c` plus one byte, padded to four.
+(`0x08246280`, `0x08249530`, `0x0824a740`, …); every `cHero` subclass creator
+and `cMan_Comm1`'s allocate **`new(0x280)`** — `0x27c` plus one byte, padded to
+four.
 
 So `cHero` and `cMan_Comm1` are not sharing a field, they are two classes each
 declaring a first member. `cMan_Comm1`'s is a different thing entirely: its
-constructor seeds it with the constant `26`, and it is read and written through a
-getter/setter pair of vtable slots — getter `+0xe0` (`cMan_Comm1_GetSubtype`,
+constructor seeds it with the constant `26`, and it is read and written through
+a getter/setter pair of vtable slots — getter `+0xe0` (`cMan_Comm1_GetSubtype`,
 `0x082461b0`), setter `+0xe8` (`cMan_Comm1_SetSubtypeFromMan`, `0x08246150`,
 which copies *another* man's man type from `+0xb3`). In the base `cMan` vtable
 those same two slots are a flat `return 25` and an empty body, so nothing
@@ -374,11 +376,11 @@ inherited ever touches the byte.
 ### The scan that settles it
 
 Done over the **instruction stream**, not over decompiles, because the earlier
-"sole writer" claim was wrong exactly where a decompile sweep is weak (the stream
-constructor takes the field's *address*, so there is no store to find). Scanning
-`.text` for the four bytes of the displacement `0x27c` gives 43 occurrences; 10
-are `jcc`/`call` rel32 and `push 0x27c` immediates, and classifying the remaining
-33 by the opcode in front of them gives:
+"sole writer" claim was wrong exactly where a decompile sweep is weak (the
+stream constructor takes the field's *address*, so there is no store to find).
+Scanning `.text` for the four bytes of the displacement `0x27c` gives 43
+occurrences; 10 are `jcc`/`call` rel32 and `push 0x27c` immediates, and
+classifying the remaining 33 by the opcode in front of them gives:
 
 | where | accesses |
 |---|---|
@@ -394,10 +396,12 @@ per-hero ability hook of the form "if my id is *N*, apply `HEROn_…`" — e.g.
 And the developers name the field themselves twice over. Base `cMan` vtable slot
 `+0x58` is a one-line `Fatal("cMan::SetHeroId : I'm not a hero")` — `cHero`
 overrides that slot with `cHero_SetHeroId`. And the one reader outside `cHero`'s
-own translation unit is fed by a config key that spells out the id it is testing.
+own translation unit is fed by a config key that spells out the id it is
+testing.
 
 So this doc's headline claim stands as written, and the class-scoping caveat can
-be dropped — with the sharper statement that it was never a `cMan` byte to scope.
+be dropped — with the sharper statement that it was never a `cMan` byte to
+scope.
 
 ### `HERO12_RANGE_MOD`, and where hero abilities really live
 
@@ -419,8 +423,8 @@ Hero 12 is **Turmoth, the archer**, whose two listed modifiers are `VIS_MOD` and
 - **Applied live in a per-class getter** — `HERO12_RANGE_MOD`, which is not
   stored anywhere and is recomputed on every call, and only by the archer class.
 
-The split matters for anyone chasing a hero ability: `SetHeroId` is not the whole
-story, and a key absent from it is not therefore dead.
+The split matters for anyone chasing a hero ability: `SetHeroId` is not the
+whole story, and a key absent from it is not therefore dead.
 
 ## Open threads
 

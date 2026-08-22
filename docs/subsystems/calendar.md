@@ -1,8 +1,8 @@
 # The in-game calendar
 
 Theocracy's calendar is not the Gregorian one. Months are 20 days, the year is
-365, and a date is one count of days since Year 0 — held in memory as three
-ints and written to a save as a single 4-byte integer.
+365, and a date is one count of days since Year 0 — held in memory as three ints
+and written to a save as a single 4-byte integer.
 
 **Verified against `theocracy.real` 2026-08-05.** Addresses are Ghidra space,
 game base `0x08048000`. The rule was originally worked out by hex-editing saves
@@ -39,10 +39,10 @@ the console writes, the save serialises and the UI formats.
 
 ## Where 20 and 365 come from
 
-`InitTimeUnitConstants` (`0x080b7b00`) builds every duration as
-*seconds × `g_TimeUnitScale`*, the scale being one global read twice at
-`0x080b7b05`/`0x080b7b0d`. Read off the instructions rather than the
-decompiler, since these are the load-bearing values:
+`InitTimeUnitConstants` (`0x080b7b00`) builds every duration as *seconds ×
+`g_TimeUnitScale`*, the scale being one global read twice at
+`0x080b7b05`/`0x080b7b0d`. Read off the instructions rather than the decompiler,
+since these are the load-bearing values:
 
 | Global | Value | = |
 |---|---|---|
@@ -129,17 +129,17 @@ an offset: there isn't one to record. In the stream it sits between the world's
 sprintf(buf, "%04d/%02d/%02d", year, monthIndex + 1, dayIndex + 1);
 ```
 
-Always exactly 10 characters plus the NUL, zero-padded — so a date in the last
-5 days of Year 1429 renders `1429/19/03`.
+Always exactly 10 characters plus the NUL, zero-padded — so a date in the last 5
+days of Year 1429 renders `1429/19/03`.
 
 This is also the answer to how a date gets into the save header. The save/load
 slot dialog (`0x0819ea00`) seeds the filename edit box with
 `cDate_ToString(g_World + 0x83c)`, and whatever the box ends up containing is
 handed back to `SaveGame` and `strcpy`'d into the 72-byte header — which is why
 a real save header opens with something like `1429/06/18`. So the header text
-and the binary count do share one source object, but only by default: the
-header holds a **save name** that starts life as the formatted date and can be
-typed over. See [save-format.md](save-format.md).
+and the binary count do share one source object, but only by default: the header
+holds a **save name** that starts life as the formatted date and can be typed
+over. See [save-format.md](save-format.md).
 
 ## Setting a date from the console
 
@@ -180,8 +180,8 @@ while (ticks != 0 && *(char *)(*(int *)(g_World + 0x140c) + 0x4f4) != '\0') {
 ```
 
 `cDate_Add` (`0x081a2180`, named this pass) is `a = ToDayCount(a) +
-ToDayCount(b)` fed back through `SetFromDayCount`. With `b` built as
-`(0, 0, 1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = **1**.
+ToDayCount(b)` fed back through `SetFromDayCount`. With `b` built as `(0, 0,
+1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = **1**.
 
 So **one simulation tick is exactly one in-game day.** They are not merely
 proportional and there is no accumulator, no remainder and no separate calendar

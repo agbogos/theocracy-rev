@@ -63,7 +63,7 @@ redistributable and is not in the bundle.
 
 ### 2. Play one signed macOS bundle — interactive only
 
-**The headless half is done (2026-08-21, v1.0.1-rc3).** The released bundle
+**The headless half is done (2026-08-21).** The released bundle
 boots the dedicated server under Unicorn — `mvos .ctors done: 10 ok, 0 faulted`,
 `OpenSubsystems`, socket bound on :5042 — so the hardened runtime does not break
 the JIT on a Developer-ID-signed binary, which was the open risk. Notarisation

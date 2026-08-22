@@ -1,8 +1,9 @@
 # The developer console
 
-How Theocracy's in-game console is built, why it is unreachable in single-player,
-and what `THEOC_CONSOLE=1` does about it. Addresses are **Ghidra space**: game
-`0x08048000`, libmvos `0x00010000` (libmvos file offset = Ghidra − `0x10000`).
+How Theocracy's in-game console is built, why it is unreachable in
+single-player, and what `THEOC_CONSOLE=1` does about it. Addresses are **Ghidra
+space**: game `0x08048000`, libmvos `0x00010000` (libmvos file offset = Ghidra −
+`0x10000`).
 
 The short version: the console was **never compiled out**. It is fully linked,
 constructed on every realm and province screen, and sits behind exactly one
@@ -24,12 +25,12 @@ and the realm loop (`RealmGameLoop`, `0x81a67a0`).
 | Opened by | `Edit__10cVOConsole`, gated (below) | auto-shows on output (`Console_ShowAndPrint`, `0x81f3fb0`) |
 
 `cVOConsole` **is-a** `cConsole` (the base sits at offset 0), which is why
-`cConsoleVO::Key` can pass the owning `cVOConsole*` straight to `cConsole::Input`.
-Useful `cConsole` offsets, all confirmed against libmvos: `+0x38` = `cShell*`
-(`cConsole::HaveShell` is literally `this+0x38 != 0`), `+0x3c` = the object's own
-vtable pointer, and on the `cVOConsole` side `+0x44` = the `cConsoleVO` widget and
-`+0x4c` = link state (`0` unlinked, `1` linked, `2` linked as requester — this is
-the game's `DAT_085c0fcc`).
+`cConsoleVO::Key` can pass the owning `cVOConsole*` straight to
+`cConsole::Input`. Useful `cConsole` offsets, all confirmed against libmvos:
+`+0x38` = `cShell*` (`cConsole::HaveShell` is literally `this+0x38 != 0`),
+`+0x3c` = the object's own vtable pointer, and on the `cVOConsole` side `+0x44`
+= the `cConsoleVO` widget and `+0x4c` = link state (`0` unlinked, `1` linked,
+`2` linked as requester — this is the game's `DAT_085c0fcc`).
 
 ## How you would open it, and where it dies
 
@@ -64,9 +65,9 @@ that one. There is no second way in.
 
 ## Why `+0x2c` is always 0 in single-player
 
-`g_GameSession+0x2c` is the **multiplayer/battle-mode flag**, not a debug switch.
-Scanning the game for accesses through the `g_GameSession` pointer (`0x84c9610`)
-gives 65: **61 reads, 4 writes**. The writes are the entire story.
+`g_GameSession+0x2c` is the **multiplayer/battle-mode flag**, not a debug
+switch. Scanning the game for accesses through the `g_GameSession` pointer
+(`0x84c9610`) gives 65: **61 reads, 4 writes**. The writes are the entire story.
 
 | Site | Value | Function |
 |---|---|---|
@@ -123,10 +124,10 @@ input half was never connected.
 
 `InGame_HandleKeyCommand` is **not** a global hotkey handler. Key events reach
 whichever `cVObject` has focus, through that widget class's **`vtable+0x10`**
-slot (4-byte slots; the classes in this family share `+0x14`/`+0x18` PLT entries).
-Only two functions in the binary call `InGame_HandleKeyCommand`, and only one of
-them — `FUN_080bfff0`, at `vtable+0x10` of the vtable at `0x832c960` — belongs to
-the **province** view's widget.
+slot (4-byte slots; the classes in this family share `+0x14`/`+0x18` PLT
+entries). Only two functions in the binary call `InGame_HandleKeyCommand`, and
+only one of them — `FUN_080bfff0`, at `vtable+0x10` of the vtable at `0x832c960`
+— belongs to the **province** view's widget.
 
 The realm map view is a different class (its object is built by `FUN_081a7180`
 in `RealmGameLoop`), and its handler never routes Alt+key anywhere near case
@@ -151,16 +152,16 @@ call the same way the timer and sound slices do (a nested `uc_emu_start` crashes
 Unicorn). Being screen-independent, it works on realm and province alike, and it
 needs no patch site, no opcode signature and no `g_GameSession+0x2c` games.
 
-**Why `g_LogConsole` and not `g_CmdConsole`** (the strip the shipped call opens):
-the command console is a dead end on both halves — no shell at `+0x38` to execute
-with, and it is not the shell's print target either. `g_LogConsole` is both, so
-input, echo and output land in one visible box.
+**Why `g_LogConsole` and not `g_CmdConsole`** (the strip the shipped call
+opens): the command console is a dead end on both halves — no shell at `+0x38`
+to execute with, and it is not the shell's print target either. `g_LogConsole`
+is both, so input, echo and output land in one visible box.
 
-**Guard:** the open is refused unless `g_LogConsole+0x38` (the shell) is non-null.
-`ChangeShell` runs at realm/province entry and `RestoreShell` at exit, so that
-field is set exactly while a game screen is live; outside that window the
-`cConsoleVO` at `+0x44` is stale from a previous screen and `Edit` would link a
-dead widget. Alt+V elsewhere logs and does nothing.
+**Guard:** the open is refused unless `g_LogConsole+0x38` (the shell) is
+non-null. `ChangeShell` runs at realm/province entry and `RestoreShell` at exit,
+so that field is set exactly while a game screen is live; outside that window
+the `cConsoleVO` at `+0x44` is stale from a previous screen and `Edit` would
+link a dead widget. Alt+V elsewhere logs and does nothing.
 
 The `V` keypress is swallowed (down and up) exactly as `Alt+Enter` already is —
 eKey `0x21` is a live game key, and leaking it would also type a stray `v` into
@@ -174,25 +175,25 @@ none of its 348 exports covers it — so it cannot be resolved by name the way
 ### The host bug this uncovered
 
 `vsprintf` was an **unimplemented trap**. It is the first call in
-`cConsole::Input`, so every command formatted into a buffer the host never wrote,
-and nothing downstream could work — with or without any patch. It is the only
-printf-family symbol libmvos imports that the host lacked (`printf`, `fprintf`,
-`sprintf` were all present). Implemented in `register_builtins`: on i386 a
-`va_list` is just a pointer into the caller's stack, so it reuses `format()` with
-base `ap - 4`.
+`cConsole::Input`, so every command formatted into a buffer the host never
+wrote, and nothing downstream could work — with or without any patch. It is the
+only printf-family symbol libmvos imports that the host lacked (`printf`,
+`fprintf`, `sprintf` were all present). Implemented in `register_builtins`: on
+i386 a `va_list` is just a pointer into the caller's stack, so it reuses
+`format()` with base `ap - 4`.
 
 ## Using it — the commands
 
-The shell is real and has a help system. **`help`** or **`?`** prints the command
-list for the screen you are on. The two shells are separate and reject each
-other's commands ("On realm screen you have different commands!"). An
-unrecognised word prints **`Unknown command.`** — which is itself useful: silence
-means something is broken upstream, not that you mistyped.
+The shell is real and has a help system. **`help`** or **`?`** prints the
+command list for the screen you are on. The two shells are separate and reject
+each other's commands ("On realm screen you have different commands!"). An
+unrecognised word prints **`Unknown command.`** — which is itself useful:
+silence means something is broken upstream, not that you mistyped.
 
 `cShell` carries its name at `+0x00` (hence `Shell Changed to Province Shell` in
-the log), an echo flag at `+0x40` — set to **1** by both ctors, so input is echoed
-as `> <line>` — and its vtable at `+0x4c`, which `cShell::Parser` dispatches
-through (`vt+0xc` = `ProcessCommand`).
+the log), an echo flag at `+0x40` — set to **1** by both ctors, so input is
+echoed as `> <line>` — and its vtable at `+0x4c`, which `cShell::Parser`
+dispatches through (`vt+0xc` = `ProcessCommand`).
 
 | Shell | Ctor | vtable | `ProcessCommand` |
 |---|---|---|---|
@@ -248,10 +249,10 @@ saveanim, pos
 
 36 advertised. Of these, `getdump`, `setdump` and `clrdump` **have no handler**
 (below). Only three carry any description of their own: `stat` (its own
-`Available commands:` block — `(nothing)` prints all statistics, `help`, `clear`),
-`mannaking` (as on realm), and `printid` (prints `Registration ID:[%s]`). The
-whole province handler contains exactly **one** `Syntax :` string, against the
-realm shell's five.
+`Available commands:` block — `(nothing)` prints all statistics, `help`,
+`clear`), `mannaking` (as on realm), and `printid` (prints `Registration
+ID:[%s]`). The whole province handler contains exactly **one** `Syntax :`
+string, against the realm shell's five.
 
 ### Undocumented literals
 
@@ -273,8 +274,8 @@ disagreed, so no split is claimed here.
   `kill`, `capture`, `goto`, `fillpeople`, `canbuild`, `buildpercent`, `mapanim`,
   `win`.
 
-Resolving the split properly needs the disassembly (tracking which argv slot each
-comparison's source register was loaded from), not the decompile — see
+Resolving the split properly needs the disassembly (tracking which argv slot
+each comparison's source register was loaded from), not the decompile — see
 [../reference/re-methodology.md](../reference/re-methodology.md) §5.
 
 ### Commands advertised with no handler
@@ -295,8 +296,8 @@ does not exist.
 
 **Edit mode is `g_GameSession+0x50`** — the byte
 [../structs/cGameSession.md](../structs/cGameSession.md) currently calls
-`bPaused`. That name is at best half right: it *does* gate the simulation, but it
-is set once at load and is the editor switch, not a pause control.
+`bPaused`. That name is at best half right: it *does* gate the simulation, but
+it is set once at load and is the editor switch, not a pause control.
 
 Written in exactly two places, both at session construction:
 
@@ -329,9 +330,9 @@ nothing writes it back, the host simply stamps it: `TrapLayer::apply_edit_mode`
 reads `g_GameSession` and sets `+0x50 = 1`. No patching.
 
 Applied per present rather than once, because the game builds a **new**
-`cGameSession` on every scenario load and re-initialises `+0x50` from `LoadGame`'s
-`editFlag` — a one-shot stamp would survive only until the next load. It logs
-once per session:
+`cGameSession` on every scenario load and re-initialises `+0x50` from
+`LoadGame`'s `editFlag` — a one-shot stamp would survive only until the next
+load. It logs once per session:
 
 ```
 [edit] edit mode on for session 0x6020b030 (sim frozen; console `save` now allowed)
@@ -357,8 +358,8 @@ at `0x838a764`, confirmed against the instruction stream:
 081e1adf  JMP [EAX*4 + 0x838a764]
 ```
 
-eKey is a dense enum, not a PC scancode: digits `1`–`0` are `0x02`–`0x0b`, `A`–`Z`
-are `0x0c`–`0x25`, and Space is `0x51`.
+eKey is a dense enum, not a PC scancode: digits `1`–`0` are `0x02`–`0x0b`,
+`A`–`Z` are `0x0c`–`0x25`, and Space is `0x51`.
 
 | Key | eKey | Action |
 |---|---|---|
@@ -510,11 +511,12 @@ The other two gates are small:
 immediately after `RollingDemoFrame__Fv` (`0x8063540`), i.e. in the attract/demo
 -mode neighbourhood, which fits their setting of `Intuition_Mode`. Neither has a
 single reference anywhere — not a call, not a data word in any table (checked
-across `.rodata` and `.data`; the only hit is an `.eh_frame` entry, which is not a
-reference — see [../reference/re-methodology.md](../reference/re-methodology.md)
-§3). They are dead entry points, presumably a stripped command-line or debug-menu
-hook. In the shipped binary the console is the only way to turn cheats on, which
-is circular: you need the console, which needs multiplayer battle mode.
+across `.rodata` and `.data`; the only hit is an `.eh_frame` entry, which is not
+a reference — see
+[../reference/re-methodology.md](../reference/re-methodology.md) §3). They are
+dead entry points, presumably a stripped command-line or debug-menu hook. In the
+shipped binary the console is the only way to turn cheats on, which is circular:
+you need the console, which needs multiplayer battle mode.
 
 ## Status
 
@@ -536,9 +538,8 @@ Alt+C closes, and the command sets respond on realm and province.
 The cheat/console surface below is **incomplete by choice**, not by oversight.
 The console itself works on both screens and the useful cheats are identified;
 the remainder is tangential to the port, so it is **not tracked anywhere as
-work** and nobody should expect it to be picked up in order.
-Recorded here so the next person knows where the edge is rather than
-rediscovering it.
+work** and nobody should expect it to be picked up in order. Recorded here so
+the next person knows where the edge is rather than rediscovering it.
 
 - **`RealmCheat` is entirely unexamined.** Three read sites — `0x81a97a0`,
   `0x81a9821`, `0x81a9b4f`, all in realm-view code. The flag and its toggles are
@@ -559,4 +560,5 @@ rediscovering it.
 - [multiplayer-and-factions.md](multiplayer-and-factions.md) — `+0x2c` as the
   battle-mode flag and everything else it switches.
 - [../structs/cGameSession.md](../structs/cGameSession.md) — the `0x58` layout.
-- [../porting/diagnostics.md](../porting/diagnostics.md) — the `THEOC_CONSOLE` row.
+- [../porting/diagnostics.md](../porting/diagnostics.md) — the `THEOC_CONSOLE`
+  row.

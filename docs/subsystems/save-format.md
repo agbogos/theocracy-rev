@@ -54,12 +54,12 @@ an earlier reading of the format string claimed.
 
 **The dialog caps a typed name at 40 characters** (measured: two 40-char saves
 were made through the game and both stop exactly there). That number decides two
-things. It puts the window between **23 and 55 bytes** rather than at a fixed
-54 — the low end being what a stamp has to survive. And it means
-`strcpy(local_ac, local_64)`, which has no bound check and would run a 64-byte
-name straight into `local_6c` and destroy the magic, **cannot be reached from
-the dialog**: 40 is comfortably clear of the 63 that would be needed. The
-overflow exists in the code and is not reachable by a player.
+things. It puts the window between **23 and 55 bytes** rather than at a fixed 54
+— the low end being what a stamp has to survive. And it means `strcpy(local_ac,
+local_64)`, which has no bound check and would run a 64-byte name straight into
+`local_6c` and destroy the magic, **cannot be reached from the dialog**: 40 is
+comfortably clear of the 63 that would be needed. The overflow exists in the
+code and is not reachable by a player.
 
 Note also that the on-disk filename is *not* this string — saves are slot-named
 (`save0.tsg` … `save9.tsg`) and this field is the player's label.
@@ -161,7 +161,8 @@ length, and every byte after it is misparsed. That is the "save corrupts after
 The engine writes byte-sized list counts as a matter of course. `FUN_08053410`
 is the same shape on a different class, confirmed against instructions rather
 than the decompiler (the offset comes off an `int *`, so it is exactly the
-scaling trap in [../reference/re-methodology.md](../reference/re-methodology.md) §2):
+scaling trap in [../reference/re-methodology.md](../reference/re-methodology.md)
+§2):
 
 ```
 08053421: PUSH 0x1               ; one byte
@@ -186,9 +187,8 @@ Saves of the same game state at different save counts:
 
 save2 is four saves further on: 4 groups × 68 B × 44 lists = 11,968, plus the
 one 5-unit province's extra = **12,036 bytes**, exactly the observed growth. All
-three collapse to **the same 588,678 bytes**, and the size removed —
-`43 × 68 + 1 × 85 = 3,009` — independently confirms 43 four-unit provinces plus
-map23.
+three collapse to **the same 588,678 bytes**, and the size removed — `43 × 68 +
+1 × 85 = 3,009` — independently confirms 43 four-unit provinces plus map23.
 
 ## The fix
 
@@ -205,22 +205,22 @@ file boundary, so a save too damaged to restructure still gets a clean header.
 It runs before the scan rather than after because the scanner reads from byte 0,
 and normalising afterwards would let junk in the header change which runs are
 found — enough for the C++ and Python implementations to disagree.
-`THEOC_NO_SAVE_FIX=1` disables both, one knob for the whole hook, so that
-"leave my saves alone" means it.
+`THEOC_NO_SAVE_FIX=1` disables both, one knob for the whole hook, so that "leave
+my saves alone" means it.
 
 **Why not patch the game.** The write site sits behind two layers of virtual
 dispatch (`vtable+8`, `vtable+0x28`) and was not pinned; byte-patching logic
-that is not fully understood is the riskier change. The file boundary is a
-place we already control, where the whole artefact is present and consistent,
-and where the result can be verified against real saves.
+that is not fully understood is the riskier change. The file boundary is a place
+we already control, where the whole artefact is present and consistent, and
+where the result can be verified against real saves.
 
 **Anchored on the counter, never on the repetition.** This is the part that
 matters. Once a list holds many identical groups, the periodicity *also* holds
 at offsets inside a group, so scanning for the repeat can lock onto a shifted
-phase and write the counter over a data byte. The first cut did exactly that
-and corrupted 86 bytes of a 64-group file. Reading each byte as a candidate
-count instead makes the phase exact: the count claims a layout, and the layout
-is then verified against the bytes.
+phase and write the counter over a data byte. The first cut did exactly that and
+corrupted 86 bytes of a 64-group file. Reading each byte as a candidate count
+instead makes the phase exact: the count claims a layout, and the layout is then
+verified against the bytes.
 
 **It refuses anything it does not fully recognise.** Every province gets one
 group per save, so an intact file has the *same* group count in every list.
@@ -230,11 +230,11 @@ run there are interior bytes that describe a plausible sub-run — and all three
 guards fire. Nothing is written.
 
 **Already-overflowed saves are detected, not repaired.** The counter is the only
-thing that fixes the phase, and once it has wrapped there is nothing
-trustworthy to anchor to; guessing yields a file that will not load. The tool
-reports the runs and stops. Running the fix *before* the counter overflows is
-what makes this a non-issue, and with the host hook active it never gets close
-— the counter is reset to 4 on every save.
+thing that fixes the phase, and once it has wrapped there is nothing trustworthy
+to anchor to; guessing yields a file that will not load. The tool reports the
+runs and stops. Running the fix *before* the counter overflows is what makes
+this a non-issue, and with the host hook active it never gets close — the
+counter is reset to 4 on every save.
 
 ### Verified
 
