@@ -1,6 +1,6 @@
 # macOS native port — HLE emulator plan
 
-> **⚡ SUPERSEDED (2026-07-22) — pivoted to guest-libmvos.** This documents the
+> **Superseded — the project pivoted to guest-libmvos.** This documents the
 > *pure-HLE native-replace* approach: run only the game under Unicorn and
 > reimplement the entire libmvos API natively. It worked up the boot/Init path
 > but hit the wall that rendering the menu required hand-reimplementing the whole
@@ -11,12 +11,11 @@
 > current architecture, playable). Kept as historical record; the ABI/boot RE
 > facts below remain accurate, but the *approach* is not current.
 
-The chosen porting strategy for modern macOS (Apple Silicon). Decision: **no
-OS-level emulation, no VM, keep `theocracy.real` byte-for-byte intact** → build
-a bespoke user-mode emulator that executes the game's i386 code and
-**high-level-emulates (HLE) the entire libmvos API boundary natively**
-(SDL/Metal/CoreAudio). The same philosophy as a console emulator: the game
-binary is sacred, the platform is reimplemented.
+The porting strategy chosen for modern macOS (Apple Silicon): no OS-level
+emulation, no VM, and `theocracy.real` kept byte-for-byte intact, with a bespoke
+user-mode emulator that executes the game's i386 code and high-level-emulates
+(HLE) the entire libmvos API boundary natively (SDL/Metal/CoreAudio) — the
+same division a console emulator makes.
 
 Why this boundary works (all confirmed by RE — see the contract inventory
 below):
@@ -32,18 +31,7 @@ below):
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│ Host app (native arm64 macOS, C++/SDL)          │
-│                                                 │
-│  ELF loader ──▶ guest memory (low-4GB, 1:1)     │
-│  Unicorn (i386 JIT) ◀─▶ trap layer at PLT/GOT   │
-│  Native MVOS impl. (SDL video/audio/input,      │
-│   filesystem, config, IPC, timers)              │
-│  Callback bridge: native → emulated re-entry    │
-│  Green-thread scheduler for guest cThreads      │
-└─────────────────────────────────────────────────┘
-```
+A native arm64 host app, six parts:
 
 1. **ELF loader** — map `theocracy.real` (ET_EXEC, base `0x08048000`), process
    `.rel.*`: PLT/GOT slots for the 232 imports → trap stubs; **R_386_COPY
@@ -140,45 +128,46 @@ Note: the four input/video device globals are all produced by the *video*
 
 ## Hard parts / risks
 
-> **Written as predictions, before anything ran. Three of the five are now
-> settled, and are marked inline.** Kept in their original form because the
-> corrections are the interesting part — this is the risk list that a plausible
-> argument produced, against what building the thing actually found.
+> Written as predictions, before anything ran. Three of the five are now
+> settled and are marked inline; the originals are kept unedited.
 
-1. **Inlined accessors bake MVOS object layouts into the game.** Any MVOS object
+1. Inlined accessors bake MVOS object layouts into the game. Any MVOS object
    the game touches directly (cString 32-byte block, cNode/cList links,
    cMemBlock fields, cVVC layout, sInput, cRectangle/cDimension/cColor PODs…)
    must match original layout exactly. Recover layouts from ctors in Ghidra
    (several already documented in `structs/` and memory doc).
-2. **Native→guest virtual dispatch.** Our native code must call through *guest*
+2. Native→guest virtual dispatch. Our native code must call through *guest*
    vtables when an object is game-subclassed, and through native paths when it's
    ours. Convention: HLE objects carry guest-visible vtables whose slots are
    trap addresses; game-subclassed objects carry guest vtables naturally.
    Dispatch = always read the vtable from guest memory and call whatever's there
    (trap → native, code addr → Unicorn).
-3. **Green-thread correctness** — blocking primitives (`cSemaphore::Lock`, pipe
+3. Green-thread correctness — blocking primitives (`cSemaphore::Lock`, pipe
    reads, `Sleep`) are the yield points; guest code presumably assumes
    preemption. Audit which game threads exist before deciding whether
-   cooperative-with-forced-preemption (Unicorn timeout hook) is needed. —
-   **Settled: no preemption is needed.** The guest's threads are the sound mixer
-   and the timer, both green-run inside the emulation, and the port has exactly
-   one real host thread (the watchdog). See
+   cooperative-with-forced-preemption (Unicorn timeout hook) is needed.
+
+   Settled: no preemption is needed. The guest's threads are the sound mixer and
+   the timer, both green-run inside the emulation, and the port has exactly one
+   real host thread (the watchdog). See
    [host-architecture.md](host-architecture.md), "The green run".
-4. **g++ 2.95 exception handling** runs entirely inside guest code (game carries
-   its own sjlj runtime) — should Just Work, but `Fatal` paths that unwind
-   across the HLE boundary would not. `Fatal` doesn't return, so treat it as
-   terminate-with-message. — **Settled: it did Just Work**, and no unwind ever
-   crossed the boundary.
-5. **The 5.6 MB unknown**: game logic may do things we haven't seen (direct
-   `/proc` reads etc.). Mitigated by: syscalls can't happen except through
-   imports (all trapped) — any surprise shows up as a trap we haven't
-   implemented yet, loudly. — **Settled: there was no surprise.** The mitigation
-   was the right one and it never had to fire: a full boot into gameplay reports
-   **0 unimplemented traps**, over 3.58M import calls in a 6-minute run.
+4. g++ 2.95 exception handling runs entirely inside guest code (game carries its
+   own sjlj runtime) — should Just Work, but `Fatal` paths that unwind across
+   the HLE boundary would not. `Fatal` doesn't return, so treat it as
+   terminate-with-message.
+
+   Settled: it did Just Work, and no unwind ever crossed the boundary.
+5. The 5.6 MB unknown: game logic may do things we haven't seen (direct `/proc`
+   reads etc.). Mitigated by: syscalls can't happen except through imports (all
+   trapped) — any surprise shows up as a trap we haven't implemented yet,
+   loudly.
+
+   Settled: there was no surprise. A full boot into gameplay reports 0
+   unimplemented traps, over 3.58M import calls in a 6-minute run.
 
 ## Milestones
 
-- **M0** — Phase 0 API inventory + headers. ✅ **DONE** — GNU-v2 demangler
+- **M0** — Phase 0 API inventory + headers. Done: GNU-v2 demangler
   (`tools/gnuv2_demangle.py`, 100% of 2400 libmvos exports), structured
   inventory (`data/mvos_api.json`: 252 classes / 1304 methods / 131
   polymorphic), 232-symbol HLE boundary (`data/game_imports.tsv`: 191 MVOS calls
@@ -186,15 +175,14 @@ Note: the four input/video device globals are all produced by the *video*
   `include/mvos_api.hpp`. Regenerate all via `sh tools/regen_api.sh`. See
   [../reference/mvos-api-inventory.md](../reference/mvos-api-inventory.md).
 - **M1** — Loader + Unicorn bring-up: map ELF, run `.ctors`, call `Init`, read
-  the 9 flags, print them. **No game data needed.** ✅ **DONE** — `port/` (C++17
-  + Unicorn 2): maps the two PT_LOAD segments, traps all 232 imports (95 more
+  the 9 flags, print them. No game data needed. Done: `port/` (C++17 + Unicorn
+  2) maps the two PT_LOAD segments, traps all 232 imports (95 more
   JMP_SLOT/GLOB_DAT resolve to game-local exports), runs 215 `.ctors` under
   emulation (213 clean, 2 fault on unimplemented data-descriptor ctors), calls
   `Init__12cApplication`, and all 9 subsystem flags transition `0 → 1`. The
-  game's own code runs (emits its own `printf` output). Details + M2 worklist:
-  [m1-loader.md](m1-loader.md).
+  game's own code runs (emits its own `printf` output).
 - **M2** — Enough HLE to reach the menu: file I/O + `cSystemMemory` +
-  strings/containers + video + input + config. First pixels. **Needs CD data.**
+  strings/containers + video + input + config. First pixels. Needs CD data.
 - **M3** — Audio, timers, sim loop → playable single-player.
 - **M4** — Movies, CD audio, save/load, fullscreen polish → shippable Mac app.
 - **M5 (optional, long-term)** — incremental native lift: hook individual game
@@ -202,12 +190,12 @@ Note: the four input/video device globals are all produced by the *video*
   gradually a true native port (devilutionX-style, but with a running product
   from day one).
 
-## Open items — all resolved or made moot
+## Open items and their outcomes
 
-Every one of these is settled. Listed with its outcome, because **this is the
-list that stops dead work being re-proposed**: three of them were questions
-*only* because this plan needed them, and would become live again only if the
-project went back to native-replacing the engine wholesale.
+All but one are closed. They are listed with outcomes so they are not
+re-proposed: three were questions *only* because this plan needed them, and
+would become live again only if the project went back to native-replacing the
+engine wholesale.
 
 | Item | Outcome |
 |---|---|

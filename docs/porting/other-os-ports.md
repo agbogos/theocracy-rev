@@ -1,10 +1,10 @@
 # Other-OS ports — Windows and Linux
 
-**Status: both done and played.** Linux was brought up and confirmed by play on
-2026-08-03, Windows on 2026-08-04 — see [Confirmed by play](#confirmed-by-play)
-and [The game runs on Windows](#the-game-runs-on-windows--done-2026-08-04).
-Three hosts now run the same 2000 i386 binaries from the same source, with no
-`#ifdef` in any unit but `traps.cpp`.
+**Status: both done and tested.** Linux was brought up and confirmed by play
+first, then Windows — see [Confirmed by play](#confirmed-by-play) and [The
+game runs on Windows](#the-game-runs-on-windows). Three hosts now run the same
+2000 i386 binaries from the same source, with no `#ifdef` in any unit but
+`traps.cpp`.
 
 Both bundles are cross-built from macOS with no machine of the target OS in the
 loop: `tools/package-windows.sh` → `dist/theoc-windows-x64-<version>/`
@@ -12,16 +12,14 @@ loop: `tools/package-windows.sh` → `dist/theoc-windows-x64-<version>/`
 `dist/theoc-linux-<arch>-<version>/` (a container).
 
 One item is outstanding: a **bare-metal Windows timing run**, blocked on
-hardware until ~2026-08-18. It qualifies a measurement rather than blocking
-anything — see [The contention runs](#the-contention-runs--2026-08-04).
+hardware availability. It qualifies a measurement rather than blocking anything
+— see [The contention runs](#the-contention-runs).
 
-> **This document is written forwards, and is kept that way on purpose.** The
-> risk list below was authored from an audit *before anything was compiled*, and
-> the corrections that follow it are left as corrections rather than folded back
-> in. Three of its five items were moved by measurement, one was the real risk,
-> and one prediction (that Windows would force a `port/src/platform/` directory)
-> was simply wrong. Reading it in order is the point; reading only the top is
-> what this status block is for.
+> The risk list below was authored from an audit before anything was compiled,
+> and the corrections that follow it are left as corrections rather than folded
+> back in. Three of its five items were moved by measurement, one was the real
+> risk, and one prediction — that Windows would force a `port/src/platform/`
+> directory — was wrong.
 
 ## The reusable core is bigger than it looks
 
@@ -38,26 +36,26 @@ Four of the seven units already travel unchanged:
 | `blit.cpp` | pixel math over guest memory |
 | `mpeg.cpp` / `video.cpp` | libav + SDL2, both cross-platform |
 
-**All of `docs/` transfers untouched.** The 232-symbol boundary, every struct
+All of `docs/` transfers untouched. The 232-symbol boundary, every struct
 layout, every guest patch and every address describes a 1999 Linux i386 binary,
-which does not care what is running it. So does every fix this year produced —
+which does not care what is running it. So does every fix the port produced —
 the save-file collapse, the cursor refresh, the sleep model,
 `THEOC_PROVINCE_MS`.
 
-## Three things that look like blockers and are not
+## What looks like a blocker and is not
 
 Worth killing early, because they would otherwise dominate planning:
 
-- **`fork` and `execlp` are stubbed to `return 0`** (`traps.cpp`, the sem/signal
+- `fork` and `execlp` are stubbed to `return 0` (`traps.cpp`, the sem/signal
   stub list). `cTask` is inert and nothing misses it, so Windows' lack of `fork`
   costs nothing.
-- **Exactly one real host thread** — the watchdog, a `std::thread`. The sound
+- Exactly one real host thread — the watchdog, a `std::thread`. The sound
   mixer and the timer are green-run *inside* the emulation
   ([host-architecture.md](host-architecture.md), "The green run"), so there is no
   host threading model to port.
-- **No host `mmap`.** Unicorn owns guest memory.
+- No host `mmap`. Unicorn owns guest memory.
 
-## Linux is a subtraction, not a port
+## Linux needs almost nothing
 
 The host currently implements **the Linux ABI on top of BSD**. On a Linux host
 those translations become the identity function — and they are not behind
@@ -69,7 +67,7 @@ host(BSD/macOS) socket translation"):
   `2`→`4`
 - `to_linux_errno()` — EAGAIN 11/35, EINPROGRESS 115/36, EADDRINUSE 98/48
 
-> **Correction (2026-08-03, measured).** This section originally claimed those
+> **Correction, measured.** This section originally claimed those
 > translations would be *actively wrong* on Linux — that `to_linux_errno` would
 > map an already-Linux errno through a BSD→Linux table. **That was wrong, and it
 > was an inference rather than a measurement.** The translations are written
@@ -82,12 +80,10 @@ host(BSD/macOS) socket translation"):
 > macOS:  EAGAIN host=35  table=11   … 12 of 12 differ  O_NONBLOCK=0x4   SOL_SOCKET=65535 SO_REUSEADDR=4
 > ```
 >
-> So there is **nothing to neutralise**: the socket layer was already portable by
-> construction, and the only things that actually broke were the two BSD-isms the
-> first build found. The general lesson is this project's own —
-> [re-methodology](../reference/re-methodology.md) — *when a claim is about
-> observable state, observe it.* A one-file probe settled in a minute what a
-> plausible-sounding argument got backwards.
+> So there is nothing to neutralise: the socket layer was already portable by
+> construction, and the only things that actually broke were the two BSD-isms
+> the first build found. The claim was about observable state and had never been
+> observed ([re-methodology](../reference/re-methodology.md)).
 
 One must **stay**, and is easy to get wrong: `__xstat` writes an **88-byte
 Linux/i386** `struct stat`. A Linux *x86-64* host's own `stat` is a different
@@ -101,12 +97,11 @@ to answer by reverse-engineering becomes a differential test.
 
 ## Windows is the real port
 
-> **Measured 2026-08-03, and it moves three of the five items below.** The list
-> that follows was written from an audit, before anything had been compiled. A
-> mingw-w64 cross toolchain and an afternoon then produced actual numbers; see
-> [What the cross compiler says](#what-the-cross-compiler-says) immediately
-> after it. Read both — the list is kept as written so the corrections have
-> something to correct, which is this repo's habit.
+> **Measured, and it moves three of the five items below.** The list that
+> follows was written from an audit, before anything had been compiled. A
+> mingw-w64 cross toolchain then produced actual numbers; see [What the cross
+> compiler says](#what-the-cross-compiler-says) immediately after it. The list
+> is kept as written so the corrections have something to correct.
 
 Roughly in risk order:
 
@@ -128,13 +123,12 @@ Audio needs nothing — `/dev/dsp` is already HLE'd onto SDL.
 
 ## What the cross compiler says
 
-**Cross-compiling is the right tool for Windows, having been the wrong one for
-Linux.** The rejection above is about the *sysroot* — "the compiler is not the
-problem" — and Windows inverts that premise: SDL2 ships an official MinGW
+Cross-compiling is the right tool for Windows, though it was rejected for
+Linux. That rejection was about the sysroot rather than the compiler, and
+Windows does not have the sysroot problem: SDL2 ships an official MinGW
 development tarball and ffmpeg has prebuilt Windows dev packages, so two of the
 three dependencies are download-and-untar and only Unicorn must be cross-built.
 Linux never developed that culture because distro packages made it unnecessary.
-Same argument, opposite conclusion, because the fact it rested on changed.
 
 So: `brew install mingw-w64`, `port/cmake/toolchain-mingw-w64.cmake`, and no
 Windows machine anywhere in the loop.
@@ -181,18 +175,18 @@ separately because a header existing is not a symbol existing.
 
 That moves the risk list:
 
-- **Risk 3, filesystem — largely dissolves.** `open`/`stat`/`opendir`/`readdir`
+- Risk 3, filesystem, largely dissolves. `open`/`stat`/`opendir`/`readdir`
   are all there. What survives is *semantics*, and one specific hazard:
   `O_BINARY`. Windows translates CRLF on handles opened without it, which
   would silently corrupt the `.tsg` saves and the PHLS packs — a data-corruption
   bug that compiles cleanly and only shows up in a file. Every guest-facing
   `open` must carry it.
-- **Risk 4, clock — dissolves.** `gettimeofday` links; no
+- Risk 4, clock, dissolves. `gettimeofday` links; no
   `QueryPerformanceCounter` translation needed for correctness.
-- **pthreads — never a risk.** mingw ships winpthreads, so the watchdog thread is
+- pthreads were never a risk. mingw ships winpthreads, so the watchdog thread is
   fine. (`fork`/`execlp` were already stubs.)
-- **Risk 2, sockets — confirmed, and now the only structural port work.** It is
-  also the point where `port/src/platform/` finally earns its keep, per
+- Risk 2, sockets, is confirmed, and is now the only structural port work. It
+  is also the point where `port/src/platform/` finally earns its keep, per
   [Sequencing](#sequencing).
 
 ### Risk 1 is untouched, and `usleep` linking makes it worse
@@ -216,12 +210,12 @@ sub-millisecond**, on every frame, as the tail slice before a tick comes due. A
 15.6 ms floor does not add jitter to those — it overshoots them by 15x–150x and
 sails past the deadline the slice existed to stop at.
 
-**So the one risk that cannot be dissolved by reading a header is the one that
-was ranked first, and it is now the only deep unknown in the Windows port.**
+So the one risk that cannot be dissolved by reading a header is the one that was
+ranked first, and it is now the only deep unknown in the Windows port.
 
 `tools/win_timing_probe.cpp` measures it, standalone, before `traps.cpp` is
-touched — the errno-probe move from [Linux is a
-subtraction](#linux-is-a-subtraction-not-a-port), applied to the claim that is
+touched — the errno-probe move from [Linux needs almost
+nothing](#linux-needs-almost-nothing), applied to the claim that is
 currently still an argument. It cross-compiles from macOS with no Windows
 involved:
 
@@ -238,19 +232,19 @@ rows that decide it, a sustained 30 Hz heartbeat measured as lateness against an
 accumulates rather than averaging out), and the province frame sliced exactly as
 the handler slices it, reported as ticks/frame against the ~3.5 the model needs.
 
-Two things to do with it, both mattering more than the headline number:
+How it should be run, beyond the headline number:
 
-- **Run it with `--busy N`.** The multiplayer session that prompted this ran
-  three game instances on one host; scheduler granularity under contention is
-  not the idle-box number.
-- **Run it on the VM *and* on bare metal.** VM timer behaviour is not the host's,
+- With `--busy N`. The multiplayer session that prompted this ran three game
+  instances on one host; scheduler granularity under contention is not the
+  idle-box number.
+- On the VM *and* on bare metal. VM timer behaviour is not the host's,
   and that gap has to be known before any later in-VM measurement can be
   trusted — the same reason this doc refuses X11 forwarding for timing work.
 
 It ships inside the Windows bundle so it can be run on the target *before*
 `theoc.exe` is.
 
-### The probe's answer — measured 2026-08-03, in a VM
+### The probe's answer, measured in a VM
 
 Run in the Windows VM (12 logical CPUs, QPC at 10 MHz). **The risk is real, and
 it has a clean fix.**
@@ -268,7 +262,7 @@ schedule: `Sleep()` **9.04 ms**, `+timeBeginPeriod` 1.59 ms, waitable timer
 **0.655 ms**. Province frame, sliced as `traps.cpp` slices it: **94.0 ms**, 84.9
 ms, **84.0 ms** against an 83.3 ms target.
 
-Four things fall out, and the third was not predicted:
+Four things fall out:
 
 1. **The 15.6 ms floor is exactly as feared.** A naive port would run the
    province frame ~13% slow, with the heartbeat 9 ms late every tick — and
@@ -299,7 +293,7 @@ Four things fall out, and the third was not predicted:
 > bare-metal run is still wanted, and there is no bare-metal Windows available to
 > this project.
 
-### What shipped — 2026-08-04
+### What shipped
 
 `theoc_sleep_us()` in `traps.cpp`, in the platform block beside `theoc_mkdir()`,
 replacing `::usleep` at its three call sites (the `THEOC_LEGACY_SLEEP` A/B path,
@@ -348,8 +342,8 @@ fps. Hitting 60 is only reachable with sub-millisecond resolution. It is not the
 display, either: the renderer is created without `SDL_RENDERER_PRESENTVSYNC` and
 samples land *above* 60 (60.3, 60.4), which a vsync clamp cannot produce.
 
-**The residual 3.7 ms is the timer's own floor, not a defect**, and the log
-decomposes it without needing another probe:
+The residual 3.7 ms is the timer's own floor, and the log decomposes it without
+needing another probe:
 
 ```
 43.5 usleep/s ÷ 11.5 fps = 3.78 slices/frame      (macOS: 3.5 — splice identical)
@@ -362,12 +356,12 @@ so the guest asks for 83.3 − 22.7 = 60.6 ms and gets 64.3
 1.0 ms per slice is what the probe measured for the timer itself (0.63 ms for a
 sub-millisecond request, 1.67 ms at 1 ms). The probe's 84.0 ms prediction
 assumed ~3.5 slices; the real frame takes 3.78, and the difference is that extra
-slice plus VM noise. **Left alone deliberately** — biasing the request down to
-cancel a 1 ms overshoot would be fitting the port to one VM's timer, and 4% on
-an engine [designed at 12 Hz](frame-timing.md) is not perceptible. The number to
-watch if this is ever revisited is slices/frame, not fps.
+slice plus VM noise. It is left alone: biasing the request down to cancel a 1 ms
+overshoot would be fitting the port to one VM's timer, and 4% on an engine
+[designed at 12 Hz](frame-timing.md) is not perceptible. Anyone revisiting this
+should read slices/frame rather than fps.
 
-## The Windows build — 2026-08-03
+## The Windows build
 
 **`theoc.exe` builds, links and packages.** Nothing has run on Windows, so this
 section is about what the compiler and linker settled, not about the game
@@ -429,21 +423,16 @@ established that guessing does not work and the loader is the oracle.
 
 Two things measured rather than assumed:
 
-- **119 MB**, of which `avcodec-61.dll` alone is 89.6 MB. (The
-  [before/after table](#both-bundles-minus-the-ffmpeg-nobody-uses) below records
-  **131 MB** for the same bundle. Both are real `du` readings taken a day apart —
-  2026-08-03 here, 2026-08-04 there, with the timing probe added in between — and
-  the pre-swap bundle no longer exists to re-measure. Neither figure is load-
-  bearing: the point either makes is "about 120 MB of ffmpeg this port cannot
-  reach".) The closure is seven
-  DLLs against Linux's ~160-library graph, but that is **not** because it carries
-  less — this ffmpeg links its codec dependencies *into* the av\* DLLs. The Linux
-  note therefore still stands: the port only decodes MPEG-1 cutscenes, and a
-  minimally-configured ffmpeg would cut this dramatically. (The first draft of
-  the packaging script claimed "~50 MB" from reasoning rather than measurement,
-  and was wrong by 2.5x.) **Done 2026-08-04 — the bundle is now 7.3 MB**; see
-  [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses).
-- **Stripping `theoc.exe` takes it from 14.1 MB to 2.4 MB**, and the symbols are
+- The bundle was almost entirely ffmpeg, `avcodec-61.dll` alone accounting for
+  89.6 MB of it. The closure is seven DLLs against Linux's ~160-library graph,
+  but not because it carries less — this ffmpeg links its codec dependencies
+  into the av\* DLLs. The Linux note therefore still stands: the port only
+  decodes MPEG-1 cutscenes, and a minimally-configured ffmpeg would cut this
+  dramatically. (The first draft of the packaging script claimed "~50 MB" from
+  reasoning rather than measurement, and was wrong by 2.5x.) Now 7.3 MB — see
+  [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses)
+  for the before/after.
+- Stripping `theoc.exe` takes it from 14.1 MB to 2.4 MB, and the symbols are
   regenerable by rebuilding.
 
 There is no system-integration hazard to reason about, which on Linux was the
@@ -499,7 +488,7 @@ cannot continue, so everything after is undefined. The ignore is now **bounded**
 diagnosis, instead of leaving someone to infer it from a repeating log. A
 healthy run aborts zero times.
 
-### The same Fatal, a second time: `WSAStartup` was never called — 2026-08-04
+### The same Fatal, a second time: `WSAStartup` was never called
 
 The bundle rebuilt with the [minimal
 ffmpeg](#both-bundles-minus-the-ffmpeg-nobody-uses) failed in `Start` with the
@@ -532,7 +521,7 @@ network-capable transports whose own initialisation calls `WSAStartup`, so by
 the time the guest asked for a socket, Winsock was already up. Cutting ffmpeg
 down to `--disable-network` removed the accident, and with it a netgame that had
 been verified by play. **The bundle-size work caused this**; the size result
-stands, but the Windows netgame verification of 2026-08-04 was obtained on a
+stands, but the earlier Windows netgame verification was obtained on a
 binary that was only working by borrowed initialisation.
 
 **This is the listen()-auto-binds bug again, in a different costume** — an
@@ -548,18 +537,18 @@ falling through to the generic unknown-error 5, and **`socket()` logs its
 failures** — both early returns used to be silent, which is the whole reason
 this cost a log diff to find. One `fprintf` would have named it immediately.
 
-> The lesson is not "call `WSAStartup`". It is that **a trap which logs only its
-> successes turns a host-side failure into a guest-side non-sequitur.** The
-> visible symptom here was a message about running two copies of the game.
+> A trap that logs only its successes turns a host-side failure into a
+> guest-side non-sequitur. The visible symptom here was a message about running
+> two copies of the game.
 
-**Confirmed fixed by play, 2026-08-04.** The rebuilt bundle boots, and the two
+**Confirmed fixed by play.** The rebuilt bundle boots, and the two
 things the borrowed initialisation had invalidated were both re-verified on it:
 **multiplayer works**, and **cutscenes play** — which is also the first
 end-to-end confirmation of the minimal ffmpeg on Windows, previously verified
 only on Linux amd64 and arm64. Nothing in the Windows port is now resting on a
 result obtained from the pre-fix binary.
 
-### The game runs on Windows — done 2026-08-04
+### The game runs on Windows
 
 **Windows is playable, and the port is closed.** Three hosts now run the same
 2000 i386 binaries from the same source, with no `#ifdef` in any unit but
@@ -579,18 +568,17 @@ maintainer's report from an interactive session, not an instrumented run. Right
 kind of evidence for "does it work", wrong kind for any number — which is why
 every figure in this section comes from the log instead.*
 
-**Two risks were ranked and both were wrong, in the useful direction:**
+Neither of the two ranked risks bit:
 
-- **Path handling never bit.** `resolve_path`'s `guest[0] == '/'` test is still
+- Path handling never bit. `resolve_path`'s `guest[0] == '/'` test is still
   not how Windows spells "absolute", and it was the standing prime suspect for
   the next failure. Every path the game actually asks for is relative to the
   data root, so the branch is simply never taken. Latent, not live.
-- **Nothing else needed a Windows-specific fix at all.** The whole distance from
+- Nothing else needed a Windows-specific fix at all. The whole distance from
   "boots to `Start`" to "playable" was one latent bug shared by all three
-  platforms, plus a sleep primitive. That is the dual-image architecture paying
-  off: the guest is the same binary everywhere, so a host port only has to be
-  right about the OS boundary — which is finite and enumerable, and was
-  enumerated in M0.
+  platforms, plus a sleep primitive. The guest is the same binary everywhere, so
+  a host port only has to be right about the OS boundary, which is finite and
+  enumerable.
 
 The clean-exit counters, for a baseline to compare future runs against:
 
@@ -623,24 +611,24 @@ change if someone looked:
    Unexplained rather than understood; the large spikes (94k, 26k, 20k) are all
    at scene loads and are the [already-documented](frame-timing.md) load stall,
    not this.
-3. ~~**Path handling**~~ — **fixed 2026-08-04**, see below. Still worth knowing
-   that no run has ever exercised the branch.
-4. ~~`THEOC_WATCHDOG_SAMPLE`~~ — **fixed 2026-08-04**: it now says it is
-   macOS-only instead of appearing to run. Still macOS-only.
-5. ~~**`CloseSubsystems` is still skipped**~~ — **closed 2026-08-04, as a
-   decision rather than a fix.** Windows was the platform
+3. ~~**Path handling**~~ — **fixed**, see below. Still worth knowing that no
+   run has ever exercised the branch.
+4. ~~`THEOC_WATCHDOG_SAMPLE`~~ — **fixed**: it now says it is macOS-only
+   instead of appearing to run. Still macOS-only.
+5. ~~**`CloseSubsystems` is still skipped**~~ — **closed as a decision rather
+   than a fix.** Windows was the platform
    [host-architecture.md](host-architecture.md) named as the revisit trigger, on
    the theory that a device left open by the guest's bookkeeping would matter
    there. It played, and nothing surfaced on any of the three hosts. The revisit
    trigger is now the host stopping being one-shot, not a fourth platform.
 
-### What closes the timing item — 2026-08-04
+### What closes the timing item
 
 Three runs and no code change. Two of them can be done today; the third waits on
 hardware. The in-game half is already done and shipped.
 
 **The in-game half — done.** `[fps]` now prints `(N slices/frame, +M ms
-each)` directly, measured at the sleep call. The 2026-08-04 residual above was
+each)` directly, measured at the sleep call. The residual above was
 decomposed by hand out of three separate columns to reach "≈1.0 ms per slice";
 that arithmetic is now the instrument's job, on every host, so the next person
 to question timing on unfamiliar hardware reads it instead of deriving it. See
@@ -678,13 +666,12 @@ after the fact:
 Anything short of those is the timer's floor under load, which is a number to
 record rather than a thing to fix.
 
-> **Bare metal is scheduled, not abandoned.** No bare-metal Windows machine is
-> available to this project; one becomes available to the author **from roughly
-> 2026-08-18** via a third party. Until then every Windows figure in this
-> document describes one VM and should be read that way. This is the whole
-> remaining content of the item — the VM half is answerable now.
+> **Bare metal is pending, not abandoned.** No bare-metal Windows machine is
+> available to this project; one is expected via a third party. Until then every
+> Windows figure in this document describes one VM and should be read that way.
+> This is the whole remaining content of the item — the VM half is answered.
 
-### The contention runs — 2026-08-04
+### The contention runs
 
 Both ran in the VM, 12 logical CPUs, waitable-timer rows quoted (that is the
 path the port takes). The idle column is the table earlier in this section.
@@ -750,10 +737,10 @@ untested and is now part of what bare metal answers.
 right call, it holds up to 2× oversubscription, and no code change is indicated.
 What is left is one bare-metal run, for the reasons above and in the note.
 
-### Two latent defects closed — 2026-08-04
+### Two latent defects closed
 
-Neither changes what any run does today. Both were found by porting rather than
-by failing, which is the argument for having done the port at all.
+Neither changes what any run does today; both were found by porting rather than
+by failing.
 
 **`resolve_path` tested `guest[0] == '/'` for "is this absolute", and that has a
 Windows-shaped hole in *both* directions.** A host path such as `D:\theocracy`
@@ -795,8 +782,8 @@ points hard at the first.
 struct layout, vtable offset and patch in `docs/` was derived against
 `theocracy.real` and `libmvos.so`. A PE build is a different compilation of a
 different codebase: `guestlink.cpp` would need a PE/COFF sibling, and none of
-the year's findings — the save-format fix, the frame limiter at `0x81da52a`, the
-GD vtable slots — would carry.
+this repo's findings — the save-format fix, the frame limiter at `0x81da52a`,
+the GD vtable slots — would carry.
 
 **The Windows build also would not run as shipped.** `tex.pck` holds `Setup.exe`
 and `theocracy-*.exe/.icd`, and the CD root carries `secdrv.sys`, `clokspl.exe`,
@@ -825,7 +812,7 @@ one set of RE, one set of fixes. The Windows work stays what the section above
 describes — a host-side OS shim — which is the whole reason this architecture
 was chosen ([guest-libmvos.md](guest-libmvos.md)).
 
-## The development environment: containers, not a VM
+## The development environment: a container
 
 Initial Linux work needs **no VM, no target machine and no SSH**. A
 `linux/arm64` container builds at native speed on Apple Silicon and can run the
@@ -853,7 +840,7 @@ network. On a project whose whole debugging history is wall-clock bugs
 masquerading as performance bugs, that produces plausible wrong numbers. Use VNC
 into a VM if you need to watch it, and keep judgement calls on real hardware.
 
-## First Linux build — 2026-08-03
+## First Linux build
 
 It builds and runs, and the prediction above held almost exactly: **two compile
 errors, both BSD-isms, nothing else.**
@@ -963,19 +950,19 @@ cycle 20 | heap 12.01 MB live / 29.74 MB frontier | esp 0x6ffff3e4 | stubs 144 B
 across all 20 cycles on both hosts, so the green-thread mixer does not drift on
 Linux either; the stub page stays flat at 144 B.
 
-Two things follow, and the second is the one that mattered:
+Two things follow:
 
 - **The guest heap is deterministic and host-independent.** Same allocation
   sequence, same totals, different kernel. That also sharpens
   the [heap-growth trials](heap-growth-trials.md): the +18 KB/cycle is the *guest*
   allocating, not the port leaking.
-- **The 2026-08-03 sleep/present/cursor rewrite did not perturb allocation at
-  all** — these numbers reproduce the 2026-07-25 baseline exactly. That closes
+- **The sleep/present/cursor rewrite did not perturb allocation at all** —
+  these numbers reproduce the earlier baseline exactly. That closes
   the "those changes have never been soaked" gap, on both platforms at once.
 
 Two instrument findings fell out:
 
-- **`fds` reads 2, not 1.** The 2026-07-25 note recorded 1; both hosts now say 2
+- **`fds` reads 2, not 1.** An earlier note recorded 1; both hosts now say 2
   and stay flat, so the old figure is stale rather than the port having leaked a
   descriptor.
 - **`rss` reads 0.0 MB inside the container.** The host-RSS probe does not work
@@ -985,7 +972,7 @@ Two instrument findings fell out:
 ### Confirmed by play
 
 Everything the headless work could not reach was then **played on a real Linux
-machine** (2026-08-03): interactive input, save/load, the province limiter and
+machine**: interactive input, save/load, the province limiter and
 the re-entrant sleep it drives, and a full netgame — one dedicated server and
 two clients — which proves the *client* side that the container could only prove
 from the server's accept path. All parts of the game were exercised and none
@@ -1043,15 +1030,15 @@ Two consequences worth knowing:
 - **~190 MB**, almost all of it ffmpeg's codec dependencies (x264, x265, vpx,
   theora, srt, zmq…). The port only ever decodes MPEG-1 cutscenes, so a
   minimally-configured ffmpeg would cut this dramatically — worth doing if the
-  bundle is ever distributed rather than just tested. **Done 2026-08-04 — 37 MB**;
-  see [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses).
+  bundle is ever distributed rather than just tested. **Done — 37 MB**; see
+  [Both bundles, minus the ffmpeg nobody uses](#both-bundles-minus-the-ffmpeg-nobody-uses).
 - **glibc ≥ 2.36 and libstdc++ from GCC 12** on the target, inherited from the
   bookworm base. For an older target, build the image `FROM` an older base
   rather than bundling around it.
 
 ## Both bundles, minus the ffmpeg nobody uses
 
-**Done 2026-08-04.** Both bundles were ~90% ffmpeg that this port cannot reach.
+Both bundles were ~90% ffmpeg that this port cannot reach.
 `tools/build-ffmpeg-min.sh` builds a minimal one; the package scripts pass it to
 cmake as `-DTHEOC_FFMPEG_PREFIX=` and are otherwise unchanged.
 
@@ -1073,7 +1060,7 @@ mpeg1video and mp2 44.1 kHz stereo** — and `port/src/mpeg.cpp` additionally us
 swscale (YUV→RGB565) and swresample (audio format). The engine's own FLC video
 never touches ffmpeg; that is guest code decoding into the LFB.
 
-**And that measurement, on its own, produced a shipped bug — 2026-08-21.** It
+**And that measurement, on its own, produced a shipped bug.** It
 covered `mpeg.cpp` and stopped there, but the port has a *second* libav
 consumer: `port/src/cdaudio.cpp` hands ripped CD audio to `avformat_open_input`,
 and its `audio_ext()` whitelist accepts ten container extensions. The minimal
@@ -1126,17 +1113,17 @@ Two smaller things this dragged out:
   linking the old one and ships it silently. One extra minute of compiling
   against a failure that looks like the prefix not working at all.
 
-## Three defects found by re-cutting the bundles — 2026-08-19
+## Three defects found by re-cutting the bundles
 
 All three were invisible in a green build log: the bundle built, the exit code
-was 0, and the defect was in what the artefact *contained*. **Verify the
-artefact, not the build.** That is what `tools/smoke-test.sh` now exists for.
+was 0, and the defect was in what the artefact contained. Checking the artefact
+rather than the build is what `tools/smoke-test.sh` now exists for.
 
 **A missing include, Linux only.** `cdaudio.cpp` uses `std::vector` without
 including `<vector>`; libc++ supplies it transitively and libstdc++ does not.
 Same class as `std::floor` without `<cmath>` in `video.cpp` above.
 
-The interesting part is why it survived. Between the 2026-08-04 bundles and this
+The interesting part is why it survived. Between the first bundles and this
 re-cut, `port/src` gained ~1800 lines that **only AppleClang had ever seen** —
 `cdaudio.cpp`, the new `config.cpp`, and +866 in `traps.cpp`. The port compiles
 on three hosts but only one was being asked. So run `tools/package-linux.sh
@@ -1169,7 +1156,7 @@ fragments. Confirm a PE's stamp by disassembling around the literal; a grep that
 finds nothing is not evidence of a missing stamp.
 ## Sequencing
 
-1. ~~**Linux first.**~~ **Done 2026-08-03.** It is mostly subtraction, it forces
+1. ~~**Linux first.**~~ **Done.** It is mostly subtraction, it forces
    the platform seam into existence against the easier target, and because it is
    the guest's *native* ABI any residual translation bug surfaces immediately
    instead of hiding behind a second translation.
@@ -1218,10 +1205,10 @@ item. See [host-architecture.md](host-architecture.md), "Why teardown skips
 `CloseSubsystems`", for what would reopen it (the host ceasing to be one-shot —
 not a fourth host).
 
-## CI: building the bundles on GitHub — 2026-08-20
+## CI: building the bundles on GitHub
 
-The bundles were cut by hand until now, which is how the 2026-08-19 re-cut
-shipped three defects out of three green builds. `.github/workflows/release.yml`
+The bundles were cut by hand until now, which is how the re-cut above shipped
+three defects out of three green builds. `.github/workflows/release.yml`
 moves the cutting onto GitHub Actions. Four decisions in it are load-bearing.
 
 **One workflow, not two.** The obvious split — build on tag, publish on a GitHub
@@ -1298,7 +1285,7 @@ an incident: a mechanical pass over many files preserves content and quietly
 drops mode, and `git ls-tree -r <ref> --format='%(objectmode) %(path)'` is how
 you see it, because `git diff` shows the mode change only in `--summary`.
 
-Verified end to end on 2026-08-20: `package-linux.sh arm64` at a clean HEAD
+Verified end to end: `package-linux.sh arm64` at a clean HEAD
 produced a 37 MB bundle, and `smoke-test.sh` run against it *inside* the
 `debian:bookworm-slim` build image — the closest local stand-in for an
 `ubuntu-24.04-arm` runner — reported `8f4b26082048239070la00`, matching the
@@ -1314,7 +1301,7 @@ macOS this never happens, because Rancher/lima translates uids across the mount
 packaging is the fix. Worth generalising: a containerised build verified on
 macOS has not been verified for file ownership anywhere.
 
-### Windows joins CI — 2026-08-20
+### Windows joins CI
 
 `tools/stage-win-deps.sh` is the missing half of `package-windows.sh`: it
 downloads the SDL2 mingw development tarball (2.32.10), cross-builds Unicorn
@@ -1351,7 +1338,7 @@ it appears to prove about who may write where does not. A related local-only
 trap: wine in an arm64 container cannot run an x86-64 `.exe` and hangs rather
 than failing, so verification runs need `--platform linux/amd64`.
 
-### macOS joins CI, signed and notarised — 2026-08-21
+### macOS joins CI, signed and notarised
 
 macOS had only ever been a dev build against `/opt/homebrew`.
 `tools/package-macos.sh` is the third and last packaging script; the workflow
@@ -1419,7 +1406,7 @@ including ad-hoc signed ones, which have no Team ID at all. The fix is not
 same identity as the executable, so validation is satisfied rather than switched
 off.
 
-#### Notarised, not stapled
+#### Notarisation without stapling
 
 `notarytool` accepts `.zip`, `.pkg` and `.dmg`, never `.tar.gz`, so the job zips
 the bundle with `ditto` purely as transport. The ticket is keyed on each
@@ -1474,7 +1461,7 @@ Ten guest i386 constructors translated and executed by the TCG inside a
 Developer-ID-signed, hardened-runtime, notarised binary. Any future *"does the
 signed bundle still run the guest"* is one headless server boot away. A play
 session is still needed for everything with a display attached.
-### The third-party manifest — 2026-08-21
+### The third-party manifest
 
 The bundles ship other people's GPL and LGPL binaries, so the
 corresponding-source obligation is real, and a version number that is merely
@@ -1519,7 +1506,7 @@ libraries. That is fine, and it is exactly the sort of thing a generated
 manifest records and a written one gets wrong.
 
 
-### The first four-bundle release, verified end to end — 2026-08-21
+### The first four-bundle release, verified end to end
 
 The first tag to build all four bundles. Each was re-verified from its
 downloaded tarball rather than from `dist/`, so the check covers packaging and
@@ -1535,7 +1522,7 @@ transport together:
 Every stamp decodes to the tagged commit and date with the right host/arch pair
 and the `0` clean-tree suffix.
 
-Two things about the method are worth repeating on any future release. Test in a
+Two things to repeat on any future release. Test in a
 **stock** base image, not the build image — a bundle tested where it was built
 can pass by inheriting the builder's libraries, which is the property under
 test. And test the **downloaded tarball**, since the build tree cannot show a

@@ -4,11 +4,10 @@ Theocracy's calendar is not the Gregorian one. Months are 20 days, the year is
 365, and a date is one count of days since Year 0 — held in memory as three ints
 and written to a save as a single 4-byte integer.
 
-**Verified against `theocracy.real` 2026-08-05.** Addresses are Ghidra space,
-game base `0x08048000`. The rule was originally worked out by hex-editing saves
-before the port existed; every part of it has now been read off the code, one
-part of it was wrong, and the two things the hex-editing method could not see
-are settled below.
+Verified against `theocracy.real`; addresses are Ghidra space, game base
+`0x08048000`. The rule was originally worked out by hex-editing saves before the
+port existed. Every part of it has since been read off the code, and one part of
+it was wrong.
 
 ## The class
 
@@ -21,8 +20,8 @@ A small `cDate`-shaped object — three ints and a vtable pointer:
 | `+0x08` | day index (**0-based**) |
 | `+0x14` | vtable (`0x08378ba4`) |
 
-The live game date is the instance at `g_World + 0x83c` — that is the object
-the console writes, the save serialises and the UI formats.
+The live game date is the instance at `g_World + 0x83c`, and everything else —
+the console, the save path, the UI formatter — works on that object.
 
 | Address | Named | Does |
 |---|---|---|
@@ -75,7 +74,7 @@ monthIndex = rem / 20;
 dayIndex   = rem % 20;
 ```
 
-**The epoch is confirmed**: year 0, month index 0, day index 0 encodes to 0.
+The epoch is confirmed: year 0, month index 0, day index 0 encodes to 0.
 There is no offset constant anywhere in either direction — the round trip is
 pure div/mod, so an epoch that was secretly shifted would have to show up here,
 and does not.
@@ -90,9 +89,9 @@ of each year decode to **month index 18**, day index 0–4.
 
 `cDate_ToString` then prints `monthIndex + 1` through `%02d` — a number, not a
 lookup into a table of 18 month names — so nothing over-reads and nothing
-crashes. Those five days simply display as **month 19**, a short month at the
-end of every year. "18 months plus 5 intercalary days" describes the arithmetic
-correctly and the engine's own presentation incorrectly.
+crashes. Those five days simply display as month 19, a short month at the end of
+every year. Calling it "18 months plus 5 intercalary days" gets the arithmetic
+right but not what the engine shows.
 
 ## How it is stored
 
@@ -103,11 +102,11 @@ int count = cDate_ToDayCount(this);
 file->Write(&count, 4);
 ```
 
-`cDate_Load` is the exact inverse — read 4, decode. So the field is a plain
-`int`, and the old notes' "3 bytes" was the low three bytes of it: the top byte
-stays zero until year ~45,965, and would never have been seen moving.
+`cDate_Load` is the exact inverse: read 4, decode. So the field is a plain
+`int`. The old notes called it "3 bytes" because that is what they could see
+moving; the top byte stays zero until year ~45,965.
 
-**There is no fixed file offset.** `cWorld::Save` (`0x081fb920`) calls
+There is no fixed file offset. `cWorld::Save` (`0x081fb920`) calls
 `cDate_Save` partway through its stream, after two polymorphic arrays and a
 length-prefixed string, all of which vary in size — so the date's position in a
 `.tsg` moves from save to save. That is why the hex-editing notes never recorded
@@ -166,9 +165,8 @@ the top: `date 5 25 40` is accepted and normalises through the div/mod.
 
 ## One tick, one day
 
-**Read 2026-08-06 from `SimulationUpdate` (`0x081f97e0`).** The date is not
-advanced inside `SimulationStep` at all. It is advanced by the loop that calls
-it:
+Read from `SimulationUpdate` (`0x081f97e0`): the date is not advanced inside
+`SimulationStep` at all. It is advanced by the loop that calls it:
 
 ```c
 while (ticks != 0 && *(char *)(*(int *)(g_World + 0x140c) + 0x4f4) != '\0') {
@@ -183,30 +181,30 @@ while (ticks != 0 && *(char *)(*(int *)(g_World + 0x140c) + 0x4f4) != '\0') {
 ToDayCount(b)` fed back through `SetFromDayCount`. With `b` built as `(0, 0,
 1)`, `ToDayCount(b)` is `20×0 + 365×0 + 1` = 1.
 
-So **one simulation tick is exactly one in-game day.** They are not merely
-proportional and there is no accumulator, no remainder and no separate calendar
-clock — the tick *is* the day. Two consequences worth stating:
+So one simulation tick is exactly one in-game day. There is no accumulator and
+no separate calendar clock; the tick *is* the day. Two things follow:
 
-- The **whole calendar rate is one number**, `tickDuration` at `g_World+0x1408`,
+- The whole calendar rate is one number: `tickDuration` at `g_World+0x1408`,
   the divisor in `SimulationUpdate`'s `ticks = elapsed/tickDuration`. Its value
-  is still unread (no absolute xref — it is written through a register-held
-  `this`), so how many real seconds an in-game day takes is not yet stated here.
-- **Catch-up moves the calendar.** `SimulationUpdate` clamps to 10 ticks per
-  call, so a stalled frame does not lose days up to that bound — but a stall
-  long enough to exceed it *does* permanently lose in-game days, silently. That
-  is a real behaviour of the original, not a port artefact.
+  is still unread — there is no absolute xref, since it is written through a
+  register-held `this` — so how many real seconds an in-game day takes is not
+  stated here.
+- Catch-up moves the calendar. `SimulationUpdate` clamps to 10 ticks per call,
+  so a stalled frame does not lose days up to that bound, but a stall long
+  enough to exceed it permanently loses in-game days, silently. This is
+  behaviour of the original game, reproduced by the port rather than caused by
+  it.
 
 The two `cDate_ToDayCount` calls inside `SimulationStep` are consumers of the
 value this loop maintains: one feeds the current day count to the **mission
-handler** (`g_World+0x1f394` — corrected 2026-08-10 from "the units manager",
-see [missions.md](missions.md)), the other measures alliance age for the
+handler** (`g_World+0x1f394`, corrected from "the units manager" — see
+[missions.md](missions.md)), the other measures alliance age for the
 `ALLIED_JOIN_YEARS` mechanic ([simulation-step.md](simulation-step.md)).
 
-That first consumer is worth a sentence here rather than only there: because the
-handler is stepped once per tick and a tick is a day, **every date in the
-campaign script — mission delays, the Spanish arrival, the dragon — is measured
-in the calendar this doc describes**, and inherits its behaviour, including the
-lost days when catch-up exceeds ten ticks.
+Because the handler is stepped once per tick and a tick is a day, every date in
+the campaign script — mission delays, the Spanish arrival, the dragon — is
+measured in this calendar and inherits its behaviour, including the days lost
+when catch-up exceeds ten ticks.
 
 > **This corrected a wrong claim.** `simulation-step.md` and
 > `game-loop-and-simulation.md` both described `g_World+0x83c` as the sim's
@@ -218,8 +216,6 @@ lost days when catch-up exceeds ten ticks.
 
 ## Open threads
 
-- ~~**How the date advances.**~~ **Answered 2026-08-06 — see "One tick, one day"
-  above.**
 - **`g_TimeUnitScale`'s value** (`0x084c7c54`) was not read — the ratios above
   are independent of it, and hold as long as `31,536,000 × scale` does not
   overflow a 32-bit int (scale ≤ 68). Real saves decode to sane dates, so it

@@ -1,25 +1,23 @@
 # Missions
 
-The scripted layer that sits on top of the simulation: twenty `cMission_*`
-classes that spawn men from their own config files, watch for a condition, and
-hand out heroes and magic items when it is met. This is the wall that
-[heroes.md](heroes.md) and [magic-items.md](magic-items.md) both hit, and it
-answers all three of their questions.
+The scripted layer on top of the simulation: twenty `cMission_*` classes that
+spawn men from their own config files, watch for a condition, and hand out
+heroes and magic items when it is met. It answers the open questions
+[heroes.md](heroes.md) and [magic-items.md](magic-items.md) both ended on.
 
-**Read off `theocracy.real` 2026-08-09**, and the layer above them —
-`iMissionHandler`, what constructs a mission, what binds it to a province and
-what starts it — **2026-08-10**. Addresses are Ghidra space, game base
-`0x08048000`. Findings are mirrored into the Ghidra DB as renames and decompiler
-comments.
+Read off `theocracy.real`, along with the layer above them — `iMissionHandler`,
+what constructs a mission, what binds it to a province and what starts it.
+Addresses are Ghidra space, game base `0x08048000`. Findings are mirrored into
+the Ghidra DB as renames and decompiler comments.
 
-> **The 2026-08-10 pass also killed a claim three other docs carried.**
+> **This work also killed a claim three other docs carried.**
 > `g_World+0x1f394` was described everywhere as "the units manager", and
 > `simulation-step.md` listed it as the biggest remaining piece of the
 > simulation. It is the `iMissionHandler` — the object this section is about —
 > and the units *container* is the next word up at `g_World+0x1f398`. See
 > [re-methodology.md](../reference/re-methodology.md) §12.
 
-## The trap that hid all of this
+## Why xref'ing the item factory finds no missions
 
 `magic-items.md` said `Item_CreateById` (`0x0820d1f0`) was "the only way an item
 comes into existence", and the obvious first move — xref it — produces eight
@@ -42,13 +40,13 @@ factory switch entirely. The question only opens up when you xref the
 
 Generalised into [re-methodology.md](../reference/re-methodology.md): a factory
 function is evidence about the paths that *use* the factory, never about the
-full construction surface of the type. Check the constructors.
+full construction surface of the type, so the constructors are what to xref.
 
 ## The twenty classes
 
 Twenty RTTI names, all deriving from one base whose type-info getter is
-`0x08210180` — that getter has exactly 20 callers, which is what fixes the count
-at twenty rather than at "twenty strings we found".
+`0x08210180`. That getter has exactly 20 callers, so the count is twenty by
+enumeration rather than by string-grepping.
 
 Twelve are the *named* missions, compiled into one translation unit, with a
 contiguous run of 20-slot (`0x50`-byte) vtables. `ctor` is the address of the
@@ -92,7 +90,7 @@ against a decompiled body.
 | `+0x1c` | `Activate()` | `this` only; `cMission_Josda_Activate` loads its man file here, `cMission_TwoRings`' does nothing but set two flags |
 | `+0x2c` | `Finish()` | branches on the state byte; five of the six hero rewards live here |
 
-> **`+0x0c`/`+0x10` corrected 2026-08-10.** This table used to list them as
+> **`+0x0c`/`+0x10` corrected.** This table used to list them as
 > anonymous "base `cMission`" slots. They are `Load` and `Save`: the handler
 > serialises every mission through them, which is how mission state survives a
 > save (and why it ships inside `init.dat`). The same two slots hold `Load`/`Save`
@@ -168,9 +166,9 @@ lists are certain and the bodies are not.
 
 | slot | signature | what |
 |---|---|---|
-| `+0x1c` | `(out, prov, &xy, radius)` | find a free cell near a raw map `(x,y)` — a ring search, `(-1,-1)` if none (read 2026-08-10, below) |
+| `+0x1c` | `(out, prov, &xy, radius)` | find a free cell near a raw map `(x,y)` — a ring search, `(-1,-1)` if none (read below) |
 | `+0xd8` | `(prov, pos, item)` | drop a magic item on the ground |
-| `+0xe0` | `(prov)` | selects between the two placement paths in `MissionCfg_PlaceMen`; a stored byte, not a computation (read 2026-08-10, below) |
+| `+0xe0` | `(prov)` | selects between the two placement paths in `MissionCfg_PlaceMen`; a stored byte, not a computation (read below) |
 | `+0xe4` | `(prov, pos, manType, tribe)` → `cMan*` | create a man |
 
 `+0xe4` is the same virtual `HeroCfg_PlaceHeroes` uses, and it is handed the
@@ -188,7 +186,7 @@ checked for a two-argument call. The inherited default is
 `Fatal("cMan::SetHeroId : I'm not a hero")` (`0x080ad270`), which is the
 developers' own name for the slot.
 
-> **Small correction, 2026-08-10.** This paragraph called `0x0831ae00` "the base
+> **Small correction.** This paragraph called `0x0831ae00` "the base
 > `cMan` vtable". Its RTTI getter says `7cWorker` — it is **`cWorker`'s** vtable,
 > which merely carries `cMan`'s inherited defaults. Nothing above depended on the
 > name, but "the base `cMan` vtable" is not a thing this project has located.
@@ -218,9 +216,8 @@ is the odd one: he is handed over when The Wall *begins*, not when it ends.
 Jarakhi (11) and Tlechlal (19) are assigned by no code path**: no data file, no
 mission, nothing outside the developer console.
 
-**That is not the same as "never appear", and for Jarakhi it is definitely not**
-— see "The third channel" below, which is the correction that matters most in
-this doc. He is the campaign's player character and ships in the world state.
+That is not the same as "never appear". Jarakhi is the campaign's player
+character and ships in the world state — see "The third channel" below.
 
 For Umochi the code-side silence still agrees with what [heroes.md](heroes.md)
 argued from his placeholder description, and he is the one of the three whose
@@ -230,11 +227,11 @@ string `Umochi`, which no amount of map data fixes.
 ### One hero placed without an identity
 
 Six sites print `"Failed to place hero to (%d,%d)"`. Five of them follow the
-placement with `SetHeroId`. The sixth — `cMission_Scroll_lost_Finish`
-(`0x0821a110`) — places a man of type `0x23` at `(0xd9,0xb8)`, gives him item 3,
-and never assigns an id, so he keeps the `0` the `cHero` constructor wrote.
-Recorded as observed; whether that is deliberate (a nameless survivor for the
-*lost*-scroll branch) or an omission is not decidable from the code.
+placement with `SetHeroId`. The sixth, `cMission_Scroll_lost_Finish`
+(`0x0821a110`), places a man of type `0x23` at `(0xd9,0xb8)`, gives him item 3,
+and never assigns an id, so he keeps the `0` the `cHero` constructor wrote. It
+could be a nameless survivor for the *lost*-scroll branch or an omission; the
+code does not say which.
 
 ## Missions place items
 
@@ -256,7 +253,7 @@ Twenty-five of the fifty item constructors have a caller outside the factory.
 ## The Two Rings, end to end
 
 The one mission read all the way through, because it answers the question
-`magic-items.md` left open. Every step is code, not inference.
+`magic-items.md` left open. Every step below is read off the code.
 
 **1 — `cMission_TwoRings_Start` (`0x0821c5e0`, slot `+0x14`).** Loads
 `misi008.man`. Walks the province building list for the one whose flags have bit
@@ -311,13 +308,13 @@ the man's item slots for id `0x15` (21, the Dragon Ring) and sets the same
 
 ## Fourteen items no *code* path creates — and the channel that is not code
 
-**Corrected 2026-08-09, the same day, after this section first claimed those
+**Corrected, after this section first claimed those
 fourteen were "created by nothing". They are not. See "The third channel" below
 before using any number here.**
 
-Placed by `mitem.cfg` (8), `hero.cfg` (12) or mission code (25), the union is
-**36 items**. The other **fourteen are created by no code path in the image**:
-ids **1, 2, 7, 9, 12, 17, 18, 29, 32, 41, 44, 47, 49, 50**.
+Placed by `mitem.cfg` (8), `hero.cfg` (12) or mission code (25), the union is 36
+items. The other fourteen are created by no code path in the image: ids 1, 2, 7,
+9, 12, 17, 18, 29, 32, 41, 44, 47, 49, 50.
 
 That statement is exhaustive over *code*, and the exhaustiveness is real:
 `Item_CreateById`'s four callers plus 25 direct constructor calls, and no
@@ -326,30 +323,29 @@ address of `Item_CreateById` and of each of those fourteen constructors finds
 exactly one occurrence each, all inside `.eh_frame` (`0x084e3be8`–`0x08597400`),
 i.e. unwind FDEs and not a dispatch table.
 
-The two gaps line up neatly, and this part survives: of the thirteen items whose
-description is just their own name, **ten are among the fourteen** (1, 2, 7, 12,
-17, 18, 29, 41, 49, 50). The only described-less items any code path places are
-20 (`mitem.cfg`) and the two Ring Pieces.
+The two gaps line up: of the thirteen items whose description is just their own
+name, ten are among the fourteen (1, 2, 7, 12, 17, 18, 29, 41, 49, 50). The only
+description-less items any code path places are 20 (`mitem.cfg`) and the two
+Ring Pieces.
 
 ## The third channel — the shipped world is a savegame
 
-**Every `init.dat` in the data tree is a `theosg42` save file**: the campaign's
+Every `init.dat` in the data tree is a `theosg42` save file: the campaign's
 (`data/campaign/init.dat`, 550 831 bytes) and all eight scenarios'
-(`data/scenario/scn*/init.dat`). The magic is at offset `0x40` and the first
+(`data/scenario/scn*/init.dat`). The magic is at offset `0x40`, and the first
 `0x40` bytes are exactly the uninitialised-stack header
 [save-format.md](save-format.md) documents — which had already recorded that the
-console's `save` command writes `init.dat`. The connection was there to be made
-and this doc's first version did not make it.
+console's `save` command writes `init.dat`.
 
-So **the starting state of every map is loaded, not placed**, and objects in it
-come up through *stream constructors* rather than through any of the three
-channels above:
+The starting state of every map is therefore loaded rather than placed, and the
+objects in it come up through *stream constructors* rather than through any of
+the three channels above:
 
-- **`cHero`'s stream constructor is `0x080b22c0`.** It runs the base `cMan`
-  stream ctor, installs the hero vtable, and then reads **one byte straight into
-  `+0x27c`** — the hero id, never touching `cHero_SetHeroId`.
-- **Items likewise**: `0x0820dbb0` reads an id byte and calls `Item_CreateById`,
-  so a stream can materialise any of the fifty.
+- `cHero`'s stream constructor is `0x080b22c0`. It runs the base `cMan` stream
+  ctor, installs the hero vtable, then reads one byte straight into `+0x27c` —
+  the hero id, never touching `cHero_SetHeroId`.
+- Items likewise: `0x0820dbb0` reads an id byte and calls `Item_CreateById`, so
+  a stream can materialise any of the fifty.
 
 And this is why neither showed up in an xref sweep. The per-man-type **caste
 properties** struct carries three function pointers, and the stream loader is
@@ -405,7 +401,7 @@ campaign start. See [starting-world.md](starting-world.md), "Open threads".
 
 ## What starts a mission — `iMissionHandler`
 
-**Read 2026-08-10.** The previous pass read the lifecycle from `Start` onward
+The previous pass read the lifecycle from `Start` onward
 and stopped; this is the layer above it, and it turns out to be one object
 driven once per in-game day.
 
@@ -529,11 +525,11 @@ The two "15 days" entries are hardcoded `cDate_ctor_YMD(&d, 0, 0, 15)` and are
 the pair [starting-world.md](starting-world.md) had already spotted from the
 other end.
 
-**Mission 4 is the interesting one**: Scroll_lost is not an alternative the
-player picks, it is what the campaign runs *because* Scroll failed. Its one hero
-(the man placed with no id, above) is the consolation branch.
+Mission 4: Scroll_lost is not an alternative the player picks, it is what the
+campaign runs *because* Scroll failed. Its one hero — the man placed with no id,
+above — is the consolation branch.
 
-**Mission 12 is not a mission**, it is a poll. `cMission_WallChecker_Activate`
+Mission 12 is a poll rather than a mission. `cMission_WallChecker_Activate`
 (`0x0821ecc0`) sets active and started and **clears the state byte**, and the
 first thing `Update` does each day is call it whenever the state is non-zero —
 so it re-arms itself forever rather than completing.
@@ -584,9 +580,9 @@ whether mission 10 completed (`"A 10-es mission-t sikeresen teljesitetted."` —
 *"you completed mission 10 successfully"*), picks one of two texts accordingly,
 and plays `spain.mpg`.
 
-And the jitter a player remembers is real, but it is not jitter — it is a
-**difficulty response**. `SpainTimer_MaybeReroll` (`0x081fa6a0`), called once
-per `SimulationUpdate` that ran at least one tick, does:
+The arrival date is not fixed, and what moves it is a difficulty response.
+`SpainTimer_MaybeReroll` (`0x081fa6a0`), called once per `SimulationUpdate` that
+ran at least one tick, does:
 
 ```c
 if (scenario id == 0 && SpainTimer_IsAtDefaultDate(handler)) {
@@ -596,9 +592,9 @@ if (scenario id == 0 && SpainTimer_IsAtDefaultDate(handler)) {
 }
 ```
 
-**When the player gets close to holding the map, the conquistadors are
-rescheduled to a random day inside the next `SPAIN_RND_YEAR` years** — printing
-`"Spanish date is reset to %d days..."` — and the guard means it happens at most
+So when the player gets close to holding the map, the conquistadors are
+rescheduled to a random day inside the next `SPAIN_RND_YEAR` years, printing
+`"Spanish date is reset to %d days..."`. The guard means it happens at most
 once, since the timer is no longer at its default date afterwards. Campaign
 only: `g_GameSession+0x4c` (the scenario id) must be `0`.
 
@@ -670,7 +666,7 @@ world file.
 
 ### Where the flags come from: nowhere in code
 
-**Read 2026-08-10.** `man+0x28` has exactly two writers in the image, and they
+`man+0x28` has exactly two writers in the image, and they
 are the two constructors:
 
 | path | what it does to `man+0x28` |
@@ -683,16 +679,16 @@ Nothing else touches it — established with the
 checking every candidate write in the man code, all of which turned out to be
 `+0x28` on unrelated classes (`cVObject`'s ctor, `cMan::cCasteProperties`).
 
-So the mission flags are **pure data**: authored in the map editor, shipped
-inside `init.dat`, never computed. Which has a consequence worth stating
-plainly, because it constrains how the campaign missions can possibly work:
+The mission flags are therefore pure data: authored in the map editor, shipped
+inside `init.dat`, never computed. That constrains how the campaign missions can
+work at all:
 
-- Any man the **code** creates has flags `0` — including every man
+- Any man the code creates has flags `0`, including every man
   `MissionCfg_PlaceMen` spawns, since the five-column `.man` format has no flag
   column and the spawn goes through province virtual `+0xe4`, i.e. the ordinary
   constructor.
-- Therefore a man can only be *found* by `Mission_FindManByFlag` if he **shipped
-  in the world file**. The campaign missions that look their commander and hero
+- Therefore a man can only be *found* by `Mission_FindManByFlag` if he shipped
+  in the world file. The campaign missions that look their commander and hero
   up instead of spawning them are reading designer-placed men, and cannot be made
   to work any other way.
 
@@ -756,7 +752,7 @@ Who writes `prov+0x400fb` is unread.
   no writer found.
 - **Mission field `+0x39`**, read by the handler's `+0x1c` predicate; no writer
   found.
-- ~~**`cMan_Comm1` writes `26` to `+0x27c`**~~ — **closed 2026-08-10.** Both
+- ~~**`cMan_Comm1` writes `26` to `+0x27c`**~~ — **closed.** Both
   readings were right and they never conflicted: `sizeof(cMan)` is `0x27c`, so
   that byte is the first member of the *derived* class and `cHero` and
   `cMan_Comm1` each own their own. [heroes.md](heroes.md)'s claim needed no

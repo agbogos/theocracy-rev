@@ -1,16 +1,17 @@
 # Music: the CD-audio (Redbook) subsystem
 
-**Theocracy's music is Redbook CD audio — the analogue tracks on the game disc,
-played by the drive, never decoded by the game.** There is no music file
+Theocracy's music is Redbook CD audio: the analogue tracks on the game disc,
+played by the drive and never decoded by the game. There is no music file
 anywhere in the installed data tree, no MIDI, no module format, no streamed
-codec. The engine asks the CD-ROM drive to play track *n* and that is the whole
+codec. The engine asks the CD-ROM drive to play track *n*, and that is the whole
 mechanism.
 
-This is why the port has never had music, and why nothing ever reported it as
-missing. The whole chain — the game's music manager, `cVCD`, and the real
-`cCD_Linux` driver — runs correctly as guest code all the way down to the
-device, where the host's blanket `ioctl` stub tells it *success* and plays
-nothing. Nothing fails, so nothing logs.
+This is why the port went a year without music, and why nothing ever reported it
+as missing. The whole chain — the game's music manager, `cVCD`, and the real
+`cCD_Linux` driver — ran correctly as guest code all the way down to the device,
+where the host's blanket `ioctl` stub reported success and played nothing. No
+failure meant no log line. The port now answers those ioctls from a virtual
+drive; see "The virtual drive" below.
 
 Addresses are `theocracy.real` (base `0x08048000`) unless stated. libmvos
 addresses are Ghidra-space (base `0x10000`), so they are the **file** addresses
@@ -25,12 +26,12 @@ and Ghidra `0x905b0`. This doc uses Ghidra addresses throughout, per
 | Source | `.wav` under `data/game/data/sounds/` (~16 MB) | CD audio tracks |
 | Engine class | `cSoundCard_Linux` + software mixer | `cVCD` |
 | Device | `/dev/dsp` (OSS) | `/dev/cdrom` (ioctl) |
-| Port status | **works** — guest mixer green-run onto SDL | **stubbed to a no-op** |
+| Port status | works — guest mixer green-run onto SDL | works — virtual drive, below |
 
-`data/game/data/sounds/ambient/` is worth naming explicitly because it is the
-thing most easily mistaken for music: `erdo.wav`, `mocsar2.wav`, `opart.wav` —
-Hungarian for *forest* and *swamp*. Environmental loops through the ordinary
-sample mixer, not score.
+`data/game/data/sounds/ambient/` is the directory most easily mistaken for
+music: `erdo.wav`, `mocsar2.wav`, `opart.wav` — Hungarian for *forest* and
+*swamp*. These are environmental loops, and they go through the ordinary sample
+mixer rather than the music path.
 
 ## `cVCDThread` — the music manager
 
@@ -58,12 +59,10 @@ Each `cList` is `0x18` bytes = two `0xc`-byte `cNode`s, the Exec header idiom
 already documented in [memory-and-containers.md](memory-and-containers.md).
 Track nodes are `0x10` bytes: `{succ, pred, vtbl, track byte at +0xc}`.
 
-**Four moods exactly.** The constructor initialises four lists, and the
-destructor (`0x081a38e0`) confirms it twice over — its node-free loop runs
+There are four moods. The constructor initialises four lists, and the destructor
+(`0x081a38e0`) gives the number twice more: its node-free loop runs
 `local_5 < 4`, and its header-unlink loop walks `this+0x7c` down to `this+0x1c`
-in `0x18` steps, which is `(0x7c-0x1c)/0x18 = 4`. Two independent readings of
-the same number, which is the discipline
-[re-methodology.md](../reference/re-methodology.md) asks for.
+in `0x18` steps, which is `(0x7c-0x1c)/0x18 = 4`.
 
 ## The track table
 
@@ -82,23 +81,23 @@ L+0xc` and updates the pred slot at `L+0x10`, so each list base is `target −
 **The disc therefore carries audio tracks 2–8: track 1 is the data track, seven
 audio tracks follow, and the game names six of them.**
 
-**Track 4 is never referenced.** `Play__4cVCDUl` has exactly one call site in
-the entire binary (`0x081a3c67`, inside `cVCDThread_StartTrackForMood`), and
-`cVCD::PlayAll` / `cVCD::GetNumberOfTracks` are not imported by the game at all.
-So track 4 is not reachable through any code path — it is either a bonus track,
-or the credits/end-title music triggered some other way, or it does not exist
-and the disc has six audio tracks with a gap in the numbering the game assumes.
-**Only the TOC of a real disc can tell these apart**, which is the single most
-useful thing a rip will settle.
+Track 4 is never referenced. `Play__4cVCDUl` has exactly one call site in the
+entire binary (`0x081a3c67`, inside `cVCDThread_StartTrackForMood`), and
+`cVCD::PlayAll` / `cVCD::GetNumberOfTracks` are not imported by the game at all,
+so no code path reaches track 4. The UK disc's TOC settles that it exists: seven
+audio tracks, 2–8, with track 4 a real 166-second recording the game never
+plays. What is on it is still unknown.
 
 ### The "random" choice is deterministic
 
 The `cRandom` at `+0x7c` is seeded with `0x2a` and then immediately re-seeded
-with the constant `0x07b9f846`. Neither is time- or entropy-derived, so for
-moods 2 and 3 the sequence of track choices is **identical on every run of the
-game**. Anyone comparing a port session against original hardware by ear can
-rely on that: same mood transitions must produce the same tracks in the same
-order, and a divergence is a real difference rather than luck.
+with the constant `0x07b9f846`. `cRandom::Rnd` is a plain LCG — `state = state *
+0xFFFFFFF1 + 0x7FFFFFFF`, returning `state / 4294967295.0` — so a seed fixes the
+whole sequence. Neither seed is time- or entropy-derived, so for moods 2 and 3
+the sequence of track choices is identical on every run of the game. That makes
+it a usable comparison against original hardware: the same mood transitions must
+produce the same tracks in the same order, so a divergence is a real difference
+rather than luck.
 
 ## How a mood becomes a track
 
@@ -118,9 +117,8 @@ The early-out matters for reading the rest of the engine: `RealmGameLoop` calls
 `SetMood(g_VCDThread, 1)` **every frame**, and after the first frame it does
 nothing. This is the call that
 [game-loop-and-simulation.md](game-loop-and-simulation.md) step 9 corrected from
-"advance animations / frame sync" on 2026-08-03. It is now identified
-completely: it is the music mood setter, and it is one of the reasons nothing in
-the realm loop is frame-tied.
+"advance animations / frame sync". It is the music mood setter, and one of the
+reasons nothing in the realm loop is frame-tied.
 
 `StartTrackForMood` (`0x081a3b80`):
 
@@ -154,12 +152,11 @@ forever {
 }
 ```
 
-**This is the only thing that advances music.** `SetMood` fires once per context
-change; without this thread a track plays through once and is followed by
-silence until the next screen transition. Any implementation that provides
-`Play` but not the equivalent of this poll will sound correct for three minutes
-and then go quiet — a failure mode that would be easy to misdiagnose as a decode
-bug.
+This poll is the only thing that advances music. `SetMood` fires once per
+context change, so without the thread a track plays through once and is followed
+by silence until the next screen transition. An implementation that provides
+`Play` without the equivalent of this poll sounds correct for three minutes and
+then goes quiet.
 
 ## The engine side: `cVCD` is abstract, `cCD_Linux` is the driver
 
@@ -219,11 +216,11 @@ a count — a distinction that matters the moment a disc's numbering has a gap.
 | `+0x24` | `GetVolume()` | `0x530a` `CDROMVOLCTRL` |
 | `+0x28` | `SetVolume(u16)` | `0x530a` `CDROMVOLCTRL` |
 
-Plain Linux CD-ROM ioctls, nothing exotic. **Every method opens the device, does
-one ioctl, and closes it** — the driver keeps no fd and no state between calls,
-which makes it trivial to virtualise.
+These are plain Linux CD-ROM ioctls. Every method opens the device, does one
+ioctl and closes it, so the driver keeps no fd and no state between calls —
+which is what makes the whole contract answerable from a virtual drive.
 
-Details worth having before implementing:
+Details an implementation needs:
 
 - `Play_Real` packs `struct cdrom_ti` as `(start & 0xff) | (end << 16)`, i.e.
   `trk0=start, ind0=0, trk1=end, ind1=0`. It is **asynchronous** — the ioctl
@@ -252,16 +249,15 @@ the return-track path. Two consequences that any implementation must reproduce:
 **paused still reports a track**, so pausing does not make the poll thread think
 the track ended; and **completed reports 0**, which *is* the advance trigger.
 
-## What the port does today
+## Why there was no music
 
-> **Correction (2026-08-08, same day).** An earlier revision of this doc said
-> the host stubs `VCD+0xc` with a synthetic vtable from
-> `port/src/mvos.cpp:153-157`. **That code is not in the build** —
-> `port/CMakeLists.txt:138` has `src/mvos.cpp` commented out as the superseded
-> pure-HLE layer, and nothing constructs `Mvos`. `VCD+0xc` is therefore the
-> genuine `cCD_Linux_virtual_table` that `OpenSubsystems` installs, and the real
-> driver runs. The conclusion (no music, silently) was right; the mechanism was
-> not, and the mechanism is what an implementation has to hook.
+> **Correction.** This section previously said the host stubs `VCD+0xc` with a
+> synthetic vtable from `port/src/mvos.cpp:153-157`. That code is not in the
+> build: `port/CMakeLists.txt:138` has `src/mvos.cpp` commented out as the
+> superseded pure-HLE layer, and nothing constructs `Mvos`. `VCD+0xc` is the
+> genuine `cCD_Linux_virtual_table` that `OpenSubsystems` installs, so the real
+> driver runs. The conclusion — no music, silently — was right, but the
+> mechanism is what an implementation has to hook.
 
 Every layer runs as original guest code. The chain reaches the host at exactly
 two traps, and both currently *succeed*:
@@ -278,15 +274,15 @@ Follow that through and the behaviour is precise:
 | Call | What happens now |
 |---|---|
 | `GetCDInfo` | "succeeds"; `+0x06`/`+0x08` are filled from **uninitialised stack** |
-| `Play_Real` | "succeeds" — **the game believes music is playing** |
+| `Play_Real` | "succeeds", so the guest proceeds as if music were playing |
 | `GetActualTrack` | buffer is zeroed by the guest, stub writes nothing, so `cdsc_audiostatus = 0` → table entry 0 → returns `0` |
 | `Stop` / `Pause` / `Resume` / `SetVolume` | "succeed", do nothing |
 
-So the game has been asking for music at every mood change since the port first
-booted, and being told it got it. The garbage in `+0x06`/`+0x08` is harmless
-today only because `PlayAll` and `GetNumberOfTracks` are never called.
+So every mood change issued its `Play` and received success, from the port's
+first boot until the virtual drive landed. The garbage in `+0x06`/`+0x08` is
+harmless only because `PlayAll` and `GetNumberOfTracks` are never called.
 
-## What is built (2026-08-08): the virtual drive
+## The virtual drive
 
 `port/src/cdaudio.{hpp,cpp}` — `VirtualCD` (the transport) and `CDPlayer` (the
 drive's DAC) — plus the two traps that reach them. The guest side runs entirely
@@ -339,9 +335,10 @@ follow beyond two rules, both in `port/src/cdaudio.cpp`:
 Track 1 is the data track on this mixed-mode disc, so an audio file claiming
 track 1 is taken but warned about.
 
-**This list is a contract with `tools/build-ffmpeg-min.sh`, not just with
-libav.** The released bundles ship a cut-down ffmpeg, and until 2026-08-21 it
-could decode *none* of these formats — the enable list had been derived from the
+
+This list is a contract with `tools/build-ffmpeg-min.sh` as much as with libav.
+The released bundles ship a cut-down ffmpeg, and for a time it could decode
+*none* of these formats — the enable list had been derived from the
 cutscenes alone, so every bundle played no CD music while the development build,
 linked against a full ffmpeg, played it perfectly. Adding a format here means
 adding its demuxer and decoder there. Verified by round-tripping a real track
@@ -360,7 +357,7 @@ music reaches the mixer and the transport model advances the track.
 
 ### Verified against the real disc
 
-The UK 2-CD release was ripped on 2026-08-08. Its macOS `.TOC.plist` reads
+The UK 2-CD release was ripped. Its macOS `.TOC.plist` reads
 **First Track 1, Last Track 8**, track 1 `Data => true`, tracks 2–8 audio —
 which is exactly what the track table predicted from the binary before any disc
 was read. A standalone harness over `VirtualCD` (no emulator, no display)
@@ -438,7 +435,7 @@ Run under **ThreadSanitizer**: clean across the decoder-thread / audio-callback
 boundary. The one race it would have caught is the volume fields, which are read
 on the SDL thread and written on the emulation thread and are therefore atomic.
 
-### Verified in a real session — 2026-08-08
+### Verified in a real session
 
 Played on macOS with the UK rip. **Music plays and switches on mood changes.**
 Level was judged "high but believable for the era", so `THEOC_MUSIC_VOL` stays
@@ -494,22 +491,21 @@ list each time — so it belongs in neither option.
 
 ## Open threads
 
-- ~~What is on track 4, and how many audio tracks the disc really has~~ —
-  **answered 2026-08-08 by the UK rip**: 7 audio tracks, 2–8, and track 4 is a
-  real 166s track with no code path to it. What it *is* remains unknown.
+- **What is on track 4.** The rip confirms it exists — 166 seconds, no code path
+  to it — but not what it is.
 - **Moods 2 vs 3.** Both are set from the battle screen (`FUN_080bb590` @
   `0x80bbe79`), chosen by `vcall[+0xb4] || flag at world+0x40a4c` — mood 2 if
   either is true, mood 3 otherwise. The flag getter is `0x081ecaa0`. Neither
   predicate has been identified, so "battle" vs "the other battle" is as far as
   this goes. Mood 2 is also set by the tutorial/briefing screen (`0x8226280`,
   `0x82263a1`) and by `FUN_0820e7f0`, which is an unidentified screen loop.
-- ~~`cVCD` itself is unread~~ — **done 2026-08-08**, and it turned out to be an
-  abstract shell over `cCD_Linux`; the driver contract is the ioctl table above.
-  What is *not* answered: `GetVolume` (`0xa1e70`) reads back through
+- **`GetVolume` and the volume setting.** `cVCD` turned out to be an abstract
+  shell over `cCD_Linux`, with the driver contract in the ioctl table above.
+  What is not answered: `GetVolume` (`0xa1e70`) reads back through
   `CDROMVOLCTRL` but nothing in the game calls it, and the `DAT_08648380` volume
   setting that gates `Resume` in `cVCDThread_UnmuteAndApplyVolume` has not been
   traced to where the options screen writes it.
-- ~~The host has a second soft thread it never runs~~ — **defended 2026-08-08.**
+- **The host has a second soft thread it never runs**, and that is deliberate.
   `maybe_redirect_sound` green-ran the *first* soft thread whose running flag was
   set, and that was the `cSoundCard_Linux` mixer only because `OpenSubsystems`
   constructs the sound card before `cApplication::Start` constructs
@@ -519,14 +515,11 @@ list each time — so it belongs in neither option.
   only `cSoundCard_Linux::Main` is patched one-shot. Music never needed it —
   `maybe_redirect_cd_advance` calls `StartTrackForMood` directly.
 
-  Worth noting for anyone reading the `[thread]` log: **every `cThread::Launch`
-  passes the same `start_routine`** (`cThread::Entry`) and differs only in the
-  `cThread*` argument, so the `entry=` field cannot tell two soft threads apart.
-  `arg=` is the identity. A one-time `[thread] N soft threads, M running; mixer
+  In the `[thread]` log, every `cThread::Launch` passes the same
+  `start_routine` (`cThread::Entry`) and differs only in the `cThread*`
+  argument, so the `entry=` field cannot tell two soft threads apart; `arg=` is
+  the identity. A one-time `[thread] N soft threads, M running; mixer
   slice = arg=…` line now records which one feeds audio.
-- ~~The host mixer is single-stream~~ / ~~decode strategy~~ — **both done
-  2026-08-08**; see "The audio output half" above.
-- ~~Nobody has heard it yet~~ — **played 2026-08-08**, see above.
 - **What `DAT_08648380` actually is.** `cVCDThread_UnmuteAndResume` gates
   `Resume` on `DAT_08648380 > 0`. This doc previously guessed "an options-screen
   music level" — the session above makes that **unlikely**, because there is no

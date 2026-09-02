@@ -1,12 +1,11 @@
 # Province population and births
 
-How Theocracy decides when a province produces a child, what hospitals actually
-do about it, and why the birth rate does not taper off as a province fills up —
-it stops dead.
+How Theocracy decides when a province produces a child, what hospitals do about
+it, and what happens to the birth rate as a province fills up.
 
-**Read off `theocracy.real` 2026-08-08.** Addresses are Ghidra space, game base
-`0x08048000`. The load-bearing claim here — the population cliff — is confirmed
-against the instruction stream at both sites, not just the decompiler.
+Read off `theocracy.real`; addresses are Ghidra space, game base `0x08048000`.
+The load-bearing claim here is the population cliff, and it is confirmed against
+the instruction stream at both sites rather than from the decompiler alone.
 
 ## The two functions
 
@@ -53,8 +52,8 @@ child. A province holding `P` eligible people therefore produces a birth every
 | 400 | every 17.8 days | every 13.7 days |
 
 The `while` is a loop rather than an `if`, so a long stall that swallows many
-days at once still pays out every birth it owes — the accumulator is the record,
-not the frame.
+days at once still pays out every birth it owes: the accumulator carries the
+debt, so nothing is lost to a stall.
 
 `UpdateBirthRate` writes the same quantity as an annual figure:
 
@@ -95,7 +94,7 @@ few of them exist.
 child is nevertheless spawned for the owner (`province[+0x40aae]`). So foreign
 population inflates your birth rate — and can push you over the cliff below.
 
-## Hospitals: a maximum, not a stack
+## Hospitals are a maximum, not a stack
 
 Both functions walk the province's building list at `+0x40b34` and reduce it to
 a single tier, taking the **highest** hospital present:
@@ -106,10 +105,9 @@ building type 0x10  ->  tier 2     (guarded by `if (tier < 2)`)
 building type 0x25  ->  tier 3     (guarded by `if (tier < 3)`)
 ```
 
-Each guard only ever ratchets the tier upward, so **a second hospital of any
-level contributes exactly nothing** — not additively, not multiplicatively. The
-list walk is a max, and the tier is then used as an index into two small sets of
-constants:
+Each guard only ever ratchets the tier upward, so a second hospital of any level
+contributes nothing at all. The list walk is a max, and the tier is then used as
+an index into two small sets of constants:
 
 | Tier | Birth divisor `D` | Births/yr at P=400 | Heal per day |
 |---|---|---|---|
@@ -118,15 +116,14 @@ constants:
 | 2 — HOSPITAL2 | `FUCK_PER_BIRTH_HOSP2` 5476 | 27 | `HOSPITAL2_Heals` 4 |
 | 3 — HOSPITAL3 | **`FUCK_PER_BIRTH_HOSP2` 5476** | 27 | `HOSPITAL3_Heals` 4 |
 
-The identification of the tiers as the three hospitals rests on the *config
-variables the tier selects* — `HOSPITAL1_Heals` / `HOSPITAL2_Heals` /
-`HOSPITAL3_Heals` / `NO_HOSPITAL_HEAL`, chosen by tier 1 / 2 / 3 / 0
-respectively — which is about as direct as naming gets. The building **type
-ids** `0x0a`/`0x10`/`0x25` are not independently confirmed; the binary carries
-no plain building-name table, only the `HOSPITALn_STONE`-style config keys.
+The tiers are identified as the three hospitals by the config variables each
+tier selects: `HOSPITAL1_Heals`, `HOSPITAL2_Heals`, `HOSPITAL3_Heals` and
+`NO_HOSPITAL_HEAL`, chosen by tier 1, 2, 3 and 0 respectively. The building type
+ids `0x0a`/`0x10`/`0x25` are not independently confirmed, because the binary
+carries no plain building-name table — only the `HOSPITALn_STONE`-style config
+keys.
 
-Two balance consequences fall out of the table, and both look like oversights
-rather than design:
+Two consequences fall out of the table, both of which read as oversights:
 
 - **HOSPITAL1 does nothing for births.** It selects the same divisor as having
   no hospital at all. Its only effect is doubling the heal, 1 → 2.
@@ -135,13 +132,13 @@ rather than design:
   `selap.txt`. It costs 240 stone / 240 wood / 90 jewel against HOSPITAL2's 120
   / 180 / 0, and the only thing it buys is `ROOM_FOR_PEOPLE` 60 vs 30.
 
-So the entire hospital contribution to population growth is a single flat
-**+30%** (`7120/5476 = 1.30`), unlocked at level 2 and never improved.
+The entire hospital contribution to population growth is therefore one flat +30%
+(`7120/5476 = 1.30`), unlocked at level 2 and never improved.
 
 ## The cliff
 
-This is the answer to "why does the birth rate crash instead of tapering". It is
-neither an unsigned overflow nor a soft saturation — it is an explicit zero:
+This is why the birth rate crashes instead of tapering. The zero is explicit in
+the instruction stream, not an unsigned overflow or a saturating clamp:
 
 ```asm
 081db788  CMP EDI, [0x084c8599]            ; MAX_FUCKER = 500
@@ -162,15 +159,15 @@ neither an unsigned overflow nor a soft saturation — it is an explicit zero:
 | 400 < P ≤ 500 | flat, pinned at the P=400 rate |
 | **P > 500** | **zero, immediately** |
 
-The shape is worth naming: the *second* test is the ordinary clamp idiom (`if (x
-> MAX) x = MAX`), and the first is that same idiom with `0` substituted for the
-cap. Whether that was a deliberate overpopulation-collapse rule or a slip is not
-readable from the code, and this doc does not claim to know. What is settled is
-that the simulation and the derived per-year figure apply it identically, so the
-number a player sees is not lying about the number of children they will get.
+The two tests have the same shape: the second is the ordinary clamp idiom (`if
+(x > MAX) x = MAX`), and the first is that idiom with `0` substituted for the
+cap. Whether that is a deliberate overpopulation-collapse rule or a slip is not
+readable from the code. What is settled is that the simulation and the derived
+per-year figure apply it identically, so the number a player sees matches the
+number of children they get.
 
-Note the compiled-in defaults are much gentler than the shipped balance — see
-below — which means the cliff as *played* is a data decision, not a code one.
+The compiled-in defaults are much gentler than the shipped balance (see below),
+so the cliff as played comes from `selap.txt` rather than from the code.
 
 ## The constants
 
@@ -230,8 +227,9 @@ and it needed Ghidra only at the last step.
 4. Only then decompile — by which point the function is already known to be the
    one that matters.
 
-Step 2 is the reusable key: it turns any balance constant a player can see in
-`selap.txt` into an address, and therefore into the code that consumes it.
+Step 2 is what makes the chain reusable: it turns any balance constant a player
+can see in `selap.txt` into an address, and from there into the code that reads
+it.
 
 ## Open threads
 

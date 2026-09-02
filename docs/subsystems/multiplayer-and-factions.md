@@ -4,11 +4,12 @@ Answers "how many players", "can you pick your realm", and "when is the dev
 console usable". Addresses in the game executable (`0x08048000`).
 
 ## Faction roster — 11 slots
+
 `GameSession_Construct(session, scenarioID, startPaused)` (`0x817af70`)
-allocates **11 faction slots** (loop `0..0xa`), each `new(0x84)`, pointer stored
-at `session + slot*4`, initialized from a **static roster template**
-`DAT_08645240` (11 × 0x10 bytes). So a match has up to 11 factions: the human +
-AI realms + neutral/special.
+allocates 11 faction slots (loop `0..0xa`), each `new(0x84)`, pointer stored at
+`session + slot*4`, initialised from the static roster template `DAT_08645240`
+(11 × 0x10 bytes). So a match has up to 11 factions: the human player, the AI
+realms, and the neutral and special slots.
 
 Iteration bounds seen elsewhere are just subsets of these 11:
 - 6 — competing realms that get periodic province events (`SimulationStep`).
@@ -16,16 +17,18 @@ Iteration bounds seen elsewhere are just subsets of these 11:
 - 11 — full roster.
 
 ## The local player / realm — `g_GameSession+0x2d`
+
 - `GameSession_Construct` sets `+0x2d = 0`.
-- **Single-player** (`SetupGame`): `+0x2d = g_LocalFactionTable[0]`.
-  `g_LocalFactionTable` (`0x864538a`) lives in **`.bss` (zero)** and is **never
-  written on the single-player path** ⇒ **the human is always faction 0. There
-  is no single-player realm selector.** (Confirmed against play experience.)
-- **Multiplayer** (`NetGame_AssignTeams`, `0x829c820`): `+0x2d` and the
-  per-network-player slots are assigned from the netgame **team info** packet,
-  indexed through `g_LocalFactionTable` (used here as a table, not a scalar). So
-  the realm/slot-assignment machinery **exists but is wired only for
-  multiplayer**.
+- Single-player (`SetupGame`): `+0x2d = g_LocalFactionTable[0]`.
+  `g_LocalFactionTable` (`0x864538a`) lives in `.bss`, so it is zero, and
+  nothing on the single-player path writes it. The human is therefore always
+  faction 0, and there is no single-player realm selector — which matches what
+  playing the game shows.
+- Multiplayer (`NetGame_AssignTeams`, `0x829c820`): `+0x2d` and the
+  per-network-player slots are assigned from the netgame team-info packet,
+  indexed through `g_LocalFactionTable`, which is used here as a table rather
+  than a scalar. The realm and slot assignment machinery exists, but only
+  multiplayer wires it up.
 
 ## The `+0x2c` flag = multiplayer/battle mode
 A single byte drives several mode differences:
@@ -47,9 +50,9 @@ Full write-up: **[dev-console.md](dev-console.md)**. Two `cVOConsole`s:
   (`0x81f3fb0`). It can only be dismissed after it self-shows. This is the
   console that receives a `cShell`.
 - `g_CmdConsole` (`0x85c0f80`): interactive command console, opened by
-  `InGame_HandleKeyCommand` **case 0x21** (= **Alt+V**) → `Edit`, **gated on
-  `+0x2c != 0`**. ⇒ **reachable in multiplayer battles only** — and it never
-  gets a shell, so a command typed into it is dropped by the null check in
+  `InGame_HandleKeyCommand` case `0x21` (Alt+V) → `Edit`, gated on
+  `+0x2c != 0`, so it is reachable in multiplayer battles only. It never gets a
+  shell either, so a command typed into it is dropped by the null check in
   `cConsole::Process`. The interactive console is effectively vestigial as
   shipped, in MP too.
 
@@ -57,14 +60,14 @@ Single-player never sets `+0x2c`. `THEOC_CONSOLE=1` sidesteps the gate entirely
 — the host calls `Edit__10cVOConsole(g_LogConsole)` itself on Alt+V, which also
 works on the realm screen, where no key path reaches this dispatcher at all.
 
-> **Corrected 2026-07-27.** The exit key `0xe` was previously read as
+> **Corrected.** The exit key `0xe` was previously read as
 > **Backspace**; `eKeyCode` is not a PC scancode — Backspace is `0x36` and `0x0e`
 > is **C**. See [re-methodology](../reference/re-methodology.md) §1.
 
 ## Netgame session lifecycle — `FUN_0829c300(netCtx, teamInfo)`
 
-The whole multiplayer game, start to finish. Not called directly — it sits in a
-function table (`0x85906a0`, `0x84bccb4`), as does `NetGame_AssignTeams`
+The whole multiplayer game, start to finish. It is not called directly: it sits
+in a function table (`0x85906a0`, `0x84bccb4`), as does `NetGame_AssignTeams`
 (`0x85907d4`), so netgame entry points are dispatched, not hard-called.
 
 1. `client = *(*(netCtx+0x34)+0xc)` → `printf("Client %p")`.
@@ -72,7 +75,7 @@ function table (`0x85906a0`, `0x84bccb4`), as does `NetGame_AssignTeams`
    identically is only useful if they are meant to compute the same thing, so
    this remains the concrete evidence for the lockstep model in
    [simulation-step.md](simulation-step.md): same seed + discrete ticks =
-   reproducible on every peer. **Corrected 2026-08-06:** this bullet used to add
+   reproducible on every peer. **Corrected:** this bullet used to add
    "+ command queue" as a third term. There is no command queue — that was the
    game date misread — so the peer-to-peer *command* channel lockstep needs is
    still unlocated, and the model is a hypothesis this seeding supports rather
@@ -89,7 +92,7 @@ function table (`0x85906a0`, `0x84bccb4`), as does `NetGame_AssignTeams`
 The `printf`s are useful runtime markers: `Client %p`, `PlayerCount: %lu`,
 `playerid: %d`, `netgame vege` will all appear in our log during bring-up.
 
-## Team-info packet format (decoded 2026-07-26)
+## Team-info packet format
 
 Consumed by `NetGame_AssignTeams`; `NULL` → `Fatal("Where is the team info in
 netgame?")`.
@@ -108,47 +111,44 @@ per player:
 | `[4..5]` | `int16` | *(unidentified)* |
 | `[6]` | `u8` | flag — non-zero triggers an extra vcall `+0x90` on the spawned unit |
 
-- The **first 5 records are the tribe's mana/resource pools**:
-  `cTribe_AddResource(tribe, rec[i].amount, i)` for `i` in `0..4`. Fewer than five
-  → `Fatal("There isn't the mana infos...")`.
-- The **rest are units**, built by `FUN_0812c160(list, rec.type, tribe)`. Type
+- The first 5 records are the tribe's mana and resource pools:
+  `cTribe_AddResource(tribe, rec[i].amount, i)` for `i` in `0..4`. Fewer than
+  five → `Fatal("There isn't the mana infos...")`.
+- The rest are units, built by `FUN_0812c160(list, rec.type, tribe)`. Type
   `0x2a` takes the group branch; anything else must be a commander, else
   `Fatal("Not a commander")`. The finished list goes to the world object through
   a virtual call `(*(netCtx+4))->vtbl[0x18](…, list)`.
 
-**playerId → tribe** resolves through the client's own slot table: `slot =
+`playerId` resolves to a tribe through the client's own slot table: `slot =
 client + 0xc + playerId*0xc` (valid when `playerId < 8` and `slot[0] != 0`),
 `tribe = DAT_084bcd8b[slot[8]]`, cached in `DAT_0867e232[playerId]`. After the
-loop the **local** player's tribe is written to `g_GameSession+0x2d` via
+loop the *local* player's tribe is written to `g_GameSession+0x2d` via
 `g_LocalFactionTable[tribe*2]` — the only path that ever writes `+0x2d`
 non-zero, which is exactly why single-player always leaves the human as faction
 0.
 
-**Implication for the port:** this is all *post-receive* — `AssignTeams` parses
-a buffer somebody already filled. Nothing here constrains the transport beyond
-delivering bytes intact, so the socket layer does not need to understand the
-protocol. Running the shipped `server` binary under emulation keeps both ends
-original, so the format above is for *diagnosis*, not for reimplementation.
+For the port, all of this is post-receive: `AssignTeams` parses a buffer
+somebody already filled. Nothing here constrains the transport beyond delivering
+bytes intact, so the socket layer does not need to understand the protocol.
+Running the shipped `server` binary under emulation keeps both ends original,
+which is why the format above is documented for diagnosis only.
 
 ## Open threads
 
-Archaeology, not blockers — multiplayer works end to end on all three hosts.
+None of these block anything; multiplayer works end to end on all three hosts.
 
-- The faction roster template `DAT_08645240` (11 × 0x10) — decode fields
-  (name/color/type/AI). The printed manual names eight tribes with their colours
-  and army compositions (red aggressive, green never attacks first, and so on),
-  which would be a ready-made key for the decode — but the yield is gameplay
-  trivia, and the native rewrite would produce the same table from code and
-  supersede it. Noted so nobody re-derives the idea; not worth doing on its own.
+- The faction roster template `DAT_08645240` (11 × 0x10) — the fields are
+  undecoded. The printed manual names eight tribes with their colours and army
+  compositions (red aggressive, green never attacks first, and so on), which
+  would be a ready-made key. Left alone because the yield is gameplay trivia.
 - Whether multiplayer is battle-only (tactical) vs. full strategic — the
   `scenarioID=-1` + battle-map load suggests **standalone tactical battles**.
-  Note this is now answerable by *playing* rather than by reading: if a netgame
-  never offers a realm/campaign layer, that is the answer.
-- **What dispatches the netgame session.** `FUN_0829c300` is the whole
-  multiplayer game start to finish and `NetGame_AssignTeams` parses the team
-  info, but **neither is called directly** — both sit in function tables
+  Answerable by playing rather than by reading: if a netgame never offers a
+  realm or campaign layer, that is the answer.
+- **What dispatches the netgame session.** Neither `FUN_0829c300` nor
+  `NetGame_AssignTeams` is called directly; both sit in function tables
   (`0x85906a0` / `0x85907d4` / `0x84bccb4`), so entry is indirect and the caller
-  is unread. Worth doing because the dispatcher is also where the tick-sync
-  *receive* side is reachable from, which is the unread half of lockstep (see
+  is unread. The dispatcher is also where the tick-sync *receive* side is
+  reachable from, which is the unread half of lockstep (see
   [game-loop-and-simulation.md](game-loop-and-simulation.md)).
 - **The realm-select UI** that writes `g_LocalFactionTable` (multiplayer only).

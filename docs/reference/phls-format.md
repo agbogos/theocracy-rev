@@ -1,8 +1,8 @@
 # PHLS archive format (`*.pck` data packs)
 
 Reverse-engineered from the CD packs (`data/cd/tdat.pck`, `tex.pck`). Extractor:
-[`tools/phls_extract.py`](../../tools/phls_extract.py). Resolves open-question
-#24 (native CD-data extractor) — no need to run `inst.linux`.
+[`tools/phls_extract.py`](../../tools/phls_extract.py), which reads the CD data
+directly, so `inst.linux` never has to be run.
 
 ```
 python3 tools/phls_extract.py data/cd/tdat.pck data/game   # -> data/game/data/...
@@ -11,8 +11,8 @@ python3 tools/phls_extract.py <archive.pck> <outdir> --list  # dry-run / inspect
 
 ## Container
 
-The `.pck` files are **gzip-wrapped** (`1f 8b`); after decompression the payload
-is a **PHLS** archive:
+The `.pck` files are gzip-wrapped (`1f 8b`); after decompression the payload is
+a PHLS archive:
 
 ```
 offset  size  field
@@ -22,33 +22,35 @@ offset  size  field
  ...          file data — all file payloads concatenated, in record order
 ```
 
-Each record is **64 bytes**:
+Each record is 64 bytes:
 
 ```
 0x00    60   char   name[60]   NUL-padded
 0x3c     4   uint32 size       LE
 ```
 
-The record block is a **flattened depth-first traversal** of the directory tree:
+The record block is a flattened depth-first traversal of the directory tree:
 
-- `size & 0x80000000` → `name` is a **subdirectory**; descend into it.
-- a record named `..` → **pop** back to the parent directory.
-- otherwise → a **file** of `size` bytes; its payload is the next `size` bytes
-  of the file-data region (files are stored contiguously in record order).
+- `size & 0x80000000` → `name` is a subdirectory; descend into it.
+- a record named `..` → pop back to the parent directory.
+- otherwise → a file of `size` bytes, whose payload is the next `size` bytes of
+  the file-data region (files are stored contiguously in record order).
 
 There are no per-file offsets — position is implicit from the DFS order, so a
 reader walks records and a data cursor in lockstep. Verified byte-exact: for
 both packs `data_base + Σ(file sizes)` equals the decompressed length exactly
-(`tex.pck`: 8 files; `tdat.pck`: **7191 files / 489 dirs**, 0 leftover bytes).
+(`tex.pck`: 8 files; `tdat.pck`: 7191 files in 489 dirs, 0 leftover bytes).
 
 `tdat.pck` is the Linux game data: everything lives under a top-level `data/`
-dir → extracts to `data/game/data/…` (anim, map, locale, menu, sounds, scenario,
-campaign, …). `tex.pck` is the **Windows** installer payload (`Setup.exe`,
-splash BMPs, `theocracy-*.exe/.icd`) — not needed for the port.
+dir, extracting to `data/game/data/…` (anim, map, locale, menu, sounds,
+scenario, campaign, …). `tex.pck` is the Windows installer payload
+(`Setup.exe`, splash BMPs, `theocracy-*.exe/.icd`), which the port does not
+need.
 
 ## Inner layers (not part of the container)
 
-Two independent layers sit *inside* extracted files:
+Three independent layers sit *inside* extracted files, none of them part of the
+container:
 
 1. **Text/config encryption — SOLVED.** Config/text files begin with the ASCII
    marker `RSA4096` (7 bytes) followed by ciphertext. The `RSA4096` name is a
@@ -66,7 +68,7 @@ Two independent layers sit *inside* extracted files:
    (e.g. `selap.txt` → `[Buildings] BARRACKA1_STONE=120…`, `menu.cfg`). Files
    without the marker (e.g. `hero.cfg`, all binary assets) are plaintext and
    must **not** be XORed. This is the heavy `cTextFile::OpenR/ReadLine`+`sscanf`
-   path M1 saw — the game decrypts on read. Tooling: `tools/theocracy_crypt.py`
+   path — the game decrypts on read. Tooling: `tools/theocracy_crypt.py`
    (module + CLI; `phls_extract.py --decrypt` decrypts on extract) — our own
    implementation, verified byte-exact against the shipped files.
 
@@ -77,13 +79,22 @@ Two independent layers sit *inside* extracted files:
    The host only serves bytes. So the canonical tree must stay **as-shipped
    (encrypted)** — a pre-decrypted tree would be XORed a second time by the game
    and parse as garbage.
-2. **Raw image format** — `.raw` assets start with `mhwanh` = the engine's
-   `sRawPicHeader` (see [overview.md](../overview.md) imaging section). Plaintext;
-   decode when the bitmap loaders are implemented.
-3. **The `.sdb` locale database — SOLVED 2026-08-08.** `data/locale/*.sdb` (one
-   per language) carries every piece of UI and flavour text, keyed by name. It
-   does **not** use the `RSA4096` scheme above and has no marker: the whole file
-   is a flat **XOR against the single byte `0x2a`**, length fields included.
+
+   Reader: `cTextFile` — `OpenR` (`0x64f70`), `ReadLine` (`0x65070`),
+   `CountLines` (`0x65110`); object layout `+0x08` open flag (0 = open), `+0x0c`
+   filesystem, `+0x14` filename, `+0x20` encrypted marker. `OpenR` checks the
+   7-byte ID then `SeekB(0)`, and `ReadChar` applies the XOR by position in the
+   body, so `i` above is an offset the reader maintains rather than a file
+   offset. `ReadLine` reads to `\n`, EOF or `max-1` and strips a trailing `\r`;
+   `CountLines` counts `\n`.
+
+2. **Raw image format** — `.raw` assets start with `mhwanh`, the engine's
+   `sRawPicHeader` (see [overview.md](../overview.md), imaging section).
+   Plaintext, and undecoded here: the engine's own bitmap loaders read it.
+3. **The `.sdb` locale database.** `data/locale/*.sdb` (one per language)
+   carries every piece of UI and flavour text, keyed by name. It does not use
+   the `RSA4096` scheme above and has no marker: the whole file is a flat XOR
+   against the single byte `0x2a`, length fields included.
 
    ```
    u32            entry count            (e.g. english.sdb = 1689)
@@ -94,47 +105,46 @@ Two independent layers sit *inside* extracted files:
               …   text bytes     ^0x2a
    ```
 
-   Two traps, both of which cost time here. A naive single-byte-XOR scan ranks
-   `0x2a` *below* the right answer, because plaintext spaces (`0x20`) are stored
-   as `0x0a` and a scorer reads those as newlines in the wrong candidate. And the
-   NUL between key and length is a NUL **in the file**, so it appears as `0x2a`
-   after decoding — searching the decoded buffer for `\x00` finds nothing and
-   silently returns no entries.
+   Two traps in reading it. A naive single-byte-XOR scan ranks `0x2a` *below*
+   the right answer, because plaintext spaces (`0x20`) are stored as `0x0a` and
+   a scorer reads those as newlines in the wrong candidate. And the NUL between
+   key and length is a NUL in the file, so it appears as `0x2a` after decoding:
+   searching the decoded buffer for `\x00` finds nothing and silently returns
+   no entries.
 
    Reader: `cLocaleEntry` (`__12cLocaleEntryPCc`), 24 bytes, text pointer at
-   `+0x10`. Entries are constructed by key at fixed addresses — so the array
-   behind any indexed lookup can be bounded exactly by reading the constructor
-   run, as done in [heroes.md](../subsystems/heroes.md). There is no tool for
-   this yet; the parse above is the whole format.
+   `+0x10`. `GetText` is inlined into its callers as a read of that field, so
+   there is no call to intercept — anything replacing the locale layer has to
+   fill `+0x10` itself. Entries are constructed by key at fixed addresses — so
+   the array behind any indexed lookup can be bounded exactly by reading the
+   constructor run, as done in [heroes.md](../subsystems/heroes.md). There is no
+   tool for this yet; the parse above is the whole format.
 
-## Runtime filesystem shape (for M2 HLE)
+## Runtime filesystem shape
 
 The `theocracy` launcher runs the game with CWD `~/.theocracy`, containing a
-`data` symlink (→ the extracted tree) and a copied `mvos.cfg`. So our HLE
-filesystem root should expose `./data/…` (→ `data/game/data`) and `./mvos.cfg`.
-**`mvos.cfg` is not in the packs** — `inst.linux` installs it. We ship our own
-`data/game/mvos.cfg`, tracked in git via a `.gitignore` carve-out since the rest
-of `data/game` is extracted content.
+`data` symlink (to the extracted tree) and a copied `mvos.cfg`. The host's
+filesystem root therefore exposes `./data/…` (mapped to `data/game/data`) and
+`./mvos.cfg`. `mvos.cfg` is not in the packs — `inst.linux` installs it — so the
+repo ships its own `data/game/mvos.cfg`, tracked in git via a `.gitignore`
+carve-out since the rest of `data/game` is extracted content.
 
-**Rewritten 2026-08-15, and the previous version of this paragraph was wrong.**
-It claimed the file was "reconstructed from the `EnvSystem` keys the boot
-actually reads — `[vmachine] device/fullscreen/fillobjmem/cdrom_mountpoint`,
-`[sound] card`, `[network] enable`". Four of those six are read by nothing: the
-engine's video key is `video`, not `device`; its sound key is `[vmachine]
-soundcard`, not `[sound] card`; and the strings `fullscreen` and `network` do
-not occur anywhere in `libmvos.so` or `theocracy.real`. Only `fillobjmem` and
-`cdrom_mountpoint` were real, and both were set to values equal to their
-built-in defaults — so the file we shipped for a year was, functionally, empty.
-It worked for exactly that reason.
+That file used to be a reconstruction from the `EnvSystem` keys the boot was
+thought to read, and four of its six keys were read by nothing: the engine's
+video key is `video`, not `device`; its sound key is `[vmachine] soundcard`, not
+`[sound] card`; and the strings `fullscreen` and `network` occur nowhere in
+`libmvos.so` or `theocracy.real`. Only `fillobjmem` and `cdrom_mountpoint` were
+real, and both were set to their built-in defaults, so the shipped file was
+functionally empty and worked for exactly that reason.
 
-The file now contains **what `inst.linux` actually writes**, which was recovered
-from the installer's own `printf` format strings once `reconf` sent us looking
+It now contains what `inst.linux` actually writes, recovered from the
+installer's own `printf` format strings once `reconf` sent us looking
 ([reconf-tool.md](reconf-tool.md)): `[vmachine]` `soundcard` / `cdrom_device` /
 `cdrom_mountpoint` / `fullscreen`, then `[game] language`. Every value is the
 installer's default, so the change is behaviour-neutral by construction.
 
-`fullscreen` is written by the installer and read by neither binary — it is
-inert in the original game, not merely under this port. For fullscreen here, use
+`fullscreen` is written by the installer and read by neither binary, so it is
+inert in the original game as well as under this port. For fullscreen here, use
 `THEOC_FULLSCREEN=1`; the engine's own path ran through the X11 plugin's
 `_MOTIF_WM_HINTS` + `XF86VidModeSwitchToMode`, which the SDL backend replaced
 wholesale.

@@ -1,12 +1,12 @@
 # Mana, pyramids and sacrifice
 
-How a pyramid makes mana by standing there, what happens to the people you feed
-into one, and why the mana indicator shoots up and then crawls — which turns out
-to be a property of the *gauge*, not of the simulation.
+How a pyramid makes mana by standing there, and what happens to the people you
+feed into one. The mana indicator's shoot-up-then-crawl is a property of the
+gauge rather than of the simulation, which is the last section.
 
-**Read off `theocracy.real` 2026-08-08.** Addresses are Ghidra space, game base
-`0x08048000`. The rounding behaviour below is confirmed against the instruction
-stream, because the decompiler is actively misleading about it (see "A note on
+Read off `theocracy.real`; addresses are Ghidra space, game base `0x08048000`.
+The rounding behaviour below is confirmed against the instruction stream,
+because the decompiler is actively misleading about it (see "A note on
 `ROUND`").
 
 ## Where mana lives
@@ -21,7 +21,8 @@ sphere shares one floor and one ceiling. The sphere order is the one the console
 ([dev-console.md](dev-console.md)).
 
 `cTribe_AddResource` (`0x0815a100`) is the only way in, and it is a plain add
-with a clamp at `MAX_MANA`. **There are no diminishing returns on stored mana.**
+with a clamp at `MAX_MANA`, so there are no diminishing returns on stored
+mana.
 
 ## The class
 
@@ -112,13 +113,13 @@ The divisor is `0x084c8639` (= 1000). It is *not* a registered config var — ni
 read sites, no `LoadConfigVar` binding — so unlike everything else here it
 cannot be retuned from `selap.txt`.
 
-**No mana is granted at this point.** The men die immediately; the pyramid keeps
-a bill.
+No mana is granted at this point. The men die immediately, and what the pyramid
+records is an amount still owed.
 
 ### `typeBase` does not come from `selap.txt` — and 16 constants are dead
 
 `SUNPRIEST_VALUE` and friends look exactly like the source for `typeBase`, and
-they are not. Settled 2026-08-08.
+they are not.
 
 The function this project has been calling `RegisterConfigVar` keeps **no
 registry**, so it is renamed `LoadConfigVar` (`0x080b3de0`) as of this work.
@@ -157,11 +158,10 @@ So editing `SUNPRIEST_VALUE=100` in `selap.txt` changes nothing, and `typeBase`
 at type-descriptor `+0x28` is loaded from somewhere else — the unit type table,
 not the balance file.
 
-The general lesson is worth more than the instance: in this binary a config key
-existing, and even being parsed, is **not** evidence that the game reads it.
-`LoadConfigVar` writes to a plain int and walks away, so "is this balance number
-live?" is answerable in one `elfq xref-global` and should be asked before any
-finding rests on a `selap.txt` value.
+In this binary a config key existing, and even being parsed, is not evidence
+that the game reads it: `LoadConfigVar` writes to a plain int and walks away.
+One `elfq xref-global` answers whether a balance number is live, and that is
+worth doing before a finding rests on a `selap.txt` value.
 
 ## Payout
 
@@ -185,11 +185,11 @@ under the 86,400k-per-day scale in [calendar.md](calendar.md). So the queue pays
 out **three sacrifices per in-game day at a constant rate**, one man each, in
 ascending *man-type* order, until it drains.
 
-It is a `while`, not an `if`, so fast-forwarding on the realm view settles
-everything the queue owes rather than dropping it. Two consequences worth
-knowing: a large sacrifice is a long slow annuity rather than a lump sum, and
+It is a `while` rather than an `if`, so fast-forwarding on the realm view
+settles everything the queue owes instead of dropping it. Two things follow. A
+large sacrifice pays out slowly over many days instead of arriving at once. And
 because the cursor walks type indices in order, a mixed batch pays out grouped
-by type rather than in the order the men were fed in.
+by type, not in the order the men were fed in.
 
 ## The taper is the gauge
 
@@ -218,9 +218,9 @@ so this is **display, not simulation**. The curve:
 | **≥ 10,000** | **full** |
 
 The stored value keeps climbing linearly to `MAX_MANA` = 70,000, but the
-indicator saturates at 10,000 — a seventh of the cap. A constant payout rate
-therefore *looks* like a burst that tapers off, and a player watching the
-indicator sees a curve the simulation does not have.
+indicator saturates at 10,000, a seventh of the cap. So a constant payout rate
+shows on the gauge as a burst that tapers off — a curve the simulation does not
+have.
 
 ## A note on `ROUND`
 
@@ -239,8 +239,9 @@ df 7d f4     fistp   qword [ebp-0xc]
 d9 6d fc     fldcw   [ebp-4]         ; restore
 ```
 
-This is not pedantry. On the gauge, `11*m/(1000+m)` approaches 11 but never
-reaches it, so **truncation keeps the frame index in `0..10`**. Round-to-nearest
+The distinction changes the result. On the gauge, `11*m/(1000+m)` approaches 11
+but never reaches it, so truncation keeps the frame index in `0..10`.
+Round-to-nearest
 would push it to 11 at `m ≥ 21000`, making `frame = 10 - 11 = -1` and indexing a
 sprite descriptor 16 bytes *before* the array — a plausible-looking
 out-of-bounds bug that was written up here and then deleted, because the
@@ -264,23 +265,21 @@ read the disassembly for anything load-bearing.
 Method for resolving any of these: see
 [population-and-births.md](population-and-births.md), "How this was found".
 
+## Both mana paths credit the local player's tribe
+
+Both write to `g_GameSession+0x2d`, which looks like it might mis-credit
+AI-owned pyramids. It does not, because the game does not simulate the AI's
+economy at all: inspected in edit mode, enemy provinces have no proper slave
+setup and support far more units than the player's economy could sustain, so AI
+forces are provisioned rather than produced. This code only ever runs for the
+player, so the local-tribe write is correct for every case that occurs. Anything
+reimplementing it should keep that assumption deliberately.
+
+Established from play rather than from the binary, and `docs/` has no page on
+the AI's economy for it to live on.
+
 ## Open threads
 
-- ~~**Both mana paths credit the *local* player's tribe**~~ — **closed
-  2026-08-08, from play rather than from the binary.** Both paths write to
-  `g_GameSession+0x2d`, which looked like it might mis-credit AI-owned pyramids.
-  It does not matter, because **the game does not simulate the AI's economy at
-  all**: inspected in edit mode, enemy provinces have no proper slave setup and
-  support far more units than the player's economy could sustain, so AI forces
-  are provisioned rather than produced. This code only ever runs for the player,
-  and the local-tribe write is correct by construction rather than by accident.
-  A native rewrite should preserve that assumption knowingly — it is not a bug to
-  "fix". (`docs/` has no page on the AI's economy; if one is ever written this
-  observation belongs there.)
-- ~~**`SUNPRIEST_VALUE` and its four siblings**~~ — **closed 2026-08-08: dead
-  data.** See "`typeBase` does not come from `selap.txt`" above. The whole
-  16-entry `*_VALUE` array is loaded and never read; `LoadConfigVar` keeps no
-  registry, so there is no by-name path either.
 - `man+0x80` — read as experience from how it is used, not confirmed. It is
   the same struct the births work left three unnamed enums in.
 - **The second `MANA_GRADIENT` reader** at `0x082b8e31` is unexamined; if it is

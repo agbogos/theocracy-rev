@@ -1,21 +1,22 @@
 # Heroes
 
-What a hero *is* in Theocracy, what actually differs between the nineteen of
-them, and which parts of the roster the shipped game never finished.
+What a hero is in Theocracy, what differs between the nineteen of them, and
+which parts of the roster the shipped game never finished.
 
-**Read off `theocracy.real` 2026-08-08.** Addresses are Ghidra space, game base
-`0x08048000`. Every ability below is named by the game's **own config keys**
-from `selap.txt`, not by inference from a decompile; where a claim rests on the
-in-game description text instead, it says so.
+Read off `theocracy.real`; addresses are Ghidra space, game base `0x08048000`.
+Every ability below is named by the game's own config keys from `selap.txt`
+rather than inferred from a decompile. Where a claim rests on the in-game
+description text instead, it says so.
 
-## Two tiers, one byte apart
+## Two tiers
 
-A hero is not a separate unit — it is a **`cMan` with a hero id**, one byte at
-`+0x27c` — which, as of 2026-08-10, is known to be the byte `cHero` *adds*
-rather than a `cMan` field it borrows: `sizeof(cMan)` is exactly `0x27c`. See
-"What `+0x27c` actually is" below. `cHero` is a real class (RTTI `5cHero`), and
-the RTTI also carries `19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`,
-`16cMan_Archer_Hero`, plus the projectiles `10cHeroArrow` and `10cHeroSpear`.
+A hero is a `cMan` carrying a hero id, one byte at `+0x27c`. That byte is one
+`cHero` adds rather than a `cMan` field it borrows — `sizeof(cMan)` is exactly
+`0x27c`. See "What `+0x27c` actually is" below.
+
+`cHero` is a real class (RTTI `5cHero`), and the RTTI also carries
+`19cMan_Swordsman_Hero`, `18cMan_Spearman_Hero`, `16cMan_Archer_Hero`, plus the
+projectiles `10cHeroArrow` and `10cHeroSpear`.
 
 That gives two tiers:
 
@@ -38,10 +39,10 @@ different order):
 `cHero::GetName` (`0x080b2b00`) branches on exactly this: hero id `0` falls back
 to the man type at `+0xb3` and returns one of three fixed locale entries;
 anything else indexes a 19-entry array at `0x085a41e0`, stride `0x18`. The array
-ends at `0x085a43a8`, which is precisely where the three generic entries begin —
-the bound is read, not assumed. `GetDescription` / `GetIcon` / `GetBigIcon`
-follow the same shape, and all four `Fatal` with `"I'm not a hero!"` when the
-man is neither.
+ends at `0x085a43a8`, precisely where the three generic entries begin, so the
+bound comes off the data rather than from counting names. `GetDescription`,
+`GetIcon` and `GetBigIcon` follow the same shape, and all four `Fatal` with
+`"I'm not a hero!"` when the man is neither.
 
 ## `cHero::SetHeroId` — `0x080b23d0`
 
@@ -71,7 +72,7 @@ table below: "no immunity" is not the same as "no ability".
 `SetHeroId` writes `100` into exactly one of five 16-bit slots at `+0x88..0x90`,
 and for hero 6 loops a config value into all five.
 
-**Read from the consumer side 2026-08-10**, which was this doc's last open
+Read from the consumer side, which was this doc's last open
 thread. It is not five fields but **one five-element `u16` array**, and the
 accessor says so in one line — `cMan_GetMagicResistance` (`0x080aded0`):
 
@@ -121,16 +122,15 @@ The descriptions, which were the previous basis and are now corroboration:
 | `+0x8e` | Nature | Kukurbuki (5), Garkuna (10), Pocotli (14) |
 | `+0x90` | Soul | Shibiri (1), Akrisi (8) |
 
-Chimoki (6) is the only hero who gets all five, at
-`HERO6_MAGICRESISTANCE=90` rather than 100 — exactly what his description
-claims, "*partial* immunity to any form of magic". Read as a percentage that is
-now literally true: he takes 10% of all magic damage. A config value, a sentence
-and a formula written by different people, agreeing.
+Chimoki (6) is the only hero who gets all five, at `HERO6_MAGICRESISTANCE=90`
+rather than 100 — which matches his description, "*partial* immunity to any form
+of magic". Read as a percentage it is literally true: he takes 10% of all magic
+damage.
 
-### It is not a hero field — every man has one
+### Every man has one, not just heroes
 
-**Added 2026-08-10.** The array is part of the base `cMan`, and heroes only
-*overwrite* entries in it. Two more paths write it, and both walk it as an array
+The array is part of the base `cMan`, and heroes only *overwrite* entries in
+it. Two more paths write it, and both walk it as an array
 of five, which is now the third and fourth independent confirmation of the
 shape:
 
@@ -175,13 +175,12 @@ directly; see the correction below.
 | 18 | Morhamum | arch | 50 | 0 | 30 | -2 | Sun | `PRIEST_HIT_PERCENT` | 8 / 33,0 |
 | 19 | Tlechlal | — | 25 | 0 | 40 | 8 | — | — | **ships in `scn6/init.dat`** |
 
-Four heroes — **Shaloc (4), Umochi (9), HuorMuah (16), Tlechlal (19)** — have no
-ability of any kind beyond the four numbers. For three of them that is clearly
+Four heroes — Shaloc (4), Umochi (9), HuorMuah (16), Tlechlal (19) — have no
+ability of any kind beyond the four numbers. For three of them that is
 deliberate: their descriptions promise nothing but statistics, and the numbers
 deliver them. HuorMuah's "one blow of his sword will kill anyone" is `ATT=40`,
 the joint highest in the game, against `DEF=0` and `ST=-4000` — "he has never
-learned to take blows and becomes tired very quickly". The lore is the stat
-block, written out in prose.
+learned to take blows and becomes tired very quickly".
 
 Umochi is the exception, and is covered under Unfinished content below.
 
@@ -236,8 +235,7 @@ found."` (in Hungarian, and rude about a colleague). Unread — see Open threads
 
 ## Unfinished content
 
-Three findings, all of the shape this codebase keeps producing — content that
-exists in a data file and is never reached by code.
+Content that exists in a data file and is never reached by code.
 
 1. **Umochi (hero 9) is a placeholder.** His description is the six-character
    string `Umochi`; every other hero runs 146–370 characters. He is also the only
@@ -252,7 +250,7 @@ exists in a data file and is never reached by code.
    suffix differs too — the live pair ends `_HP`, the dead ones `_MO` — so this
    looks like an ability that was redesigned and left behind in the data.
 3. **Umochi (9) is placed by nothing at all** — no code path, and no world file
-   either, which was checked across all nine on 2026-08-09
+   either, which was checked across all nine world files
    ([starting-world.md](starting-world.md)). He is the only hero of whom that is
    true. This started as eight unplaced heroes; mission code accounts for five,
    **Jarakhi (11) ships in `data/campaign/init.dat`** as the player character,
@@ -277,15 +275,15 @@ file for a config key gives a **false negative**, because the file is encrypted.
 This cost a wrong intermediate conclusion ("`selap.txt` has no hero keys" — it
 has 103).
 
-## Where the other eight enter — answered 2026-08-09
+## Where the other eight enter
 
 **Five of the eight are mission rewards; three are placed by nothing.** Full
 write-up in [missions.md](missions.md); the short form:
 
 `cHero_SetHeroId` is a virtual at hero-vtable slot `+0x58`, and it is the only
-writer of the id — established by scanning every write to `+0x27c`, not by
-trusting the name. Across the whole binary **five call sites pass a constant
-id**, plus `hero.cfg` and the developer console:
+writer of the id, established by scanning every write to `+0x27c` rather than by
+trusting the name. Across the whole binary five call sites pass a constant id,
+plus `hero.cfg` and the developer console:
 
 | mission | hook | hero | items given |
 |---|---|---|---|
@@ -295,13 +293,13 @@ id**, plus `hero.cfg` and the developer console:
 | `cMission_Josda` | `Finish` | **8 Akrisi** | 31, 13 |
 | `cMission_TheWall` | `Start` | **17 Skalaki** | 34 |
 
-So sixteen of the nineteen are placed by code. **Umochi (9), Jarakhi (11) and
-Tlechlal (19) are assigned by no code path** — but see the correction directly
-below before reading anything into that.
+So sixteen of the nineteen are placed by code, and Umochi (9), Jarakhi (11) and
+Tlechlal (19) are assigned by no code path. The correction directly below
+qualifies what that means.
 
 ### Correction — a hero can ship in the world state
 
-**2026-08-09, same day.** This section first said those three "are set by
+This section first said those three "are set by
 nothing" and moved them into the unfinished-content list. That was wrong, and
 `cHero_SetHeroId` is **not** the only writer of the id.
 
@@ -327,20 +325,19 @@ consistent with this.
 Umochi (9) is the one of the three that a stream-loaded hero would not rescue:
 his description is the string `Umochi`, and no map data changes that.
 
-### Confirmed against all nine world files — 2026-08-09
+### Confirmed against all nine world files
 
 The correction above was an inference from a constructor that *could* place a
 hero. All nine `init.dat` files have since been read by the game's own loader
 ([starting-world.md](starting-world.md)), and it holds:
 
-- **Jarakhi (11) is in `data/campaign/init.dat`** and in nothing else. Confirmed,
-  not inferred.
-- **Tlechlal (19) is in `scn6/init.dat`** — the one genuinely unexplained hero,
-  and the answer is that he is scenario content. Every campaign-shaped search
-  was looking in the wrong file.
-- **Umochi (9) is in none of the nine.** He was the one a world file could not
-  rescue and it does not: code, `hero.cfg`, mission rewards and serialised state
-  have all now been checked. The placeholder reading is as firm as it gets.
+- Jarakhi (11) is in `data/campaign/init.dat` and in nothing else, read from the
+  file rather than inferred.
+- Tlechlal (19) is in `scn6/init.dat`. He is scenario content, which is why
+  every campaign-shaped search had been looking in the wrong file.
+- Umochi (9) is in none of the nine. Code, `hero.cfg`, mission rewards and
+  serialised state have all been checked, so the placeholder reading stands on
+  four exhausted sources.
 
 The campaign's twelve heroes are **exactly `hero.cfg`'s eleven plus Jarakhi**,
 which is what a world file generated by starting a new game and then editing one
@@ -353,10 +350,10 @@ A sixth site places a hero-type man and never assigns an id
 
 ## What `+0x27c` actually is
 
-**Settled 2026-08-10**, and the question as this doc posed it — *the* hero id,
-or a general subtype byte? — turns out to be a false choice. It is neither: it
-is **the first byte past the end of `cMan`**, so every subclass that adds one
-byte gets its own field at that offset.
+`+0x27c` is the first byte past the end of `cMan`, so every subclass that adds
+one byte gets its own field at that offset. It is neither *the* hero id nor a
+general subtype byte — those were the two readings this doc weighed, and the
+offset belongs to whichever subclass is looking at it.
 
 `sizeof(cMan) == 0x27c`, read off the allocators rather than inferred from a
 struct guess. Six caste creators allocate a plain man with `new(0x27c)`
@@ -399,10 +396,6 @@ overrides that slot with `cHero_SetHeroId`. And the one reader outside `cHero`'s
 own translation unit is fed by a config key that spells out the id it is
 testing.
 
-So this doc's headline claim stands as written, and the class-scoping caveat can
-be dropped — with the sharper statement that it was never a `cMan` byte to
-scope.
-
 ### `HERO12_RANGE_MOD`, and where hero abilities really live
 
 That last reader closes the doc's other open thread. `cMan_Archer_Hero`
@@ -423,15 +416,10 @@ Hero 12 is **Turmoth, the archer**, whose two listed modifiers are `VIS_MOD` and
 - **Applied live in a per-class getter** — `HERO12_RANGE_MOD`, which is not
   stored anywhere and is recomputed on every call, and only by the archer class.
 
-The split matters for anyone chasing a hero ability: `SetHeroId` is not the
-whole story, and a key absent from it is not therefore dead.
+A key absent from `SetHeroId` is therefore not necessarily dead.
 
 ## Open threads
 
-- ~~**Who reads `+0x88..0x90`.**~~ **Closed 2026-08-10** — `cMan_GetMagicResistance`
-  and `cMan_ApplyMagicDamage`, above. The mapping is now read from the consuming
-  code for four of five schools and determined by elimination for the fifth, and
-  the slots turn out to be a percentage reduction rather than a flag.
 - **The regen keys** (`HEROn_REG_FRAME`/`REG_HP`/`REG_ST`) and the various
   `*_HIT_PERCENT` keys have registered consumers somewhere in the ~21 per-hero
   hooks in the `cHero` translation unit, now enumerated by address above but not
@@ -454,5 +442,5 @@ whole story, and a key absent from it is not therefore dead.
   format, cracked in the course of this work.
 - [simulation-step.md](simulation-step.md) — the unit AI/movement core, still the
   unmapped mass around all of this. (Its "units manager at `g_World+0x1f394`" was
-  withdrawn 2026-08-10 — that address is the mission handler; the units
+  withdrawn — that address is the mission handler; the units
   *container* is `+0x1f398`.)

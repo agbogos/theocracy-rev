@@ -6,7 +6,7 @@ the check that would have caught it. Read this before lifting an address, an
 offset, or a struct layout out of a decompile.
 
 It exists because a documented wrong address is worse than a missing one: the
-2026-07-26 audit re-checked every address `docs/` cited and found **five wrong
+An audit re-checked every address `docs/` cited and found **five wrong
 claims**, and every single one came from one of two mechanical failure modes
 described below — not from misunderstanding the code.
 
@@ -72,24 +72,24 @@ DATA refs and nothing else.
 
 ## 4. Ghidra mis-flags g++ 2.95 tail-call thunks as non-returning
 
-This is the highest-impact tooling problem in the project, because **it fails
-silently**: the analyzer marks a thunk "No Return", and every caller is then
+This one fails silently, which is what makes it dangerous: the analyzer marks a
+thunk "No Return", and every caller is then
 truncated at its first call to that thunk. What you get is a plausible,
 complete-looking decompilation that is simply missing everything after the first
 thunk call. Nothing warns you.
 
 `tools/ghidra/FixBogusNoReturn.java` clears the bogus flags (and the
-fall-through overrides they stamp on call sites). Run in 2026-07-26 it
-un-flagged 495 functions in `libmvos.so` and 277 in `theocracy.real`.
+fall-through overrides they stamp on call sites). It un-flagged 495 functions in
+`libmvos.so` and 277 in `theocracy.real`.
 
-Two things about the repair are worth knowing, both learned the hard way:
+The repair is partial:
 
-- **Clearing the flags does not re-merge function boundaries.** Split functions
+- Clearing the flags does not re-merge function boundaries. Split functions
   persist, with a duplicate `FUN_*` left at the old truncation point — `main`
   still reports a 48-byte body against its real `0xfc`. So **reported body
   extents remain unreliable even after the repair**, and that is precisely how
   §3's fragment address happened.
-- **The MCP's `get_function_by_address` matches entry points only.** Any
+- The MCP's `get_function_by_address` matches entry points only. Any
   mid-body address answers "no function at address" — mid-`main` does too. This
   was briefly written up as evidence of live damage in the DB. It is a tool
   artifact and means nothing.
@@ -127,8 +127,8 @@ float→int conversion needs the instruction stream.
 
 ## 6. Guessed struct layouts are this port's dominant bug class
 
-Not typos, not misread logic — ABI contracts assumed rather than read. Four
-independent instances, each of which cost a debugging session:
+They are ABI contracts assumed rather than read. Four independent instances,
+each of which cost a debugging session:
 
 | What was assumed | What it actually is | How it presented |
 |---|---|---|
@@ -137,16 +137,16 @@ independent instances, each of which cost a debugging session:
 | `cSprite`'s save/restore is single-buffered | Two slots, one per buffer; `AfterSwapBuffer` restores through the *swapped* pointer | Cursor smeared its whole path across static screens |
 | `cSoundCard_Linux`'s ctor ends `cThread::Launch(this)` | `Launch(this + 4)` — `cThread` is a *secondary* base at `+4` | Would misplace every `cThread` field read off a sound card (fds at `+0x0c`/`+0x10`, not `+0x08`/`+0x0c`) |
 
-The pattern: a plausible layout produces plausible behaviour for a while, then
-fails somewhere structurally distant from the assumption. When implementing an
-OS or engine ABI, read the real definition or the real ctor; do not infer the
-shape from how the caller seems to use it.
+In each case a plausible layout produced plausible behaviour for a while, then
+failed somewhere structurally distant from the assumption. When implementing an
+OS or engine ABI, read the real definition or the real constructor rather than
+inferring the shape from how the caller seems to use it.
 
 ## 7. Evidence discipline: measure the running system, not the file
 
 The netgame map-selection crash took three wrong diagnoses before an instrument
-settled it. Each wrong one was stated more confidently than its evidence
-supported, and each is a distinct error worth naming:
+settled it. Each was stated more confidently than its evidence supported, and
+each failed differently:
 
 1. **A stack slot was read as a return address.** The "call site" came from
    `[ESP+0x18]`, six words into a raw fault dump. The actual return slot held a
@@ -169,9 +169,9 @@ suspicion was a function *epilogue* rather than a call site — reframing the
 whole problem as "the function returned to 0". See
 [porting/diagnostics.md](../porting/diagnostics.md).
 
-**Generalisable:** `eip=0` with `EBP=0` is a **smashed frame, not a null call**
-— nothing has pushed a frame pointer yet. Look for who wrote past a buffer, not
-for an unresolved symbol.
+`eip=0` with `EBP=0` is a smashed frame rather than a null call, since nothing
+has pushed a frame pointer yet. Look for who wrote past a buffer, not for an
+unresolved symbol.
 
 ## 8. Reading the symbols at all
 
@@ -250,7 +250,7 @@ function pointer.
 
 ## 11. If it runs, run it before you read it
 
-The dev-console work (2026-07-27) is the cautionary case. The feature was gated
+The dev-console work is the cautionary case. The feature was gated
 by one branch, and a large static pass went into proving *which* branch and what
 else read the same flag — analysis that was correct, already known, and not the
 blocker. Two runs then produced both real causes in seconds:
@@ -268,10 +268,9 @@ had. The follow-on lesson is about *direction*: the question that cracked it was
 not "why is the input gated?" but **"where does the output go?"** — which led in
 three lookups to `Print(shell->+0x44, …)` and a console nothing ever shows.
 
-So, when the port can execute the path: run it with the flag on, read the log,
-and let the log choose what gets reverse-engineered. Reach for Ghidra when the
-log names something you cannot resolve — not before. This sits alongside §7: the
-running system is evidence, and it is usually cheaper evidence than the file.
+So when the port can execute the path, run it first and let the log say what
+needs reverse-engineering. Ghidra is for what the log names and cannot resolve.
+This sits alongside §7.
 
 ## 12. A name is not a finding — and it propagates
 
@@ -280,21 +279,21 @@ described as the simulation's **order/command queue**, and
 `FUN_081a2060`/`FUN_081a1fa0`/`FUN_081a2180` as its API. All three are `cDate`
 arithmetic; `+0x83c` is the game date. Nothing anywhere reads a command from it.
 
-Why it stuck, and what to take from each part:
+Why it stuck:
 
-- **The guess was reasonable.** A per-tick call, on an object the sim owns, at
+- The guess was reasonable. A per-tick call, on an object the sim owns, at
   the top of a deterministic step function, is what an order queue *would* look
   like. Plausibility is not evidence, and it is precisely when a guess fits that
   it stops getting checked.
-- **It became load-bearing.** A whole "determinism & lockstep" argument was
+- It became load-bearing. A whole "determinism & lockstep" argument was
   built on top of it, complete with a conclusion — *deterministic, replayable,
   lockstep-synchronizable* — that read as a finding. The RE fact underneath had
   never been read.
-- **It spread.** Three docs cited it, and one of them
+- It spread. Three docs cited it, and one of them
   (`dev-console.md`) used it as the *contrast* for something else: "that pipe is
   not the sim's order queue". A wrong fact acquires dependents that look like
   corroboration.
-- **An audit missed it.** The 2026-07-26 findings audit re-checked every cited
+- An audit missed it. The findings audit re-checked every cited
   address against the binaries. `g_World+0x83c` is a perfectly real address, and
   `FUN_081a2060` is a perfectly real function — so an address-checking pass had
   nothing to catch. **Checking that an address exists is not checking that the
@@ -306,7 +305,7 @@ work lands in a doc, grep the other docs for the addresses it touches.
 
 ### It happened again, in the same function, one field over
 
-**2026-08-10.** Step 2 of that same `SimulationStep` passed the day count to
+Step 2 of that same `SimulationStep` passed the day count to
 `g_World+0x1f394`, which three docs called **the units manager** — and
 `simulation-step.md` ranked "the units manager and the virtual it dispatches" as
 the biggest remaining piece of the simulation. There is no units manager at that
@@ -314,19 +313,17 @@ address. It is the `iMissionHandler`, and what step 2 actually does is advance
 the campaign's scripted layer by one day
 ([missions.md](../subsystems/missions.md)).
 
-Everything about the first instance repeats, which is the point of recording it
-twice:
+This is recorded twice because the second instance adds three things the first
+did not show:
 
-- **The guess was reasonable again.** Something gets the day count once per tick,
-  in a function full of unit work, and the units container really is at
-  `g_World+0x1f398` — *one word away*. The name was never absurd; it was just
-  never read.
-- **It survived the correction of its own neighbour.** The `+0x83c` fix landed in
-  this very step on 2026-08-06 and rewrote the sentence around it. Correcting one
+- The guess survived the correction of its own neighbour. The `+0x83c` fix
+  landed in this very step and rewrote the sentence around it. Correcting one
   clause of a sentence does not audit the rest of it.
-- **It set the agenda.** Because the phantom was ranked "biggest remaining
-  piece", it shaped what the next task would have been. A wrong name costs more
-  than a wrong fact: it also costs the work you do because of it.
+- The real object was one word away, at `g_World+0x1f398`, in a function full of
+  unit work — so the name was never absurd, just never read.
+- It set the agenda. Because the phantom was ranked "biggest remaining piece",
+  it shaped what the next task would have been. A wrong name costs more than a
+  wrong fact: it also costs the work done because of it.
 
 The cheap check that would have caught either, at any point: **the object's
 vtable slot is callable — call it.** One decompile of `*(handler+0x28)+0x10`
@@ -376,9 +373,9 @@ value — `return default(this, m) != 0`, fifteen instructions of nothing. Three
 items behave exactly as the base class and the structural test called all three
 implemented.
 
-The generalisation, which applies well beyond vtables: **a difference in a table
-is evidence that a compiler emitted something, not that a programmer meant
-something.** g++ 2.95 emits a distinct thunk per class for covariant returns,
+A difference in a table is evidence that a compiler emitted something, not that
+a programmer meant something. g++ 2.95 emits a distinct thunk per class for
+covariant returns,
 access adjustments and inlined trivia, so "has its own entry" is nearly free.
 
 - Compare *bodies*, not addresses, whenever the conclusion is about behaviour.
@@ -396,8 +393,9 @@ access adjustments and inlined trivia, so "has its own entry" is nearly free.
 `magic-items.md` recorded `Item_CreateById` (`0x0820d1f0`) as "the only way an
 item comes into existence" — a switch over ids 1..50, each case calling that
 item's own constructor. It reads like a chokepoint, so the mission task's
-cheapest first move was to xref it. Eight call sites came back: two config-file
-placers, save-load, and the developer console. **No mission.**
+cheapest first move was to xref it. Eight call sites came back — two
+config-file placers, save-load, and the developer console — and not one of them
+is a mission.
 
 Every one of those eight is real, and the conclusion they invite — "missions
 don't place items, so the Ring Pieces are unreachable" — is false. Mission code
@@ -406,7 +404,7 @@ the switch. Xref'ing the fifty constructors instead of the one factory turns up
 25 with a non-factory caller, and with them the entire quest-reward layer: the
 ring combination, five hero rewards, and 25 item placements.
 
-- **A factory is a convenience for its callers, not a gate on construction.** In
+- A factory is a convenience for its callers, not a gate on construction. In
   C++ it cannot be one: any code with the class definition can call the
   constructor. Treat "the only way X is created" as a claim needing the
   *constructors* xref'd, and say which you checked.
@@ -500,9 +498,7 @@ actually does, not what a reading of it predicts.
   those are the same question. For "what is the on-disk layout of a `cMan`" they
   are not, and then the parser is the only route.
 
-This is §11 (*if it runs, run it before you read it*) applied to a data format
-rather than to a bug: the running system is evidence, and it is usually the
-cheaper evidence.
+This is §11 applied to a data format rather than to a bug.
 
 ### …and a §12 relapse in the same session: adjacent strings are not a set
 
@@ -553,7 +549,7 @@ offset as a literal disp32, so:
 3. Map each surviving address to its containing function and see how they
    cluster.
 
-Done for `+0x27c` on 2026-08-10: 43 raw hits, 10 false positives, and the
+Done for `+0x27c`: 43 raw hits, 10 false positives, and the
 remaining 33 fell into exactly two translation units plus one subclass method.
 The clustering *was* the finding — a field used by two classes and nothing else
 is a field the two classes each declared, which is what `sizeof(cMan) == 0x27c`
@@ -602,6 +598,26 @@ The tell that saved it was cheap and worth reusing: the field was one of five
 consecutive slots that a *loop* in `SetHeroId` writes with a scaled index. **If
 something writes it as an array, something reads it as an array.**
 
+## 18. Search for the operand, not for a list of opcodes
+
+A hand-rolled `80 /n` scan that only knows `/7` (cmp) misses `/6` (xor), so a
+read-modify-write toggle reads as "never written" — which is how the cheat flags
+were first documented wrong, and why `tools/elfq.py` exists.
+
+The same defect then recurred inside `elfq.py`. Its `xref-global` decoded only
+`A1`/`8B` pointer loads plus a byte-op table, so every dword `cmp`, every dword
+*write* and every `push`-the-address was invisible; it reported zero references
+to `MAX_FUCKER` (`0x84c8599`), a global read twice by `3B /r`
+([../subsystems/population-and-births.md](../subsystems/population-and-births.md)).
+The fix inverts the search: find the 4-byte operand anywhere in `.text` and
+classify each occurrence *backwards* from it, reporting anything it cannot
+decode as `operand?` rather than dropping it.
+
+An opcode table you enumerate is a table you can be wrong about silently. An
+operand match you classify afterwards is not.
+
+---
+
 ## Checklist
 
 Before a finding lands in `docs/` or in host code:
@@ -617,21 +633,8 @@ Before a finding lands in `docs/` or in host code:
    any output get truncated on the way?
 7. If you read a vtable or a pointer table out of a file and got zeros, did you
    apply the relocations — from *every* `.rel*` section, not just `.rel.dyn`?
-8. If you hand-rolled a byte scan, does it decode the *whole* opcode group? An
-   `80 /n` scan that only knows `/7` (cmp) misses `/6` (xor), so a
-   read-modify-write toggle reads as "never written" — which is exactly how the
-   cheat flags were first documented wrong. Prefer `tools/elfq.py`, which was
-   built after that scan produced two wrong claims in committed docs. **And the
-   same defect recurred in `elfq.py` itself** (2026-08-08): `xref-global` decoded
-   only `A1`/`8B` pointer loads plus a byte-op table, so every dword `cmp`, every
-   dword *write* and every `push`-the-address was invisible. It reported **zero
-   references** to `MAX_FUCKER` (`0x84c8599`), a global read twice by `3B /r`
-   ([../subsystems/population-and-births.md](../subsystems/population-and-births.md)).
-   The fix inverts the search: find the 4-byte operand anywhere in `.text` and
-   classify each occurrence *backwards* from it, reporting anything it cannot
-   decode as `operand?` rather than dropping it. **Search for the operand, not
-   for a list of opcodes** — an opcode table you enumerate is a table you can be
-   wrong about silently; an operand match you classify afterwards is not.
+8. If you hand-rolled a byte scan, does it decode the *whole* opcode group, and
+   would you rather be using `tools/elfq.py`? (§18)
 9. Is the *name* in this claim something the function was read to do, or
    something it plausibly does? If the latter, is it written as a hypothesis —
    and does any conclusion elsewhere depend on it? (§12)

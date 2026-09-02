@@ -5,14 +5,16 @@
 executable (`0x08048000`).
 
 ## Player / realm model (confirmed)
+
 From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
-- `g_GameSession` (`0x84c9610`): **11 faction slots** created (loop
-  `0..0xa`), each `new(0x84)`, pointer at `+slot*4`, initialized from a static
-  template table `DAT_08645240` (11 × 16 bytes) — the fixed faction roster. An
-  index table sits at `+0x2e..+0x38`.
-- `+0x2d` = **local/human player index** (ctor sets 0; `SetupGame` overwrites
-  with `DAT_0864538a` — the chosen faction).
-- `+0x2c` = **multiplayer/battle-mode flag**: `1` in netgame battles (set by
+
+- `g_GameSession` (`0x84c9610`): 11 faction slots created (loop `0..0xa`), each
+  `new(0x84)`, pointer at `+slot*4`, initialised from the static template table
+  `DAT_08645240` (11 × 16 bytes) that holds the fixed faction roster. An index
+  table sits at `+0x2e..+0x38`.
+- `+0x2d` = the local player index. The ctor sets 0; `SetupGame` overwrites it
+  with `DAT_0864538a`, the chosen faction.
+- `+0x2c` = the multiplayer/battle-mode flag: `1` in netgame battles (set by
   `NetGame_InitBattle`), `0` in single-player (force-cleared by `SetupGame`).
   Enables the interactive command console + battle-stat views; disables some
   single-player-only orders. See
@@ -23,23 +25,25 @@ From the session constructor `FUN_0817af70(session, scenarioID, startPaused)`:
   (`local_21 < 6`, the competing realms) for periodic province events, 8
   elsewhere, 11 total. So "N players" depends on which system — the
   allocation is 11 faction slots (1 human + AI realms + neutral/special).
-- **Provinces**: `g_World+0x1468` (count `+0x1470`); **province owner = byte at
-  `province+0x40aae`** (index into the player array).
-- **Game date**: `g_World+0x83c` is the `cDate` instance — see
-  [calendar.md](calendar.md). Not a command queue; see the correction below.
+- Provinces: `g_World+0x1468`, count `+0x1470`. The province owner is the byte
+  at `province+0x40aae`, an index into the player array.
+- Game date: `g_World+0x83c` is the `cDate` instance — see
+  [calendar.md](calendar.md). It is not a command queue; see the correction
+  below.
 
 ## What one tick does
-1. **cDayTime** stamps (profiling).
-2. **Mission-handler update** (unpaused only): compute the **current day count**
-   — `cDate_ToDayCount(g_World+0x83c)` — and pass it to the `iMissionHandler` at
-   `g_World+0x1f394`, through vtable slot `+0x10`. This is the scripted layer —
-   mission time conditions, the four `cMissionTimer`s, the Spanish invasion —
-   and it advances exactly once per tick, i.e. once per in-game day
-   ([missions.md](missions.md)). Then the **win/lose check** — if
-   `g_World+0x140c → +0x4f4 == 0`, print `"### Most ki kene lepni ###"`
-   (Hungarian: "should exit now").
 
-   > **Corrected 2026-08-10.** This step used to read "units-manager update", with
+1. `cDayTime` stamps, for profiling.
+2. Mission-handler update, unpaused only. It computes the current day count with
+   `cDate_ToDayCount(g_World+0x83c)` and passes it to the `iMissionHandler` at
+   `g_World+0x1f394` through vtable slot `+0x10`. This is the scripted layer:
+   mission time conditions, the four `cMissionTimer`s and the Spanish invasion,
+   advanced exactly once per tick and so once per in-game day
+   ([missions.md](missions.md)). Then the win/lose check: if
+   `g_World+0x140c → +0x4f4 == 0`, print `"### Most ki kene lepni ###"`
+   (Hungarian, "should exit now").
+
+   > **Corrected.** This step used to read "units-manager update", with
    > `g_World+0x1f394` called the units manager and `+0x28` its "sub-object".
    > `+0x28` is the object's vtable pointer, and the object is the mission
    > handler: the same pointer is passed to `iMissionHandler_GetMission`
@@ -94,18 +98,17 @@ event actually is"). One **data** reference also exists, at `0x0852d6f8`,
 unexamined; if that is a vtable slot the function has a second, virtual, caller
 and the "only" above is too strong.
 
-> **Offset corrected (audit 2026-07-26).** This doc previously gave the sub-object
+> **Offset corrected.** This doc previously gave the sub-object
 > as `+0x103a1`. That was the decompiler's **pointer-arithmetic index** on an
 > `int *` parameter (`param_1 + 0x103a1`), i.e. `0x103a1 × 4` bytes. The raw
 > instruction settles it: `081d69f3 ADD EBX,0x40e84`. Corroboration: `0x40e84`
 > sits `0x3d6` past the owner byte at `0x40aae`, in the same province-header
 > region, whereas `0x103a1` as a byte offset lands somewhere unrelated.
-> **Watch for this whole class** — any offset lifted from a decompiled `TYPE *`
-> parameter must be scaled by `sizeof(TYPE)`. Offsets taken off an `int`/`char *`
-> base (like `+0x40aae` here, which is `*(byte *)((int)param_1 + 0x40aae)`) are
-> already byte offsets and are fine.
+> The general form of this is [re-methodology.md](../reference/re-methodology.md)
+> §2. Offsets taken off an `int`/`char *` base — like `+0x40aae` here, which is
+> `*(byte *)((int)param_1 + 0x40aae)` — are already byte offsets and are fine.
 
-## Determinism & lockstep (weakened — corrected 2026-08-06)
+## Determinism & lockstep
 
 > **The command queue does not exist.** This section previously rested on three
 > legs: a command queue at `g_World+0x83c`, discrete ticks, and a shared seeded
@@ -114,7 +117,7 @@ and the "only" above is too strong.
 > ([calendar.md](calendar.md)). Nothing in `SimulationStep` reads a command from
 > anywhere.
 
-What survives, and it is less than was claimed:
+What survives:
 
 - The sim advances in **discrete ticks** — still true, and `SimulationUpdate`'s
   fixed timestep is real.
@@ -125,19 +128,19 @@ What survives, and it is less than was claimed:
   while loop. Since a call runs 0–10 ticks, the message count and the tick count
   are not the same number, so it cannot by itself be a per-tick sync.
 
-So "deterministic, replayable, lockstep-synchronizable" is a **hypothesis
-consistent with the evidence, not something read off the code**. A lockstep
-design needs a channel that carries player commands between peers; this doc
-claimed to have found it and had not. The `cMsgSender` at `+0x5c8` is still the
-best candidate and is still undecoded. Until its payload is read, the honest
-statement is: the sim *could* be lockstep and nothing contradicts it.
+So "deterministic, replayable, lockstep-synchronizable" is a hypothesis
+consistent with the evidence rather than something read off the code. A lockstep
+design needs a channel carrying player commands between peers, and no such
+channel has been located. The `cMsgSender` at `+0x5c8` is the best candidate and
+is undecoded; until its payload is read, the sim *could* be lockstep and nothing
+contradicts it.
 
 ## What this event actually is (step 6)
 
-`DAT_084c8160` is not an anonymous rate constant. It is bound by name at
-`0x080b3f32` — `LoadConfigVar(&DAT_084c8160, "ALLIED_JOIN_YEARS")` — to a
-tunable in the balance file, and the shipped `data/selap.txt` sets
-`ALLIED_JOIN_YEARS=10`.
+`DAT_084c8160` is bound by name at `0x080b3f32` —
+`LoadConfigVar(&DAT_084c8160, "ALLIED_JOIN_YEARS")` — so it is a tunable in the
+balance file rather than an anonymous rate constant, and the shipped
+`data/selap.txt` sets `ALLIED_JOIN_YEARS=10`.
 
 Read with that name, step 6 is: **once you have been allied with a realm for 10
 in-game years, one random province of that ally is picked every 7 days and put
@@ -145,30 +148,29 @@ through `TriggerProvinceEvent`.** The obvious reading of "allied join" is that
 those provinces gradually *join* your realm — a long alliance annexing itself to
 you one province at a time.
 
-**That is a hypothesis, not a finding.** The effect itself is `FUN_081d6570`,
-still undecoded; the config name is strong evidence about intent but is not the
-code. What it does settle is that this is a **diplomacy mechanic keyed to
-alliance age**, not the "periodic divine/random event system" this doc
-previously guessed at — a god-game prior that the binary does not support.
+That reading is a hypothesis. The effect itself is `FUN_081d6570` and is still
+undecoded; the config name is strong evidence about intent, but it is not the
+code. What the name does settle is that this is a diplomacy mechanic keyed to
+alliance age, rather than the "periodic divine/random event system" this doc
+previously guessed at.
 
 ## Open threads
-- ~~**Units manager** at `g_World+0x1f394`~~ — **withdrawn 2026-08-10, it was
-  never there.** That address is the `iMissionHandler` and is now read end to
-  end ([missions.md](missions.md)). The unit AI/movement core is still the
-  biggest remaining piece, but the way in is the units **container** at
-  `g_World+0x1f398` / count `+0x1f3a0` and the per-unit call `FUN_0812bcb0(unit,
-  ticks)` in `SimulationUpdate`.
-- **`TriggerProvinceEvent` → `FUN_081d6570`** — decode the actual province event
-  effect.
-- `g_World+0x1490` manager list — enumerate the registered per-tick systems
-  (what each vtable is).
+
+- The unit AI and movement core, still the biggest remaining piece. The way in
+  is the units container at `g_World+0x1f398` / count `+0x1f3a0` and the
+  per-unit call `FUN_0812bcb0(unit, ticks)` in `SimulationUpdate` — not
+  `g_World+0x1f394`, which is the `iMissionHandler` and is read end to end in
+  [missions.md](missions.md).
+- `TriggerProvinceEvent` → `FUN_081d6570` — decode the province event effect.
+- `g_World+0x1490` manager list — enumerate the registered per-tick systems and
+  what each vtable is.
 - Province struct: map fields around `+0x40aae` (owner) and `+0x40e84`; confirm
   province record size/stride. (Both offsets are ~0x40000 in, so the province
   record is large — likely an embedded tile map ahead of the header fields.)
-- **Where player commands actually enter the sim.** The order queue this doc
-  used to cite was `cDate` all along, so the question is open again and nothing
-  is known about it. `cMsgSender` at `g_World+0x5c8` is the candidate; decoding
-  its payload would settle the lockstep hypothesis above.
+- Where player commands enter the sim. The order queue this doc used to cite
+  was `cDate` all along, so nothing is known about this. `cMsgSender` at
+  `g_World+0x5c8` is the candidate, and decoding its payload would settle the
+  lockstep hypothesis above.
 - `FUN_081d6570` — the `ALLIED_JOIN_YEARS` effect. Does an allied province
   actually change owner? The `+0x40aae` owner byte is the thing to watch.
 - `0x0852d6f8` — the data reference to `TriggerProvinceEvent`. Vtable slot

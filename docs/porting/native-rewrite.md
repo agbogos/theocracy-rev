@@ -1,93 +1,106 @@
-# Native rewrite — retiring Unicorn, gradually
+# Native rewrite — why this repo does not do it
 
-**Status: not started. This is the long game.**
+Status: out of scope, and staying that way. This doc says why, and leaves what
+is known to anyone who picks the idea up.
 
-The goal is to replace the emulated engine with native C++ **one piece at a
-time**, with the game playable at every step, until Unicorn has nothing left to
-execute and can be removed.
+The idea was to replace the emulated engine with native C++ one function at a
+time, with the game playable at every step, until Unicorn had nothing left to
+execute and could be removed.
 
-## Why this is now the direction
+## Why not
 
-The port is finished as a port: single-player and multiplayer run end to end,
-and the modernisation list closed on 2026-08-03. Everything still wanted from
-here — a sim that is not welded to the frame rate, higher-resolution art, any
-change to game logic — needs the engine to be *ours*, not emulated. The
-frame-tied province simulation is the clearest case: it is unfixable from
-outside (see [frame-timing.md](frame-timing.md), "Why province stays at 12fps")
-and trivial once the code is native.
+The port is finished as a port. Single-player and multiplayer run end to end on
+macOS, Linux and Windows, and the modernisation list — frame pacing, music,
+filtering, fullscreen — is closed.
 
-## Why this is not the 2026-07 plan again
+What going further would buy is a short list, and every item on it is a change
+to the game rather than to the host: a simulation not welded to the frame rate,
+higher-resolution art, altered game logic. This project runs the binaries Philos
+shipped and writes down how they work. A native rewrite would instead reproduce
+them, which is a different undertaking with a different relationship to someone
+else's copyrighted work, and the author does not intend to pursue it.
 
-The **pure-HLE native-replace** attempt is superseded, and this is not a revival
-of it. That plan tried to reimplement the libmvos API boundary *before* anything
-ran, and hit an unbounded wall: rendering a menu meant hand-writing the entire
-GUI toolkit. See [macos-hle-emulator.md](macos-hle-emulator.md).
+## What that costs
 
-The difference is direction and evidence. We now have a **running system** to
-replace pieces of, so every step is verifiable against the emulated original
-rather than against a guess, and any piece can be reverted the moment it
-misbehaves.
+Consequences of the decision, recorded so they are not re-opened as defects:
 
-## The seam already exists
+- Province view stays at 12fps. It is frame-tied inside the engine and
+  unfixable from outside — [frame-timing.md](frame-timing.md), "Why province
+  stays at 12fps", has the evidence. `THEOC_PROVINCE_MS` is the one pacing
+  control the engine admits.
+- The art stays at its shipped resolution. There is no geometry to re-render and
+  no higher-resolution source; [upscale-filtering.md](upscale-filtering.md)
+  covers what filtering can and cannot recover.
+- Game logic stays as it is, including what the original got wrong. The clearest
+  example is the missing music volume control, below.
 
-This is not new machinery — it is the mechanism `blit.cpp` has used since the
-province-performance work. `Machine::add_code_traps` aimed at a single byte
-inside the mapped libmvos image replaces one function with a native
-implementation; the real body never runs. Five LFB16 rasterizer functions are
-already native, with `THEOC_NATIVE_BLIT=0` to fall back for A/B.
+## The seam exists anyway
 
-`cGD_LFB16::Refresh` (2026-08-03) is the same seam used the other way — to
-*implement* a method whose emulated body was a no-op that no longer suited us.
+Not as a foothold — compatibility work needed it. `Machine::add_code_traps`
+aimed at a single byte inside the mapped libmvos image replaces one function
+with a native implementation, and the real body never runs. `blit.cpp` has used
+it since the province-performance work: five LFB16 rasterizer functions are
+native today, with `THEOC_NATIVE_BLIT=0` to fall back for A/B.
+`cGD_LFB16::Refresh` is the same seam used the other way, to implement a method
+whose emulated body was a no-op that no longer suited the host.
 
-So the work is: keep widening that set, in dependency order, until the emulated
-side is empty. See [host-architecture.md](host-architecture.md), "Native
+So the mechanism a native rewrite would be built on is already in the tree and
+already exercised. See [host-architecture.md](host-architecture.md), "Native
 override of a real libmvos function".
 
-## What makes a good next candidate
+## For anyone who does pursue it
 
-Roughly in the order these matter:
+What a good candidate looks like, in the order these matter:
 
-1. **Leaf-first.** Something that calls little or nothing else, so the native
+1. Leaf-first. Something that calls little or nothing else, so the native
    version cannot drag in half the engine.
-2. **Already understood.** Prefer functions a `docs/` page already describes;
-   guessed struct layouts are this port's dominant bug class
+2. Already understood. Prefer functions a `docs/` page describes; guessed struct
+   layouts are this port's dominant bug class
    ([re-methodology.md](../reference/re-methodology.md)).
-3. **Verifiable.** A function whose output can be compared against the emulated
-   original — pixels, a return value, a memory range — rather than judged by eye.
-4. **Worth it.** Either hot, or standing between us and something we want to
+3. Verifiable. Output that can be compared against the emulated original —
+   pixels, a return value, a memory range — rather than judged by eye.
+4. Worth it. Either hot, or standing between you and something you want to
    change.
 
-### A named candidate: a music volume control
+The smallest concrete instance is a music volume control. The game ships working
+SFX and ambience sliders, an on/off toggle for CD music, and no volume control
+for the music at all
+([music-and-redbook.md](../subsystems/music-and-redbook.md)) — a gap in the
+original, not something the port lost. It scores well on all four tests: the
+music subsystem is decompiled and documented, `cCD_Linux::SetVolume` exists and
+is implemented host-side (`CDROMVOLCTRL` scales the mix), and `THEOC_MUSIC_VOL`
+proves the plumbing end to end today. Only the widget is missing, which is also
+the warning: adding one slider to an existing options screen means understanding
+`cVObject` layout, and the GUI toolkit is the hard part below.
 
-The one concrete "fix something the original got wrong" item on the list, added
-2026-08-08 after music was revived. The game ships **SFX and ambience sliders
-that both work, an on/off toggle for CD music, and no music volume control at
-all** ([music-and-redbook.md](../subsystems/music-and-redbook.md)). CD audio is
-on or off, nothing in between — a gap in the original, not something the port
-lost.
+The hard parts:
 
-It scores unusually well against the four tests above: the whole music subsystem
-is decompiled and documented, `cCD_Linux::SetVolume` already exists and is
-already implemented host-side (`CDROMVOLCTRL` scales the mix), and
-`THEOC_MUSIC_VOL` proves the plumbing end to end today. What is missing is
-**only the widget** — which is also the honest warning, because the GUI toolkit
-is named below as one of the hard parts, and "add one slider to an existing
-options screen" is precisely the kind of task that turns out to require
-understanding `cVObject` layout properly. Good first *real* test of whether the
-GUI is approachable, on a change small enough that failing costs little.
+- Shared state. Native and emulated code operate on the same guest memory, so a
+  replaced function must keep its struct layout byte-exact. That is what
+  `docs/structs/` is for.
+- The GUI toolkit. What killed the pure-HLE plan
+  ([macos-hle-emulator.md](macos-hle-emulator.md)) is still the largest single
+  mass of work, and it is nearly all of `cVObject` and its subclasses.
+- The game binary. `theocracy.real` is `.symtab`-stripped and its simulation is
+  largely unread ([simulation-step.md](../subsystems/simulation-step.md), "Open
+  threads"). Retiring Unicorn means understanding the game, not just the engine.
+- A stopping point. A conversion left half-finished is worse than either end
+  state, so decide in advance what done means.
 
-## The hard parts, stated up front
+## The licence rules it out separately
 
-- **Shared state.** Native code and emulated code operate on the *same* guest
-  memory, so every replaced function must keep its struct layout byte-exact.
-  This is what the `docs/structs/` pages are for.
-- **The GUI toolkit.** The thing that killed the pure-HLE plan is still the
-  largest single mass of work, and it is nearly all of `cVObject` and its
-  subclasses.
-- **The game binary, eventually.** `theocracy.real` is `.symtab`-stripped and
-  its simulation is still largely a black box
-  ([simulation-step.md](../subsystems/simulation-step.md), "Open threads"). Retiring Unicorn means
-  understanding it, not just the engine.
-- **Knowing when to stop.** A port that is 90% native and permanently mid-flight
-  is worse than either endpoint. There is no deadline here, but there should be
-  an honest checkpoint.
+This repo's own code is `GPL-2.0-or-later`, both forced by Unicorn (see
+[README.md](../README.md), "Licence"), and consciously chosen by the author.
+The GPL requires the complete source of whatever is distributed to be released
+under the same terms, and nobody can grant those terms over code they do not own.
+A native reimplementation written by reading these decompiles would be derived
+from Philos's work, so shipping it from here would mean licensing someone else's
+expression under the GPL — which is not the author's to license.
+
+The emulator has no such problem. It runs the shipped binaries without
+containing them, and those binaries are not in this repository, so the only
+thing distributed under the GPL is code we wrote. A clean-room
+reimplementation — a specification written by one party and implemented by
+another who has never seen the original — would avoid the derivation, but that
+is not available here: `docs/` is written from the decompiles by the same
+person who would write the replacement.

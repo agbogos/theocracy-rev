@@ -1,14 +1,14 @@
 # `reconf` — Philos' post-release reconfiguration tool
 
-A 78 KB i386 ELF that is **not on the CD**, found in 2026-08-15 on a
+A 78 KB i386 ELF that is not on the CD, recovered from a
 [holarse.de](https://files.holarse.de/native/Spiele/Theocracy/) mirror of the
-long-dead dlh.net download, described there as an official Philos-released
-reconfiguration script. It is not a script: it is a small unstripped C++ console
-program that rewrites `mvos.cfg` by asking five questions.
+long-dead dlh.net download, where it is described as an official Philos-released
+reconfiguration script. It is a small unstripped C++ console program that
+rewrites `mvos.cfg` by asking five questions.
 
-It matters to this repo for one concrete reason: `data/game/mvos.cfg` is
-hand-authored by us because the installer normally writes it, and this is the
-only surviving Philos code that writes that file.
+It matters here because `data/game/mvos.cfg` is hand-authored in this repo — the
+installer normally writes it — and `reconf` is the only surviving Philos code
+that writes that file.
 
 ## The artifact
 
@@ -38,35 +38,34 @@ packed it. It appears nowhere else in this project.
 
 ## Is it really post-release?
 
-Yes — **by seven months, and it is dated rather than argued.** The tarball's
-stored timestamps put the binary at **2000-09-21**, against a CD mastered 23–25
-Feb 2000.
+Yes, by seven months, and the tarball's stored timestamps settle it: they put
+the binary at 2000-09-21, against a CD mastered 23–25 Feb 2000.
 
-The rest of this section is the case as it stood *before* the archive turned up,
-kept because it was built independently and every piece of it agrees with the
-answer. That is worth something: the same reasoning is all that will be
-available for the next artifact that arrives without its container.
+The rest of this section is the case as it stood *before* the archive turned up.
+It is kept because it was built independently and every piece of it agrees with
+the answer, and because it is the only kind of reasoning available for an
+artifact that arrives without its container.
 
 The website's claim was not self-evidently true, and this project has been
 burned before by a plausible attribution hardening into a documented fact
 ([re-methodology.md](re-methodology.md) §12). So it was tested rather than
 repeated. Four pieces of evidence, in descending strength:
 
-1. **The installer's own sentence was rewritten around it.** `inst.linux`, which
+1. The installer's own sentence was rewritten around it. `inst.linux`, which
    shipped on the CD, contains `To reconfigure please edit %s, or %s!` — two
    paths, hand-editing. `reconf` contains the same sentence updated for a tool
    that now exists: `To reconfigure please run reconf!`. That is the shipped
    advice being superseded.
-2. **Nothing on the CD knows about it.** A `grep -ril reconf` over the whole
+2. Nothing on the CD knows about it. A `grep -ril reconf` over the whole
    `data/cd` tree returns nothing: not `readme.linux` (which is otherwise a
    detailed troubleshooting document, exactly where such a tool would be
    mentioned), not `theocracy.real`, `libmvos.so.0.9`, `server`, or `inst.linux`.
-3. **It is a sibling of the installer, not a third-party reimplementation.** It
-   statically links the same in-house classes (`cString`, `cConfig`, `cList`,
-   `cNode`) from the same source files (`strings.cpp`, `strings.hpp`,
-   `list.cpp`), and it shares the installer's compiler *family* rather than the
-   game's.
-4. **It was built with a newer compiler package than the installer.**
+3. It is a sibling of the installer rather than a third-party
+   reimplementation. It statically links the same in-house classes (`cString`,
+   `cConfig`, `cList`, `cNode`) from the same source files (`strings.cpp`,
+   `strings.hpp`, `list.cpp`), and it shares the installer's compiler *family*
+   rather than the game's.
+4. It was built with a newer compiler package than the installer.
 
 | Binary | `.comment` | CD mtime |
 |---|---|---|
@@ -86,10 +85,9 @@ dates, so on its own it was equally consistent with a tool made during the
 run-up to the master. Points 1 and 2 carried the conclusion; point 4 only failed
 to contradict it.
 
-The archive settles it at 2000-09-21, which is consistent with all four and
-sharper than any of them. Note what the compiler stamp did *not* say: eight
-months elapsed between the newest possible compiler package and the actual
-build, so on a stamp alone the honest answer was always going to be a range.
+The archive settles it at 2000-09-21, consistent with all four and sharper than
+any of them. Eight months elapsed between the newest possible compiler package
+and the actual build, so the stamp alone could only ever have given a range.
 
 ## What it writes
 
@@ -215,28 +213,27 @@ misbehaved. The full engine vocabulary is five keys and is tabulated in
 [application-bootstrap.md](../subsystems/application-bootstrap.md), whose own
 "config vocabulary" line was wrong in the same two places and is now corrected.
 
-The fix did not come from `reconf` but from what it pointed at: **`inst.linux`
-writes `mvos.cfg` with `printf` formats that spell the whole schema out** —
+The fix did not come from `reconf` but from what it pointed at: `inst.linux`
+writes `mvos.cfg` with `printf` formats that spell the whole schema out —
 `soundcard=%s`, `cdrom_device=%s`, `cdrom_mountpoint=%s`, the literal
 `fullscreen=false`, `[game]`, `language=%s`, under `[vmachine]`. That is the
 authentic installed file, and `data/game/mvos.cfg` is now exactly it. Every
 value equals the default the engine would have picked anyway, so the change is
-behaviour-neutral by construction — and **confirmed by play on 2026-08-15**:
-boot, the `xf86` default video path, English menu text, sound and a CD music
-track. That run was worth insisting on for a reason the analysis could not
-cover. The *values* were verified by decompiling each reader, but the file's
-**shape** was not: the new file drops the blank lines between sections, and
+behaviour-neutral by construction, and it was confirmed by play: boot, the
+`xf86` default video path, English menu text, sound and a CD music track.
+
+That run covered what the analysis could not. The *values* were verified by
+decompiling each reader, but the file's shape was not: the new file drops the
+blank lines between sections, and
 libmvos' own parser (`IdentifyFileSystemMvosCfg`, `0xa4640`) has never been
 read. Reasoning had established what the keys resolve to, not that the parser
 accepts the layout they arrive in.
 
-Two things worth keeping straight:
-
-- **`fullscreen` is inert in the original game**, not merely under this port.
-  The installer writes it, `reconf` toggles it, and no code in either shipped
-  binary ever looks it up. The port's `THEOC_FULLSCREEN` is not a replacement
-  for a working key; there was never a working key.
-- **`[game] language` is read by the game, not the engine** — `theocracy.real`
+- `fullscreen` is inert in the original game as well as under this port. The
+  installer writes it, `reconf` toggles it, and no code in either shipped binary
+  ever looks it up. The port's `THEOC_FULLSCREEN` is not a replacement for a
+  working key; there was never a working key.
+- `[game] language` is read by the game, not the engine. `theocracy.real`
   holds `game`, `language`, `english`, `data/locale/` and `.sdb` in one string
   block, i.e. it composes `data/locale/<language>.sdb`. `libmvos.so` contains
   none of those.
@@ -249,9 +246,9 @@ the MCP shows one program at a time and that one was not loaded. No
 ## What it does *not* do
 
 It is a configuration editor and nothing more — no patching, no file
-installation, no data migration. That is exhaustive rather than impressionistic:
-the binary has **34 dynamic imports and zero `int 0x80` in `.text`**, so those
-imports are the complete OS boundary. Absent from them: `unlink`/`remove`/
+installation, no data migration. The binary has 34 dynamic imports and zero
+`int 0x80` in `.text`, so those imports are the complete OS boundary and the
+list below is exhaustive. Absent from them: `unlink`/`remove`/
 `rename` (it cannot delete or move anything), `mkdir`/`chmod`/`chown`,
 `system`/`exec*`/`fork`/`popen` (it cannot launch anything, including the
 installer), `open`/`read`/`write`/`ioctl`, `stat`/`access`, sockets, `dlopen`.
@@ -276,8 +273,7 @@ and `exit(0)`, and `signal_handler_null` is a literal no-op used to ignore
 `SIGINT` while the banner prints.
 
 So whatever Philos shipped this to fix in September 2000 was fixable by editing
-five config values — most plausibly the CD mount-point detection, which is the
-only part of the tool doing real work.
+five config values. The mount-point detection is the likeliest candidate.
 
 ## A free cross-check on the container classes
 
@@ -303,8 +299,7 @@ Two layouts fall straight out of the code above:
   between `[%s]\n` and `%s=%s\n`.
 
 These are read off `reconf`, so they are evidence about *its* statically linked
-copy. They should agree with libmvos' — but that is a prediction until someone
-checks it, not a transfer.
+copy. Whether libmvos' copies agree has not been checked.
 
 ## Open threads
 

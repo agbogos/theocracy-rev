@@ -1,21 +1,22 @@
-# Host architecture — the shape of `port/src` today
+# Host architecture — the shape of `port/src`
 
 This is a structural map of the emulator host: what each translation unit owns,
 how the guest address space is laid out, and the exact call paths between guest
-and host. For how it got this way — the G1→G21 milestone log, with the
-symptom/diagnosis of each change — see [`guest-libmvos.md`](guest-libmvos.md).
+and host. For the full work log and the
+symptom/diagnosis of each change, see [`guest-libmvos.md`](guest-libmvos.md).
 Where the two disagree, this file describes the code as it stands and
 `guest-libmvos.md` describes when a thing was introduced.
 
-## The model in one paragraph
+## Summary
 
 Both shipped i386 ELFs are mapped into a single Unicorn `UC_ARCH_X86 /
 UC_MODE_32` instance and run as original code: `theocracy.real` (ET_EXEC, mapped
 at its own VAs, ~`0x08048000`+) and the real `libmvos.so.0.9` (ET_DYN, mapped at
-`guestlink::MVOS_BASE` = `0x10000000`). The host is not a reimplementation of
-the engine — it is a loader, a dynamic linker, and a high-level emulation of the
+`guestlink::MVOS_BASE` = `0x10000000`). The host is a loader, a dynamic linker, and a high-level emulation of the
 *OS/library ABI only*: libc, pthread, libdl, BSD sockets, SMPEG, and the
-`libmvos_vvc_x.so` device-plugin boundary. Every `UND` symbol that one image
+`libmvos_vvc_x.so` device-plugin boundary.
+
+Every `UND` symbol that one image
 does not satisfy for the other is bound to a one-byte address inside a trap
 window; jumping there fires a Unicorn code hook that runs a native C++ handler
 and returns as if a cdecl callee had run. Two narrow exceptions to "guest code
@@ -49,7 +50,7 @@ target and no library target.
 
 All addresses below are in the **guest** (Unicorn) address space. Everything at
 or above `0x50000000` is host-owned scaffolding; everything below it is real
-guest code and data. That split is load-bearing — the block profiler and block
+guest code and data. That split is key — the block profiler and block
 counter both filter on `addr >= 0x50000000` to decide "this is not guest work"
 (`machine.cpp`, `count_hook` and `block_hook`).
 
@@ -269,7 +270,7 @@ The current export list is `QueryDevice`, `CreateVideoDevice`,
 
 We replace one function in the present path, and it is the innermost of
 three. Every link below has exactly one call site, so this is the whole of it
-(libmvos, read off the disassembly 2026-08-03):
+(libmvos, read off the disassembly):
 
 ```
 cScreen::EndRefresh                       (0x9d2d0 — PaintTree, then:)
@@ -295,8 +296,8 @@ The two `cSprite::MoveTo` call sites are mutually exclusive on `Intuition_Mode`
 `Intuition+0x14/0x18` — which is why nopping `PushMouseInput` does **not** cost
 us pointer tracking.
 
-**This corrects a year-old task-list entry** that described the guest
-`SwapBuffers`/`BeforeSwapBuffer` path as "abandoned as fragile". The opposite is
+For a long time the guest's `SwapBuffers`/`BeforeSwapBuffer` path was "abandoned as fragile",
+however this proves that the opposite is
 true: it is load-bearing, and G17's cursor-trail fix is a patch *inside* it.
 What is HLE'd is the VVC-level present alone, which is architecture, not debt.
 
@@ -319,21 +320,18 @@ Two consequences: `HLE_OpenDisplay` is the **sole** writer of those slots, and
 our writing `gd` into `+0x08` is meaningless but harmless, since its only two
 readers are those same two replaced functions.
 
-**Two bring-up-era paths were deleted from `HLE_SwapBuffers` on that basis
-(2026-08-03)** — a per-frame re-stamp of the five GD slots, and the G5 magenta
+Two bring-up-era paths were deleted from `HLE_SwapBuffers` on that basis — a per-frame re-stamp of the five GD slots, and the G5 magenta
 crosshair (`draw_software_cursor`) drawn whenever the active screen had no
 pointer sprite. Both were defensive code whose trigger had been designed out
 long before, and neither had ever been shown to fire.
 
 The static argument above is what identified them; it is not what closed them.
-Each was first turned into a **counter in the trap report**, because this port's
-standing lesson is that an instrument reading zero has to be shown capable of
-non-zero before the zero means anything. A session covering every transition
-that could plausibly produce a spriteless frame or a moved slot — movies,
-save/load, quit, new game — recorded **0 and 0 across 466 presents**, and they
-were removed. Coverage, not duration, is what made that run decisive: both paths
-live at screen transitions, so a long session of steady play would have proved
-nothing a two-minute one did not.
+Each was first turned into a counter in the trap report and tested at runtime.
+A session covering every transition that could plausibly produce a spriteless
+frame or a moved slot — movies, save/load, quit, new game — recorded 0 and 0
+across 466 presents, and they were removed. Both paths live at screen
+transitions, so the session was scoped to cover every transition rather than
+to run long.
 
 > **Method note.** Both `cVVC::SwapBuffers` and `cVVC::OpenDisplay` have
 > **truncated reported bodies** in the Ghidra DB, so `get_xrefs_to` attributed
@@ -345,7 +343,7 @@ nothing a two-minute one did not.
 
 ### Asynchronous cursor refresh: implementing `cGD_LFB16::Refresh`
 
-The engine repaints the pointer **between frames**, and that is how a 12fps game
+The engine repaints the pointer between frames, and that is how a 12fps game
 felt responsive in 2000. `cIntuition::TimerProc` runs on the 30Hz `setitimer`
 heartbeat and, gated on `GD->IsAsyncRefreshCapable()`, calls `MouseRefresh` +
 `cSprite::Refresh`. `cSprite::Refresh` erases the old pointer (`RestoreBg`),
@@ -357,8 +355,8 @@ are traps for us:
 
 | | Original | Us |
 |---|---|---|
-| `IsAsyncRefreshCapable()` | returns 1 — an LFB *is* the display | still returns 1, but now it is a lie |
-| `Refresh(rect)` | `{ return; }` — writing the LFB already displayed it | `{ return; }` — the pixels sit in a staging buffer |
+| `IsAsyncRefreshCapable()` | returns 1 — an LFB *is* the display | returns 1, but an LFB is no longer the display |
+| `Refresh(rect)` | `{ return; }` — writing the LFB already displayed it | `{ return; }` — the pixels sit in a staging buffer, so the no-op drops the frame |
 
 `cGD_LFB16` is the **linear framebuffer** GD: on real hardware, writing to it is
 writing to the screen, so an empty flush is correct. (The X backend substitutes
@@ -372,22 +370,22 @@ timer existed to buy.
 The fix implements the method rather than patching anything: an entry-point
 override (`install_gd_refresh`, the same seam `blit.cpp` uses) marks the frame
 dirty, and `present_async_cursor` does the LFB→SDL copy at the next safe point.
-Three things make it correct:
+Supporting this:
 
-- **It does not present from inside the override.** `cSprite::Refresh` calls
+- It does not present from inside the override. `cSprite::Refresh` calls
   `Refresh` *twice* — once after the erase, once after the repaint — so
   presenting on the first would show the erased pointer as its own frame.
-- **The present happens on the `usleep` resume path**, right after the spliced
+- The present happens on the `usleep` resume path, right after the spliced
   tick returns. The frame limiter sleeps at the *top* of `cProvince_Do`, so the
   LFB holds the **last completed frame** at that moment: no half-drawn scene, and
   `TimerProc`'s erase/repaint pair has finished.
-- **It is skipped when the scene already outruns the heartbeat** (>25 ms since
+- It is skipped when the scene already outruns the heartbeat (>25 ms since
   the last present). The realm screen presents faster than 30Hz on its own, where
   an extra present would buy nothing.
 
 `THEOC_LEGACY_CURSOR=1` reverts to the inherited no-op. Note the side effect on
 instruments: province now presents ~30×/s while its simulation still steps
-12×/s, so **`THEOC_FPS`'s fps figure is no longer a proxy for sim rate** — see
+12×/s, so `THEOC_FPS`'s fps figure is no longer a proxy for sim rate — see
 [diagnostics.md](diagnostics.md).
 
 ### x87 float returns: `return_double`
@@ -537,8 +535,9 @@ emulation thread.
 - **The game's load base is not read from a variable, but it is confirmed.**
   `theocracy.real`'s program headers give `PT_LOAD 0` at va `0x08048000`
   (`R-X`, filesz = memsz `0x47e565`) and `PT_LOAD 1` at `0x084c7580`
-  (`RW-`, filesz `0xd0ae4`, memsz `0x1ba978`) — matching
-  [m1-loader.md](m1-loader.md). The *host* never names a game base, though:
+  (`RW-`, filesz `0xd0ae4`, memsz `0x1ba978`), re-derivable with `readelf -l`
+  or [`tools/elfq.py`](../../tools/elfq.py). The *host* never names a game base,
+  though:
   `main.cpp`'s backtrace labeller and the profiler simply call anything outside
   `[MVOS_BASE, MVOS_BASE + 0x200000)` "game". That is fine for labelling and
   wrong as a general test, since it would also label a host region "game" —
@@ -547,8 +546,7 @@ emulation thread.
 ### Accepted behaviours and won't-fixes
 
 Deliberate non-bugs. Recorded so they are not rediscovered as defects and
-"fixed" at cost. (Migrated here 2026-08-03 when `task_fifo.md` was retired;
-these were the only decisions in it that had no other home.)
+"fixed" at cost.
 
 - **A cutscene is bracketed by ~1.35 s of decode.** `SMPEG_new` decodes the whole
   movie up front (~0.9 s for the intro) and `SMPEG_delete` frees it (~0.4 s).
@@ -565,16 +563,8 @@ these were the only decisions in it that had no other home.)
   genuinely compute-bound there and rarely yields. Steady state is clean (0
   underruns/s); see [frame-timing.md](frame-timing.md).
 - **Guest heap grows ~18 KB per load/unload cycle** — measured very linearly over
-  a 20-cycle soak, i.e. ~7000 cycles to exhaust the 128 MB arena. Left unchased;
+  a 20-cycle soak, i.e. you'd need ~7000 cycles to exhaust the 128 MB arena. Left unchased;
   attributing it needs an allocation-site histogram that does not exist; see [heap-growth-trials.md](heap-growth-trials.md).
-
-**One harness lesson worth keeping**, from `THEOC_LONGRUN` silently capping
-every session at ten minutes: it armed the watchdog but left `THEOC_START_SEC`
-at its 600 s default, so multi-hour sessions ended early *and* ended with a line
-that read like a fault. **A harness that configures only some of the knobs its
-own purpose depends on is worse than one that configures none**, because the one
-it missed presents as a result. It now defaults `THEOC_START_SEC=0` the same way
-it defaults the watchdog.
 
 ### Why teardown skips `CloseSubsystems`
 
@@ -584,28 +574,29 @@ down `TimerSystem`, `VVC`, `VKeyboard`, `VMouse`, `SystemPointer`, `VCD` and
 oversight** — the constant that used to sit unused in `main.cpp` has been
 deleted so it stops implying otherwise.
 
-The reasoning:
+The reasoning, in short, is that the game owns *nothing* since we emulate the OS boundary,
+and the application terminating frees up everything we'd otherwise manually free.
+In a few more words:
 
-- **Nothing outlives the process.** Everything `CloseSubsystems` releases is
+- Nothing outlives the process. Everything `CloseSubsystems` releases is
   either host-owned or inside the Unicorn mapping. SDL audio and video are opened
   and closed by us (`Video`, the audio device in `traps.cpp`); the guest heap is
   one big mapping the OS reclaims. There is no guest-side resource that survives
   exit for the guest to leak.
-- **It closes devices, not files.** Nothing in that sequence flushes game state,
+- It closes devices, not files. Nothing in that sequence flushes game state,
   so skipping it cannot lose a save or corrupt a file.
-- **Calling it would add a failure surface, not remove one.** Those seven close
+- Calling it would add a failure surface, not remove one. Those seven close
   paths run through HLE device stubs that no other code path exercises, at the
   one moment a fault is most annoying and least diagnosable — a crash *after* the
   session is otherwise over. Zero upside, non-zero downside.
 
-**Settled 2026-08-04, after three platforms.** Windows was the named candidate
+Windows was one candidate
 for this being wrong — a platform where an audio or video device left open by
-the guest's own bookkeeping might matter. It shipped and was played, and nothing
+the guest's own bookkeeping might matter. Once shipped and tested, nothing
 surfaced: no device left claimed after exit, no handle warning, no second-launch
-failure on any of macOS, Linux or Windows. The decision above is therefore
-closed rather than pending, and it is not carried on any worklist.
+failure on any of macOS, Linux or Windows.
 
-**What would reopen it**, narrowed by that evidence to two things, neither of
+What would reopen this, narrowed by that evidence to two things, neither of
 which is a platform:
 
 - **The host stops being one-shot** — an in-process restart, a "quit to menu that
@@ -621,7 +612,7 @@ arguments, after `Start` returns and before the video hold.
 
 ### Game-space addresses in the host
 
-**Resolved by name — done (2026-07-27).** Four singleton pointers (`VVC`
+**Resolved by name.** Four singleton pointers (`VVC`
 `0x08598cec`, `Intuition` `0x08598454`, `VMouse` `0x08598c3c`, `VKeyboard`
 `0x08598b58`) used to be hardcoded in `traps.cpp`. All four are `R_386_COPY`
 globals listed in `data/theocracy_copyrelocs.tsv`, so the executable's dynamic
@@ -644,32 +635,32 @@ singleton globals resolved by name: 4/4`. This is the same fix that let the
 
 There is no name to resolve, so `abs_sym` cannot help and no amount of work
 makes these safe against a differently built executable. Both are accepted
-deliberately, with the reasoning recorded rather than left implicit:
+deliberately:
 
-- They serve **developer features, not the port**. `THEOC_CONSOLE` and
-  `THEOC_EDIT` reach *into* the game to expose its own debug surface, which is a
-  step beyond "run the shipped binary faithfully". That scope creep was a
-  conscious call.
-- Both are **opt-in and default-off**. With the env vars unset, neither address
-  is ever read, so a mismatched executable behaves exactly as before.
-- Both are **guarded at use**: the console open is refused unless a `cShell` is
+- `THEOC_CONSOLE` and `THEOC_EDIT` reach into the game to expose its own debug
+  surface, which is a step beyond running the shipped binary faithfully — a
+  deliberate scope expansion for developer features, not part of the port itself.
+- Both are opt-in and default-off. With the env vars unset, neither address is
+  ever read, so a mismatched executable behaves exactly as before.
+- Both are guarded at use: the console open is refused unless a `cShell` is
   attached, and the edit stamp is skipped while `g_GameSession` is null. A wrong
   address yields a no-op, not a corrupted write.
 
 If the game surface ever needs to be addressed properly, the answer is a
 signature scan or a per-build address table — not another bare constant. Full
 context: [../subsystems/dev-console.md](../subsystems/dev-console.md).
-- **Teardown deliberately skips `CloseSubsystems`** — decided 2026-07-27, see
+
+Notes:
+- Teardown deliberately skips `CloseSubsystems`, see
   below.
-- **`Machine::install_traps` vs `add_code_traps`.** The header calls
+- `Machine::install_traps` vs `add_code_traps`. The header calls
   `install_traps` a "back-compat shim". Both are live; `install_traps` is used
   only for the import window.
 - `Video::keep_open_for` presents outside the frame counter, which is why
   `stop_watchdog()` must be called before it. That ordering is a real coupling,
   not a stylistic one.
-- **Trap-window sizing.** `add_code_traps` maps `(nslots + 0xfff) & ~0xfff`
-  bytes, minimum one page. With ~119 HLE symbols today that is one page. Since
-  2026-07-27 the function **checks the rounded window** against the nearest
+- Trap-window sizing. `add_code_traps` maps `(nslots + 0xfff) & ~0xfff`
+  bytes, minimum one page. With ~119 HLE symbols today that is one page. The function now checks the rounded window against the nearest
   higher trap base (`PLUGIN_TRAP_BASE`, `TRAP_BASE`, `VT_TRAP_BASE` sit
   `0x01000000` apart) and against address overflow, and throws naming both
   extents rather than mapping over its neighbour. Unreachable at today's slot

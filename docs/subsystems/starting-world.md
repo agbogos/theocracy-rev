@@ -1,18 +1,17 @@
 # The starting world — what actually ships in `init.dat`
 
-Every map's opening state is a **savegame**, not code. `data/campaign/init.dat`
-and all eight `data/scenario/scn*/init.dat` carry the `theosg42` magic at offset
-64 and go through the ordinary `LoadGame` path. So the men, the heroes and the
-magic items a player starts with are *loaded from a file*, and a sweep of call
-sites — however exhaustive — cannot see any of them.
+Every map's opening state is a savegame. `data/campaign/init.dat` and all eight
+`data/scenario/scn*/init.dat` carry the `theosg42` magic at offset 64 and go
+through the ordinary `LoadGame` path. The men, the heroes and the magic items a
+player starts with are therefore *loaded from a file*, which is why a sweep of
+call sites cannot see any of them however exhaustive it is.
 
-That is the correction this doc exists to make durable. It closes the last open
-question of [heroes.md](heroes.md) and [magic-items.md](magic-items.md), and the
-"created by no code path" wording that [missions.md](missions.md) had to leave
-standing.
+That closes the last open question of [heroes.md](heroes.md) and
+[magic-items.md](magic-items.md), and the "created by no code path" wording
+[missions.md](missions.md) had to leave standing.
 
-**Read off `theocracy.real` 2026-08-09.** Addresses are Ghidra space, game base
-`0x08048000`. Findings are mirrored into the Ghidra DB as renames and comments.
+Read off `theocracy.real`; addresses are Ghidra space, game base `0x08048000`.
+Findings are mirrored into the Ghidra DB as renames and comments.
 
 ## The load chain
 
@@ -35,17 +34,17 @@ LoadGame(path)                                    0x081a07f0
   └─ (header check, ManIndexArray/BuildingIndexArray cleanliness asserts)
 ```
 
-Two details worth having written down.
+Two details in that chain are worth spelling out.
 
-**The header check compares the magic with itself — and works anyway.** The
+The header check appears to compare the magic with itself, and works anyway. The
 function copies the eight literal bytes into `local_2c`, then reads 0x48 bytes
 into `local_6c[64]`, which is the *adjacent* stack slot: the read deliberately
 overruns into `local_2c` and replaces the copy with the file's own bytes before
 the comparison. It reads as a tautology in the decompiler and is not one. The
-72-byte header is otherwise unread — consistent with
+72-byte header is otherwise unread, consistent with
 [save-format.md](save-format.md), where it is 54 bytes of uninitialised stack.
 
-**The file names its own scenario.** `cGameSession_ctor_fromStream` reads the
+The file names its own scenario. `cGameSession_ctor_fromStream` reads the
 scenario id out of the stream and builds the matching `cGameInfo` from it, so a
 world file is self-identifying. That is what makes `THEOC_WORLD_FILE` (below)
 sound: serving `scn3/init.dat` for the campaign's open still loads it as
@@ -160,7 +159,7 @@ is logged once as `[world] THEOC_WORLD_FILE: '<guest>' -> '<host>'`.
 
 ## The census
 
-All nine world files, read by the game's own loader (2026-08-09):
+All nine world files, read by the game's own loader:
 
 | file | men | heroes | magic items |
 |---|---:|---|---|
@@ -176,22 +175,21 @@ All nine world files, read by the game's own loader (2026-08-09):
 
 ### The three questions this was run to answer
 
-1. **Jarakhi (hero 11) is in `data/campaign/init.dat`** — confirmed. He is in no
-   other file, appears in no `hero.cfg` row and is handed out by no mission: the
-   campaign's player character reaches the game exactly one way, as save data.
+1. **Jarakhi (hero 11) is in `data/campaign/init.dat`.** He is in no other file,
+   appears in no `hero.cfg` row and is handed out by no mission, so the
+   campaign's player character enters the game only as save data.
    [heroes.md](heroes.md)'s claim is now read off the running loader rather than
    inferred from his absence everywhere else.
-2. **Tlechlal (19) is in `scn6/init.dat`** — the last unexplained hero, and the
-   one nobody had a story for. He is a scenario-6 fixture, not campaign content,
-   which is why every campaign-shaped search missed him.
+2. **Tlechlal (19) is in `scn6/init.dat`.** He is a scenario-6 fixture rather
+   than campaign content, which is why the campaign-shaped searches missed him.
 3. **Mask of the Brave (item 1) is in none of the nine worlds.** With config
    placement, mission placement and now all nine world files checked, the
-   stronger claim stands: **it is dead in the shipped game.** The withdrawal
-   `magic-items.md` and `missions.md` recorded on 2026-08-09 is lifted.
+   stronger claim stands: it is dead in the shipped game. The withdrawal
+   `magic-items.md` and `missions.md` recorded is lifted.
 
-**Umochi (hero 9) is in no world file either.** Every channel is now checked for
-him — `hero.cfg`, mission rewards, and serialised state — and he is in none. The
-placeholder reading in [heroes.md](heroes.md) is as strong as it can get.
+Umochi (hero 9) is in no world file either. Every channel has now been checked
+for him — `hero.cfg`, mission rewards and serialised state — and he is in none,
+so the placeholder reading in [heroes.md](heroes.md) rests on all four.
 
 ### Four of the fourteen "no code path" items do ship
 
@@ -206,20 +204,19 @@ inert. A player can still summon any of them from the developer console.
 
 ### The campaign world looks generated, then edited
 
-The campaign census lines up against the two config placers with a precision
-that is hard to read any other way:
+The campaign census lines up against the two config placers in three ways:
 
-- Its twelve heroes are **exactly `hero.cfg`'s eleven, plus Jarakhi**.
+- Its twelve heroes are exactly `hero.cfg`'s eleven, plus Jarakhi.
 - Its items are the `hero.cfg` ∪ `mitem.cfg` union minus 30 and 40, plus the
   four editor-placed ones above.
-- **Items 16 and 36 appear twice**, and 16 and 36 are precisely the two ids that
-  appear in *both* config files.
+- Items 16 and 36 appear twice, and those are precisely the two ids that appear
+  in *both* config files.
 
-So `data/campaign/init.dat` reads as the output of starting a new game — running
-the placement the config files describe — then editing in a player character and
-a handful of extra items and saving. That makes `hero.cfg` and `mitem.cfg`
-authoring inputs whose effect reaches players through the world file, which is a
-different thing from being loaded at play time.
+So `data/campaign/init.dat` reads as the output of starting a new game, which
+runs the placement the config files describe, then editing in a player character
+and a handful of extra items and saving. That makes `hero.cfg` and `mitem.cfg`
+authoring inputs: their effect reaches players through the world file, and not
+by being loaded when the game runs.
 
 Two cautions on the last point, both about what was *not* measured. No item was
 created outside the stream during any run — placement never fired — but every
@@ -257,11 +254,10 @@ branch is unreachable. Mode 0 also asks for **paused = 1**, i.e. the game's own
 edit mode — which is exactly what makes the console's `save` command legal
 ([dev-console.md](dev-console.md)). `save` writes `<mapdir>/init.dat`.
 
-So the pipeline is **generate → edit → `save`**, gated by one constant. This is
-not code left behind by accident: a small team used the game as its own campaign
-builder rather than writing a separate editor, and closed the door on the way
-out. The `1323` in the generator is a default the authoring overrode, not a
-forgotten value.
+So the pipeline is generate → edit → `save`, gated by one constant. The game is
+its own campaign builder, and the mode is reachable only by changing that
+constant. The `1323` in the generator is a default the authoring overrode rather
+than a forgotten value.
 
 ### Its inputs had already stopped working
 
@@ -271,11 +267,10 @@ Generation dies immediately on `Fatal:Unknown textfile format! data/mitem.cfg`.
 tree with no magic at all (the others are `mvos.cfg`, which is ours, and
 `servers.txt`). 4473 shipped files are `RSA4096`.
 
-Beware the misread this doc originally made: `theocracy sux` and `mutant
-technology` sit next to the magic in libmvos and look like two more formats.
-They are the two **XOR keys**, periods 13 and 17
-([phls-format.md](../reference/phls-format.md)). Three adjacent strings, one
-format.
+One trap here: `theocracy sux` and `mutant technology` sit next to the magic in
+libmvos and look like two more formats. They are the two XOR keys, periods 13
+and 17 ([phls-format.md](../reference/phls-format.md)). Three adjacent strings,
+one format.
 
 So the campaign builder cannot read its own inputs in the shipped build. That is
 further evidence the path was closed deliberately — once nothing read those two
@@ -313,20 +308,16 @@ unchanged.
 Both dates were read out of the running game rather than computed. Note the
 generated world has **no player character** — Jarakhi is a hand-edit.
 
-**And then it was played** (2026-08-09), which is the only thing that could
-settle what "generated" actually means:
+A generated world was then played, which is what settled the rest:
 
 - **Every AI tribe starts with fewer provinces.**
 - **The starting province has different units and a different distribution.**
 - **The player starts with zero slaves**, so the opening move has to be demoting
   soldiers just to feed the province. It is **not playable as shipped content**.
 
-That is the finding. Generation produces a *scaffold* — a legal world, not a
-designed one — and the designer's job was everything between it and
-`data/campaign/init.dat`: the population, the balance of provinces, the player
-character, and four items placed by hand. It also makes the "empty start" a
-genuinely interesting basis for a new campaign, which is what the recovered
-builder is now for.
+Generation produces a scaffold: a world that loads and runs, with the designer's
+work being everything between it and `data/campaign/init.dat` — the population,
+the balance of provinces, the player character, and four items placed by hand.
 
 ## The Spanish, and what the start date costs
 
@@ -349,11 +340,10 @@ Because the arrival is absolute, **the start date is the campaign length**: 1419
 leaves 99 years 8 months, 1323 leaves 195 years 8 months. The shipped campaign
 is very close to exactly half the one the generator builds.
 
-Whether that was a rush or a decision is not settled by anything here, and both
-readings survive: 1419 → a historically exact 1519 is a clean century, while
-1323 sits on the founding of Tenochtitlan. What *is* established is that the
-change was made in the data, late, and the code still carries the longer
-default.
+Nothing here settles whether that was a rush or a decision. Both dates have a
+reading: 1419 to a historically exact 1519 is a clean century, and 1323 is the
+founding of Tenochtitlan. What is established is that the change was made in the
+data, late, and that the code still carries the longer default.
 
 **The mission deadlines are relative and were not retuned.** They are `current
 date + N`, so halving the campaign did not tighten any individual mission — it
@@ -374,9 +364,10 @@ at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
 ## Open threads
 
 - **Whether a generated world is playable is deliberately not a question here.**
-  Closed 2026-08-09 by decision, not by evidence: the builder's job was always to
-  hand a designer something to work on, so "not survivable as-is" is the expected
-  output rather than a defect to chase. What the builder is *for* now is new
+  Closed by decision rather than by evidence: the builder's job was always to
+  hand a designer something to work on, so "not survivable as-is" is the
+  expected output rather than a defect to chase. What the builder is *for* now
+  is new
   campaigns, and the interesting version of the question is what a 195-year
   campaign should open with — a design question, not an RE one.
 
@@ -384,8 +375,8 @@ at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
   caste counter sits on `CreateMan_fromStream`, which is the **load** path, so a
   generated world reports `men in file: 0`. That is the instrument, not the map.
 
-- ~~**Does the AI attack independent provinces?**~~ **Answered 2026-08-10 by
-  play: it does.** The worry was that the shipped campaign hides the question —
+- **Does the AI attack independent provinces?** Answered by play: it does. The
+  worry was that the shipped campaign hides the question —
   there the AI tribes already hold everything they will ever hold and the grey
   provinces are simply left alone, whereas a generated world leaves roughly 60%
   of the map unclaimed, so an AI that ignored independents would have opponents
@@ -400,9 +391,9 @@ at all: `THEOC_EDIT=1 THEOC_CONSOLE=1`, then `date 1323 7 4` and `save`.
   distance, optimal force and actual force ([dev-console.md](dev-console.md)),
   which is how a *quantitative* answer — do they value greys as highly as an
   enemy's province? — would be got without any RE.
-- ~~**`SPAIN_RND_YEAR`.**~~ **Closed 2026-08-10** — the player's recollection was
-  right and the code has two mechanisms, neither of them jitter on the default
-  date. First, the arrival is **two staggered waves**: `Spain0` at
+- **`SPAIN_RND_YEAR`.** Answered: the player's recollection was right, and the
+  code has two mechanisms, neither of them jitter on the default date. First,
+  the arrival is two staggered waves: `Spain0` at
   `SPAIN_ENTER_YEAR/03/07`, `Spain1` at that plus `SPAIN_TIME_OFFSET_DAY / 2`,
   each re-arming itself every `SPAIN_TIME_OFFSET_DAY` until a counter seeded from
   `SPAIN_UNITS_BY_PROV` runs out. Second, `SpainTimer_MaybeReroll` (`0x081fa6a0`,

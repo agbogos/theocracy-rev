@@ -4,20 +4,19 @@ How the engine comes alive, and what it sits on. All addresses in `libmvos.so`.
 
 ## The split: framework here, main loop in the game binary
 
-`cApplication` in libmvos is a **framework base class**. The game's run loop
-lives in the game executable, but — **correction to the earlier read** — the
-orchestrator does not: **`main()` itself is exported by libmvos** (file
-`0x951e0` / Ghidra `0xa51e0`, 0xfc bytes; the game binary *imports* `main` and
-its `main@0x804fb44` is just a PLT thunk). AmigaOS-style inversion: the
-framework owns startup, the app provides `Init`/`Start` callbacks. libmvos
-provides:
+`cApplication` in libmvos is a framework base class. The game's run loop lives
+in the game executable, but the orchestrator does not: `main()` itself is
+exported by libmvos (file `0x951e0` / Ghidra `0xa51e0`, 0xfc bytes; the game
+binary *imports* `main`, and its `main@0x804fb44` is just a PLT thunk). This is
+the AmigaOS inversion — the framework owns startup and the app provides
+`Init`/`Start` callbacks. libmvos provides:
 
-- The **requirement contract** — static flags declaring which subsystems an app
-  needs (set directly by the game's exported `Init__12cApplication`, which
-  assigns all nine `= 1`; the `XxxRequired()` setters exist but Theocracy's
-  `Init` writes the globals directly).
-- The **subsystem singletons + their Open/Close entry points**, driven by
-  `main()` after `Init()`.
+- The requirement contract: static flags declaring which subsystems an app
+  needs, set directly by the game's exported `Init__12cApplication`, which
+  assigns all nine `= 1`. The `XxxRequired()` setters exist, but Theocracy's
+  `Init` writes the globals directly.
+- The subsystem singletons and their Open/Close entry points, driven by `main()`
+  after `Init()`.
 
 Every `cApplication` accessor's only xref is `From Entry Point [EXTERNAL]`, i.e.
 called from the game binary.
@@ -52,13 +51,13 @@ Confirmed. This is the function our native HLE runtime replaces verbatim (steps
 
 ### `OpenSubsystems()` construction order (`0xa4fae`)
 Each gated by its flag (read after `Init()`):
-1. **Video device** — `GetVideoDeviceName()` reads `mvos.cfg` `vmachine/video`
-   (**not** `device` — corrected 2026-08-15 from the decompiled body, which
-   passes the literal `"video"` to `cEnvClass::FindVariable`); name → loader.
-   **Default (unset) = `"xf86"`** → `LoadDevicePlugins` (`0xa4990`), which
-   dlopens the whole `libmvos_*_x.so` family and creates globals **`VVC`,
-   `VKeyboard`, `VMouse`, `SystemPointer`** (so keyboard/mouse/pointer come from
-   *here*, not separate steps). Alt names → `glide` (`0xa4ce0`) / a third
+1. **Video device** — `GetVideoDeviceName()` reads `mvos.cfg` `vmachine/video`;
+   the decompiled body passes the literal `"video"` to
+   `cEnvClass::FindVariable`. The name selects a loader, and unset defaults to
+   `"xf86"` → `LoadDevicePlugins` (`0xa4990`), which dlopens the whole
+   `libmvos_*_x.so` family and creates the globals `VVC`, `VKeyboard`, `VMouse`
+   and `SystemPointer` — so keyboard, mouse and pointer come from here rather
+   than from separate steps. Alt names → `glide` (`0xa4ce0`) / a third
    (`0xa4910`); unknown → `Fatal("Unknown video device")`. Prints `"Useing
    default video device xf86."` (sic).
 2. **Redbook** flag → `new(0x14)` → `VCD` (CD audio).
@@ -71,9 +70,8 @@ Each gated by its flag (read after `Init()`):
 `CloseSubsystems()` (`0xa50e0`) tears down in fixed order: `TimerSystem`, `VVC`,
 `VKeyboard`, `VMouse`, `SystemPointer`, `VCD`, `SoundCard`.
 
-**Config vocabulary — corrected and closed 2026-08-15.** The earlier version of
-this line listed vars `device` and `fullscreen`, and both were wrong. libmvos
-reads **exactly five** keys, all in class `vmachine`, each via
+**Config vocabulary.** libmvos reads exactly five keys, all in class
+`vmachine`, each via
 `FindClass("vmachine")` → `FindVariable(<key>)` with a hardcoded fallback:
 
 | Key | Reader | Default when absent |
@@ -84,7 +82,7 @@ reads **exactly five** keys, all in class `vmachine`, each via
 | `cdrom_mountpoint` | `VM_GetCDRomName` (`0xa52e0`) | `"/mnt/cdrom"` |
 | `fillobjmem` | boot step 5 (`0xa5210`) | fill on; **only a leading `'n'` clears it** |
 
-There is no `device` key and **no `fullscreen` key**: the literal string
+There is no `device` key and no `fullscreen` key: the literal string
 `fullscreen` does not occur anywhere in `libmvos.so` *or* `theocracy.real`,
 though the installer writes the line. The only other key in a shipped `mvos.cfg`
 is `[game] language`, which the **game** reads (to build
@@ -96,10 +94,11 @@ Static globals (`Video`, `Sound`, `Mouse`, `Pointer`, `Keyboard`, `Redbook`, `Ti
 - setter `XxxRequired()` → sets flag to 1 (e.g. `VideoRequired` @ `0x57af0`).
 - getter `IsXxxRequired()` → returns flag (e.g. `IsVideoRequired` @ `0x57a50`).
 
-The game's `cApplication` subclass declares its needs (e.g. `VideoRequired();
-SoundRequired(); MouseRequired();`), and the run loop opens only those
-subsystems. `Redbook` = CD audio; `Intuition` = the Amiga-style UI/windowing
-layer.
+The contract is that a `cApplication` subclass declares its needs and `main()`
+opens only the subsystems whose flag is set. Theocracy sets all nine, and does
+it by writing the globals directly rather than through the setters, so the
+selective path is never exercised. `Redbook` is CD audio; `Intuition` is the
+Amiga-style UI and windowing layer.
 
 ## Library load — global constructors
 
@@ -129,6 +128,29 @@ the `.ctors` table (`PTR_PTR_000bee60`) running each global constructor, then
 The concrete pixel backend (`cGD_LFB8/15/16/24/32`, etc.) is reached via vtable
 — selected/loaded at runtime (see below), not hard-linked.
 
+### Screen activation and the refresh pair
+
+`cIntuition::ActivateScreen` (`0x9d830`) stores the screen at `Intuition+0x24`,
+the active-`cScreen` pointer the whole render path reads (see
+[host-architecture.md](../porting/host-architecture.md)). A `cScreen` opens with
+the same three fields as a `cVModeRequest` — width `+0x00`, height `+0x04`,
+depth code `+0x08` — which is why `ActivateScreen` can hand the screen straight
+to `OpenDisplay`; the root `cVObject` of the widget tree is at `+0x14`.
+
+`cScreen::BeginRefresh` (`0x9d2a0`) opens a frame. `cScreen::EndRefresh`
+(`0x9d2d0`) paints the widget tree with `PaintTree(root, *(VVC+0x14))`, then
+calls `SwapBuffers`.
+
+### Game-side global constructors
+
+The game binary runs 215 of its own `.ctors` after libmvos's. Entry #194,
+`FUN_08141f30` (`RegisterGlobalResources`), constructs roughly 200 resource
+objects, so the named global assets exist before the later constructors look for
+them. One is `DAT_085bf980`, an ordinary
+`cData_Font("data/fonts/small_1pix.mft")` that `FUN_08063600` — the intro-demo
+subtitle table, read from `data/rd/rd.txt` — consumes through
+`cAnimBitmap::GetPalette` while building its `cVObject` widgets.
+
 ## Platform layer — what libmvos links against
 
 From the dynamic imports:
@@ -145,41 +167,32 @@ From the dynamic imports:
 | libc | file/str/malloc/`__builtin_new`/`__builtin_vec_new` | Note: mixes libc `malloc` with C++ `new[]` (the latter backs `cSystemMemory`). |
 
 **Bidirectional game↔engine coupling:** libmvos *imports* symbols from the game
-binary — `cDisplay`, `Init`, `Start`, `RollingDemoFrame`. So the two are
-mutually linked; the engine calls back up into game-provided code (e.g.
-`RollingDemoFrame` = attract/demo-mode callback).
+binary — `cDisplay`, `Init`, `Start`, `RollingDemoFrame` — so the engine calls
+back up into game-provided code (`RollingDemoFrame` is the attract-mode
+callback).
 
-## Bootstrap sequence (reconstructed)
+## What runs outside `main()`
 
-1. **`.so` load** → `_init` runs global ctors → subsystem static state built
-   (video mode info, input config, palette, env, audio).
-2. **libmvos `main()`** (Ghidra `0xa51e0`) calls the game's exported
-   `Init__12cApplication` → the nine requirement flags are set (Theocracy: all).
-3. **libmvos `main()`** opens each required subsystem (dlopen device plugins →
-   `VVC`/`VKeyboard`/`VMouse`/`VPointer` globals, sound card + server,
-   timer/SIGALRM, Intuition, network), then calls the game's
-   `Start__12cApplicationiPPc` — the whole game runs inside that call. Video
-   mode itself is set later, from game code, via `cVVC::OpenDisplay(mode)`.
-4. **Frame loop** (in game binary) pumps events → updates → paints the back
-   buffer → flips. Timer SIGALRM triggers periodic repaints unless
-   `NoTimerInterruptPaintFlag` is set.
-5. Shutdown reverses it (`.dtors`, subsystem Close).
+The decompiled sequence above starts at `main()`. Two things bracket it:
+
+- Before it, the `.so` load runs `_init` and the global constructors, which
+  build the subsystem static state — video mode info, input config, palette,
+  env, audio.
+- After `Start` returns, shutdown reverses the order through `.dtors` and the
+  subsystem Close entry points.
+
+The frame loop itself is in the game binary, inside `Start`: it pumps events,
+updates, paints the back buffer and flips, while the timer's SIGALRM triggers
+periodic repaints unless `NoTimerInterruptPaintFlag` is set. Video mode is set
+from game code too, via `cVVC::OpenDisplay(mode)`, not during subsystem open.
 
 ## Open threads
-- ~~Decompile `main` @ `0xa51e0`~~ **DONE** — see the boot-sequence section
-  above.
+
 - `LoadDevicePlugins` (`0xa4990`) internals — confirm it creates all four device
   globals (`VVC`/`VKeyboard`/`VMouse`/`SystemPointer`) and how the input
   plugins' `Create*Device`/`QueryDevice` are resolved (should mirror the video
   handshake in [porting/vvc_x-backend.md](../porting/vvc_x-backend.md)).
 - `IdentifyFileSystemMvosCfg` (`0xa4640`) — where it searches for `mvos.cfg`
   (cwd `~/.theocracy` per launcher) and the full `EnvSystem` class/var schema.
-- ~~Trace how a graphics backend is chosen and `dlopen`'d~~ **RESOLVED** —
-  `LoadDevicePlugins` / `Create*Device` ABI, see
-  [porting/vvc_x-backend.md](../porting/vvc_x-backend.md).
-- ~~Switch to the game binary to read the concrete `cApplication::Run`~~
-  **RESOLVED** — there is no game-side `Run`; the game's frame loop is
-  `RealmGameLoop` etc. inside `Start` (see
-  [game-flow-and-main-loop.md](game-flow-and-main-loop.md)).
 - `RollingDemoFrame` / `RollingDemo*` — attract-mode hook provided by the game;
   where is it driven from in libmvos?

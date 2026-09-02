@@ -2,19 +2,19 @@
 
 There are two ways to play Theocracy on a modern machine. One is this repo's
 port. The other is to run the shipped Linux binaries unmodified on a period
-Linux inside a VM, which is what was done first — before any of the port
-existed, and before any of the disassembly did.
+Linux inside a VM, which is what was done first, before any of the port or the
+disassembly existed.
 
-This is the record of that setup. It is worth keeping for three reasons: it is
-the only configuration in which the game runs as *entirely* original code, it is
-the reference the port is judged against, and every workaround in it turned out
-to have a cause that the disassembly later named. Each section says which.
+This is the record of that setup. It is the only configuration in which the game
+runs as *entirely* original code, so it is the reference the port is judged
+against, and every workaround in it turned out to have a cause the disassembly
+later named. Each section says which.
 
 **Provenance.** These are session notes from a UTM setup on macOS, taken while
 getting the game running and not re-verified since. Where a claim has since been
 confirmed against the binaries, it is cross-referenced. Where it has not, it is
-labelled *observed*. Written up here 2026-08-05; the notes themselves predate
-the port.
+labelled *observed*. The notes predate the port and were written up here
+afterwards.
 
 ## 1. Which past to choose
 
@@ -26,16 +26,16 @@ Two guest systems were tried. **Debian Woody (3.0r6, i386)** is the one to use.
 | Audio | OSS, one module, then smooth — see §4 | stuttered, sometimes refused to initialise |
 | Timing | correct | game timers ran fast, cutscenes stuttered, under both VirtualBox and UTM |
 | Responsiveness | snappy despite the age of the OS | sluggish in the VM even with more RAM |
-| Control | colour depth, resolution and daemons are all manually settable | fights back |
+| Control | colour depth, resolution and daemons are all manually settable | none of the three is directly settable |
 
-The reason is not really Windows-vs-Linux. It is that the Linux release runs
-**natively** from its own ELF binaries with `LD_LIBRARY_PATH` pointed at the
-shipped `libmvos.so`, with no installer, no registry and no DLL closure, and
-that a 2002 distribution still lets you set the two things the engine is fussy
-about — the X visual depth and the OSS device — by editing a file.
+The reason has little to do with Windows against Linux. The Linux release runs
+natively from its own ELF binaries with `LD_LIBRARY_PATH` pointed at the shipped
+`libmvos.so` — no installer, no registry, no DLL closure — and a 2002
+distribution still lets you set the two things the engine is fussy about, the X
+visual depth and the OSS device, by editing a file.
 
-Use XP only if you need a Windows-only tool in the same VM, and expect to fight
-it. Note also that the Windows release is protected where the Linux one is not,
+Use XP only if you need a Windows-only tool in the same VM. Note also that the
+Windows release is protected where the Linux one is not,
 which is why the port runs the Linux binaries on all three hosts
 ([../porting/other-os-ports.md](../porting/other-os-ports.md)).
 
@@ -51,7 +51,7 @@ which is why the port runs the Linux binaries on all three hosts
 | Disk | 8 GiB | 8–16 GiB |
 | Kernel | Linux 2.4.x | Windows NT 5.1 SP3 |
 
-## 2. Colour depth is law
+## 2. Colour depth
 
 **Symptom.** The game exits with
 
@@ -76,8 +76,8 @@ if (!ActivateScreen(Intuition, &screen)) {
 }
 ```
 
-That is §2's symptom in three lines: 16-bit, then 15-bit, then die. There is no
-24-bit branch to fall through to. The same block sits in the `SaveGame` error
+There is no 24-bit branch to fall through to. The same block sits in the
+`SaveGame` error
 path at `0x081a0a10`, and the string appears many times over in the image, so it
 is the general shape rather than one site's quirk.
 
@@ -105,8 +105,9 @@ EndSection
 ```
 
 The depth needs at least one resolution listed under it or X will not use it.
-XFree86 wants every mode declared up front — there is no `xrandr` to fall back
-on — so declare a conservative one (800×600 or 640×480) if unsure, and match it
+XFree86 requires every mode to be declared up front and there is no `xrandr` to
+fall back on, so declare a conservative one (800×600 or 640×480) if unsure, and
+match it
 to the game's own resolution to avoid the server stretching or centring the
 image.
 
@@ -179,7 +180,6 @@ observation, and it is the one item below in "Open threads".
 The engine is OSS and only OSS: it opens `/dev/dsp` directly and configures it
 with `SNDCTL_DSP_SETFRAGMENT`, with no ALSA, no daemon and no fallback — see
 [../subsystems/platform-audio-threads.md](../subsystems/platform-audio-threads.md).
-Everything below follows from that.
 
 **"Permission denied" or "no such device".** OSS does not share a device between
 clients, and KDE's `artsd` holds it. Kill it, or turn it off for good in Control
@@ -204,18 +204,17 @@ modprobe i810_audio
 
 Add `i810_audio` to `/etc/modules` to make it stick.
 
-**Pick AC97 in the VM, not SB16.** The QEMU/UTM default SoundBlaster 16 works in
-the technical sense and stutters and drifts out of sync in the practical one.
-AC97 is new enough to be emulated well and old enough that a 2.4 kernel has a
-driver for it:
+**Pick AC97 in the VM, not SB16.** The QEMU/UTM default SoundBlaster 16 plays,
+but stutters and drifts out of sync. AC97 is emulated well by QEMU and a 2.4
+kernel still has a driver for it:
 
 ```
 -device AC97,audiodev=audio0
 ```
 
 With that combination sound was smooth and needed no mixer configuration.
-Neither ALSA nor PulseAudio is involved — one is irrelevant here and the other
-did not meaningfully exist yet.
+Neither ALSA nor PulseAudio is involved: the engine never uses ALSA, and
+PulseAudio postdates this software.
 
 | Component | Setting |
 |---|---|

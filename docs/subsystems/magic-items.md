@@ -1,14 +1,12 @@
 # Magic items
 
-The fifty magic items, what each one actually does, and the answer to the
-question that started this: **thirteen of them ship with no flavour text, and
-only three of those are unimplemented.** The missing text is a writing gap, not
-cut content.
+The fifty magic items and what each one does. Thirteen ship with no flavour
+text, and only three of those are unimplemented — so the missing text is a
+writing gap rather than cut content.
 
-**Read off `theocracy.real` 2026-08-08.** Addresses are Ghidra space, game base
-`0x08048000`. Effects are named by the game's own `selap.txt` keys; where a
-claim rests on description text or on structure rather than on a read function,
-it says so.
+Read off `theocracy.real`; addresses are Ghidra space, game base `0x08048000`.
+Effects are named by the game's own `selap.txt` keys, and where a claim rests on
+description text or on structure rather than on a read function, it says so.
 
 ## There are exactly fifty
 
@@ -69,13 +67,14 @@ begin (`Sun1_Wound`, `Moon2_ShieldPercent`, `Star4_ModifyAtt`, …), which is a
 useful independent sighting of the same school names that [heroes.md](heroes.md)
 derived from immunity slots.
 
-**The key column in the table below is read from each item's override bodies,
-not matched by name prefix.** Six of the fifty do not follow their own naming:
-Ghost Shield (`SGH`) reads `GS_*`, Dragon Ring (`RD`) reads `DR_ATT`, Ring of
-Concordance (`RPT`) reads `RT_DEF`, Symbol of Power (`MSP`) reads `MSYP_DEF`,
-and — the one that actually misleads — **`SF_HP_PERCENT` belongs to Shield of
-Reflection (`SFI`, id 11), not to Flame Spears (`SF`, id 31)**, whose only
-constant is `SF_ATT`. A prefix match gets that pair backwards.
+The key column in the table below is read from each item's override bodies
+rather than matched by name prefix, because six of the fifty do not follow their
+own naming: Ghost Shield (`SGH`) reads `GS_*`, Dragon Ring (`RD`) reads
+`DR_ATT`, Ring of Concordance (`RPT`) reads `RT_DEF`, and Symbol of Power
+(`MSP`) reads `MSYP_DEF`. The one that actually misleads is `SF_HP_PERCENT`,
+which belongs to Shield of Reflection (`SFI`, id 11) and not to Flame Spears
+(`SF`, id 31), whose only constant is `SF_ATT`. A prefix match gets that pair
+backwards.
 
 The vocabulary is small: `_ATT`, `_DEF`, `_HP`, `_POISON`, `_RANGE`, `_VRAD`
 (view radius), `_TIME_MIN`/`_TIME_MAX`, and a few `_PERCENT` bonuses against a
@@ -156,7 +155,7 @@ spears, `4` bows, `8` shields, `16` masks, `32` rings and earrings, `64` and
 cannot use this magic item", "Your man is using **another magic item of this
 type**", "No more room for another magic item".
 
-**The checker was read 2026-08-10** — `cMan_TryEquipItemSlot` (`0x080a81f0`),
+The checker is `cMan_TryEquipItemSlot` (`0x080a81f0`),
 called by `cMan_GiveItem` once the item is in a slot — and it settles
 bitmask-vs-category: **it is a bitmask**, and the ambiguity was real because the
 field is used *both* ways in the same function.
@@ -176,20 +175,20 @@ else {
 }
 ```
 
-So the **carry** test is a genuine bitwise AND against a mask the man's class
-supplies, while the **duplicate** test compares the field for equality — which
-is what makes it read like a category id. Both work because every shipped value
-is a single bit.
+The carry test is therefore a genuine bitwise AND against a mask the man's class
+supplies, while the duplicate test compares the field for equality, which is
+what makes it read like a category id. Both work because every shipped value is
+a single bit.
 
-The duplicate rule has an exemption nothing else records: **types `0x80` and
-`0x20` are excluded from it**, so a man may hold two rings/earrings (`0x20`) or
+The duplicate rule has an exemption nothing else records: types `0x80` and
+`0x20` are excluded from it, so a man may hold two rings or earrings (`0x20`) or
 two of the `0x80` oddments, but not two shields. The third warning string is
 `cMan_GiveItem`'s own, for the two-slot limit, and is checked before either of
 these.
 
 ### Who can carry what
 
-**Read 2026-08-10.** The other half of that AND — man vtable slot `+0x24` — is
+The other half of that AND — man vtable slot `+0x24` — is
 `cMan::GetItemCarryMask`, and every implementation in the image is a single
 `return <constant>`. So the entire carrier table is sixteen numbers, recovered
 by reading slot `+0x24` out of each man-class vtable and the constant out of
@@ -213,36 +212,37 @@ lama driver, `cMan_Kezmuves`), and also `cMan_Vampire`, `cMan_Jaguar`,
 `cMan_Lama`, `cMan_Shadow`, `cMan_Stonewarrior`, `cMan_Cortes` and
 `cMan_Dragonkiller`.
 
-Three things fall out that the item table alone could not say:
+What the item table alone could not say:
 
-- **No man carries two weapon families.** Swordsman gets `1`, spearman `2`,
-  archer `4`, and nobody gets a second — the exclusivity is in the carrier, not
-  in the item.
-- **The archer is the only class whose hero variant differs.** Swordsman and
-  spearman have identical masks to their hero versions; `cMan_Archer` is `0xf4`
-  and `cMan_Archer_Hero` is `0xfc`, so **only a hero archer may carry a shield**.
-- **Every item type has at least one carrier**, so no item is unequippable by
-  construction — which, with the `+0x18` finding above, means the inert items are
-  inert for authoring reasons and never for lack of a hand to hold them.
+- No man carries two weapon families. Swordsman gets `1`, spearman `2`, archer
+  `4`, and nobody gets a second, so the exclusivity lives in the carrier rather
+  than in the item.
+- The archer is the only class whose hero variant differs. Swordsman and
+  spearman have identical masks to their hero versions, while `cMan_Archer` is
+  `0xf4` and `cMan_Archer_Hero` is `0xfc` — so only a hero archer may carry a
+  shield.
+- Every item type has at least one carrier, so no item is unequippable by
+  construction. With the `+0x18` finding above, that means the inert items are
+  inert for authoring reasons rather than for want of a carrier.
 
 `cMan_BigVampire` sharing the hero-archer mask is the one entry that reads as a
 design oddity rather than a rule; recorded as observed.
 
 ## The thirteen without flavour text
 
-Thirteen items have a description equal to their own name: **1, 2, 7, 12, 17,
-18, 20, 24, 25, 29, 41, 49, 50**. Every other item runs 122–415 characters.
+Thirteen items have a description equal to their own name: 1, 2, 7, 12, 17, 18,
+20, 24, 25, 29, 41, 49, 50. Every other item runs 122–415 characters.
 
-This is **not a localisation gap**. All six shipped languages are short for
+This is not a localisation gap. All six shipped languages are short for
 exactly the same thirteen keys and full for all the others — the lengths differ
 only because each language translated the *name* into the description slot.
 Whatever produced these files had no source text to work from in any language.
 
-Of the thirteen, **ten are fully implemented** — they have real vtable overrides
-and, in most cases, their own balance constants. Ray Axe reads `AD_ATT` and
-`AD_DEF`; Night Blade reads `SWNB_ATT`; Bone Horn has a working timed effect
-with a counter capped by `MBH_TIME`. A player who picks these up gets exactly
-what the numbers say; nobody wrote the sentence.
+Of the thirteen, ten are fully implemented: they have real vtable overrides and,
+in most cases, their own balance constants. Ray Axe reads `AD_ATT` and `AD_DEF`,
+Night Blade reads `SWNB_ATT`, and Bone Horn has a working timed effect with a
+counter capped by `MBH_TIME`. A player who picks these up gets what the numbers
+say — only the description was never written.
 
 Three are genuinely inert:
 
@@ -282,7 +282,7 @@ more, including the Ring pieces. See "The third placement channel" below.
 
 ## The third placement channel — mission code
 
-**Read 2026-08-09; full write-up in [missions.md](missions.md).** The claim
+Full write-up in [missions.md](missions.md). The claim
 above that `Item_CreateById` is "the only way an item comes into existence" is
 **wrong, and was wrong in the confident direction**: mission code calls the
 fifty per-item constructors *directly*, bypassing the factory switch. Xref'ing
@@ -294,9 +294,9 @@ That closes both of this doc's headline open questions:
 - **The Ring Pieces do combine.** `cMission_TwoRings_Start` (`0x0821c5e0`) drops
   ids 24 and 25 on the map. When one man carrying both walks into the mission's
   `cBld_Ring` building, its "man entered" virtual (`+0xd4`,
-  `cBld_Ring_OnManEntered` at `0x08295d10`) destroys both halves, constructs
-  **id 26 Ring of Concordance** and gives it to that same man — the Ring
-  *replaces* the pieces on their carrier. Either carry order works. So ids 24
+  `cBld_Ring_OnManEntered` at `0x08295d10`) destroys both halves, constructs id
+  26 Ring of Concordance and gives it to that same man, so the Ring replaces the
+  pieces on their carrier. Either carry order works. So ids 24
   and 25 are inert *as items* and load-bearing *as quest tokens*, exactly as
   this doc guessed, and the mechanism is in the building rather than in the
   items — which is why nothing in their own vtables showed it.
@@ -327,24 +327,23 @@ constructor at `0x0820dbb0`**, which reads an id byte and calls
 `Item_CreateById` — meaning a shipped world file can materialise **any of the
 fifty**, including Mask of the Brave.
 
-So the honest state of the question:
+Where that left the question:
 
-- "**No code creates item 1**" — established.
-- "**Item 1 is dead in the shipped game**" — *not* established, and must not be
-  quoted from this doc until `init.dat` is parsed.
+- "No code creates item 1" — established.
+- "Item 1 is dead in the shipped game" — *not* established, and not to be quoted
+  from this doc until `init.dat` is parsed.
 - The ten-of-thirteen correlation stands as stated (it is a claim about code
   paths), but the inference from it to player experience does not.
 
-The parallel correction on the hero side is sharper still, and is what surfaced
-this: Jarakhi is the campaign's **player character** and is assigned by no code
-path either — because he ships in the world state ([heroes.md](heroes.md),
-[missions.md](missions.md)).
+The same correction on the hero side is what surfaced this: Jarakhi is the
+campaign's player character and is assigned by no code path either, because he
+ships in the world state ([heroes.md](heroes.md), [missions.md](missions.md)).
 
 ### …and the fourth channel has now been read — the withdrawal is lifted
 
-**2026-08-09, same day again.** All nine world files were read by the game's own
-loader ([starting-world.md](starting-world.md)), so the fourth channel is no
-longer an unknown:
+All nine world files were then read by the game's own loader
+([starting-world.md](starting-world.md)), so the fourth channel is no longer an
+unknown:
 
 - **Mask of the Brave (1) is in none of the nine.** All four channels are now
   checked, and the strong claim is restored: **item 1 is dead in the shipped
@@ -355,9 +354,9 @@ longer an unknown:
   it was not, for those four, the same as absent.
 - **Ten of the fourteen are genuinely in nothing**: 1, 2, 7, 12, 17, 18, 29, 41,
   49, 50. Nine of them work perfectly and no shipped content hands them out.
-- The ten-of-thirteen correlation is untouched, and now says something about the
-  player's experience as well as about code paths: the items nobody wrote lore
-  for are overwhelmingly the items nobody placed.
+- The ten-of-thirteen correlation is untouched, and now covers the player's
+  experience as well as code paths: nine of the ten items with no lore are also
+  in no world file.
 
 The `placed by` column in the table above is still a code-path column. For what
 a player actually finds on the map, read the census in
@@ -365,9 +364,6 @@ a player actually finds on the map, read the census in
 
 ## Open threads
 
-- ~~**The `+0x04` type field's exact semantics**~~ — **closed 2026-08-10**, above:
-  a bitmask for the carry test and an equality key for the duplicate test, with
-  `0x80` and `0x20` exempt from the latter.
 - **The `+0x18` field on ids 2, 8 and 50** — **mechanism answered, initialisation
   is a defect.** (Note the collision: this is the *object* field at `+0x18`, not
   the *vtable* slot at `+0x18` in the table above.) The three 28-byte items are

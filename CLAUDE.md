@@ -19,12 +19,14 @@ holds tasks only; the reasoning goes in `docs/`, which it links to. (The older
 `task_fifo.md` was retired on 2026-08-03 and is not coming back — its history is
 in git.)
 
-Directions rather than tasks: `docs/porting/native-rewrite.md` (retire Unicorn
-gradually) and `docs/porting/other-os-ports.md`. What is still *unknown* lives in
-each doc's own **"Open threads"** section — the central `docs/open_questions.md`
-ledger was retired on 2026-08-04 because everything in it was archaeology that
-no longer gated anything, and keeping it in sync with the subsystem docs cost
-more than it returned.
+`docs/porting/other-os-ports.md` is a direction rather than a task list.
+`docs/porting/native-rewrite.md` is *not* one: it records why replacing the
+emulated engine with native C++ is out of scope for this repo.
+
+What is still *unknown* lives in each doc's own **"Open threads"** section — the
+central `docs/open_questions.md` ledger was retired on 2026-08-04 because
+everything in it was archaeology that no longer gated anything, and keeping it
+in sync with the subsystem docs cost more than it returned.
 
 Findings live in `docs/`, not in commit messages. If a finding has no doc that
 owns it, that means a doc is missing.

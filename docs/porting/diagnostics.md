@@ -1,205 +1,487 @@
-# Diagnostics: the instruments, and the method they encode
+# Diagnostics
 
-This is the single catalogue of every diagnostic the port carries — the ~38
-`THEOC_*` environment knobs, the instruments that are always on and are not env
-knobs at all, and the debugging method the whole set exists to serve.
+Diagnostic levers baked into the binary that can be set via environment variables.
 
-Everything here was read out of `port/src/` (`traps.cpp`, `main.cpp`,
-`machine.cpp`, `video.cpp`, `guestlink.cpp`, `blit.cpp`, `mvos.cpp`) and
-cross-checked against the commit history (`python3 tools/dump_commit_log.py` →
-`data/commit-log.md`, which is untracked and regenerated on demand). Defaults
-and units are taken from the code, not from prose. Almost nothing here was
-verified by running the game — it needs a display and the copyrighted data tree.
-The exceptions are `THEOC_CONSOLE` and `THEOC_EDIT`, both exercised live.
+Contains:
+- ~38 `THEOC_*` environment knobs
+- always-on instruments
+- some debugging methodology
 
----
+## Setting them
 
-## The method: what to ask first
-
-Three questions decide almost every investigation here, and each has an
-instrument that answers it in one line. Reaching for a profiler, a disassembler
-or a hypothesis before answering them is how this project has repeatedly lost a
-debugging cycle.
-
-**1. Is the emulator saturated, or idle while slow?** Under this emulator
-wall-clock-shaped bugs masquerade as performance bugs. Province view once sat at
-a rock-steady 11.9fps; the native LFB16 rasteriser removed real per-frame CPU
-cost and *did not change the frame rate at all*, because the bottleneck was a
-stalled game clock, not the renderer. The decisive question is never "what's
-hot?" but "is the emulator busy?" — if it is idle while slow, the cause is a
-host-side wait we synthesised (a sleep, a signal we failed to deliver, a clock
-we advanced too slowly), not the guest's compute. `THEOC_FPS=1` prints guest
-basic blocks per second next to the frame rate and answers it in one line. See
-[frame-timing.md](frame-timing.md).
-
-**2. On a hang: is the guest still executing?** A freeze is ambiguous only until
-you know which side is stuck. `THEOC_WATCHDOG` is the first thing to reach for
-on any "it froze": it watches the present counter from a host thread, and when
-frames stop it samples guest blocks *and* trap calls over half a second and says
-which side is wedged — **still running (spinning)** with the guest EIP that is
-spinning, or **not executing (stuck host-side)** with the name of the last trap
-entered. It turns "it hung" into an address. `THEOC_SLOWLOG` is the follow-up:
-the watchdog says *that* we are stuck host-side, `THEOC_SLOWLOG` says *which
-handler*.
-
-**3. Am I measuring, or inferring?** The map-selection crash cost three
-confident wrong diagnoses in a row — a stack slot read as a return address, a
-GOT value read from the file on disk instead of guest memory, and a truncated
-grep taken as proof of a missing export — before an instrument found the real
-cause in one run. When a claim is about guest state, read guest state.
-
----
-
-## Setting them permanently: `theoc.cfg`
-
-Since 2026-08-08 the same names can live in a file instead of the environment,
-so a release bundle can carry settings. `port/theoc.cfg` is the shipped
-template; both packaging scripts copy it to the top of the bundle and point
+`port/theoc.cfg` is the shipped
+template; the scripts copy it to the top of the bundle and point
 `THEOC_CONFIG` at it from the launcher, because the binary sits in `bin/` and
 would otherwise look in the wrong place.
 
-Format is `NAME = value` with `#` comments — deliberately the shape the game's
-own `mvos.cfg` already uses, and deliberately **not** TOML or YAML: the knobs
-are a flat list of scalars, so a structured format would buy nothing and cost
-either a vendored dependency or a parser that implements a fraction of a spec
-while claiming the whole thing. `[section]` headers are accepted and ignored,
-keys are case-insensitive, and a UTF-8 BOM is stripped (Notepad writes one).
+### Format
 
-The rules that matter:
+Deliberately the shape the game's own `mvos.cfg`.
 
-- **The environment always wins.** `THEOC_MUSIC_VOL=50 ./theoc` beats the file,
-  so the file can never make a command line lie.
-- **No file, or an unreadable one, is exactly the old behaviour.** This must
-  never become a new way for the game to fail to start.
-- **An empty value is "leave it unset", not "set it to empty".** Most knobs are
-  presence-tested, so `THEOC_FPS =` turning the instrument *on* would be the
-  opposite of what anyone writing that line means.
-- **A misspelt `THEOC_*` name is applied anyway, with a warning.** Failing shut
-  would mean a knob added to the code but not to the checker silently stops
-  working; this way that mistake is cosmetic.
-- **Four are refused from the file** — `THEOC_FIX_SAVE`, `THEOC_HEAP_TEST`,
-  `THEOC_SERVER` and `THEOC_TREE`. The first three replace running the game, so
-  a stale line means it never starts and the person hitting that is the least
-  equipped to work out why; `THEOC_TREE` is dead code. Environment only, and
-  each one is logged as refused rather than ignored quietly.
+- `NAME = value`
+- `#` comments
+- `[section]` headers are accepted and ignored
+- keys are case-insensitive
+- UTF-8 BOM is stripped (fuck Notepad).
+- deliberately **not** TOML or YAML
 
-Search order: `$THEOC_CONFIG`, then `theoc.cfg` beside the executable, then
-`./theoc.cfg`. The chosen file and its setting count are logged, right after the
-build-identity banner.
+### Logic
 
-The template ships **15 settings, all commented out** — display, speed, sound,
-startup, paths, and the three enthusiast knobs (`THEOC_CONSOLE`, `THEOC_EDIT`,
-`THEOC_REAL_LOCK`). The other 35 are accepted from the file but not listed in
-it: a config a player scrolls past is one they do not read.
+- The environment variables override the config file
+- Game runs even with a corrupted config file
+- An empty value is "leave it unset", not "set it to empty"
+- Most knobs are presence-tested, so `THEOC_WATCHDOG=0` still turns the instrument *on*.
+  would be the opposite of what anyone writing that line means.
+- A misspelt `THEOC_*` name is applied anyway, with a warning
+- The following are refused from the file:
+  - `THEOC_FIX_SAVE`
+  - `THEOC_HEAP_TEST`
+  - `THEOC_SERVER`
+  - `THEOC_TREE`
 
----
+Search order:
+1. `$THEOC_CONFIG`
+2. `theoc.cfg` beside the executable
+3. `./theoc.cfg`.
 
 ## The complete `THEOC_*` catalogue
 
-53 variables. **A note on parsing that bites:** most are gated on *presence*
-only, so `THEOC_WATCHDOG=0` still turns the watchdog on. The only three that
-inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
+The only three that inspect their value for an off-switch are `THEOC_NATIVE_BLIT` (off only on a
 leading `0`), `THEOC_FULLSCREEN` and `THEOC_NO_HIDPI` (off when unset, empty, or
 exactly `"0"`). Numeric knobs parse with `atoi`/`atof`, so garbage reads as 0
 and then falls into whatever that variable's zero case is.
 
 ### Instruments
 
-| Variable | Argument / units | Default | What it does |
-|---|---|---|---|
-| `THEOC_VERBOSE` | presence, or a level | off (quiet) | Restores the host's boot log. **The default became quiet on 2026-08-21**: the port printed 65 lines before the dedicated server reached its first socket — guest link, segment map, relocation counts, `.ctors` runs, subsystem flags — all of it developer output that every player saw on every run. `THEOC_VERBOSE=1` prints exactly what the port printed before that change, so any instruction, log or bug report written against the old behaviour still works; `=2` adds the deeper per-trap detail. It also puts **ffmpeg's own** `av_log` back to its default level, which is silenced at the quiet level — probing a file libav cannot identify emits three lines per file on its own account, and none of them are ours. What stays unconditional at the quiet level: the banner (it names the build, so a tester's log identifies itself), and anything the user can act on — a failed bind, a cutscene that would not open, a `.ctors` run with a non-zero fault column. The rule applied at each site was: **a line whose only content is "the expected thing happened" is verbose; the same line reporting a failure is not.** |
-| `THEOC_FPS` | presence | off | Per-second `[fps]` line on stderr: fps, guest blocks/s and blocks/frame (the saturation check), heartbeat and mixer redirect rates, `usleep` ms/s and call count, `gettimeofday`/s, `select`/s, audio queue depth in seconds and underruns/s, guest heap live MB and frontier growth MB/s. The tool that split throughput-bound from timing-bound; its heap column also caught the G14 `cIntuition` corruption. **Since 2026-08-03 the fps figure is not a proxy for sim rate**: the async-cursor path presents out-of-band, so province reports ~30 presents/s while `cProvince_Do` still steps 12×/s. To read the *simulation* rate, use the `usleep` call count — the game issues one frame-limiter sleep per sim step, so `usleep` calls ÷ ~3.5 slices ≈ sim Hz — or set `THEOC_LEGACY_CURSOR=1` to put presents back on the frame. Since 2026-08-04 the sleep column also carries `(N slices/frame, +M ms each)` — see "Reading the sleep slices" below, which is the first thing to look at when timing is questioned on a new host. |
-| `THEOC_PROFILE` | presence | off | Size-weighted guest basic-block histogram (Σ instruction bytes ≈ work), rolling top-15 dumped every 3s so the window tracks whatever is on screen. Host trap/stub/scratch pages (≥ `0x50000000`) are excluded; addresses are labelled `game 0x…` / `mvos+0x…` for the two Ghidra DBs. Armed just before `Start`, so boot and `.ctors` are not in the sample. Found the hot blit functions. |
-| `THEOC_TRACE` | presence | off | 32-entry ring of the last basic-block entries, dumped (oldest-first, labelled) when `Start` faults. Essential exactly when the EBP walk cannot help: at `eip=0` the frame pointer is usually 0 too, and this is then the only thing that shows how control got there. |
-| `THEOC_WATCHDOG` | seconds | off; **10s** when the value is ≤ 1 | Host thread, armed on the first present. Polls the present counter every 250ms; after the given stall it samples `exec_blocks` and the trap sequence over 500ms and reports uptime, stall length, guest running/not-running, the last guest EIP, the last trap name and live heap. **Arms the guest block counter itself** — its whole verdict is read off `exec_blocks`, and that counter used to be armed by `THEOC_FPS` alone (see "A counter nobody armed" below). |
-| `THEOC_WATCHDOG_SAMPLE` | path | off | **macOS only.** On a **host-side** stall only (guest not executing), shells out to `sample <pid> 1 -file <path>` to capture a native stack of exactly that moment. An aggregate profile over a 40s run cannot isolate a 1.5s window. On Linux and Windows it prints one line saying it is unavailable and points at the stall report's last-trap field plus `THEOC_SLOWLOG` — until 2026-08-04 it instead ran `sample` anyway and printed the shell's failure as a bare `rc=`, which reads as the sampler failing rather than as the feature not existing. |
-| `THEOC_SLOWLOG` | milliseconds | off; **250ms** when the value is ≤ 1 | Prints `[slow] <section> took N ms` for any host-side section that blocks the emulation thread past the threshold. Covers every trap dispatch, every plugin dispatch, `OpenDisplay` and `present`. The deliberate frame-cap sleep is credited out, or every capped frame would report as an 83ms "slow" section and bury the real ones. |
-| `THEOC_DUMP_WORLD` | presence | off | **What actually ships in a world file.** Four *passive* guest watches (`Machine::add_watch` — the instruction still executes; nothing is patched): `LoadGame` `0x081a07f0` for the path, `CreateMan_fromStream` `0x081becfc` for each man's caste byte, the `cHero` stream ctor `0x080b22f6` for the hero id, and `Item_CreateById` `0x0820d1f0` for the item id **plus its return address** — `0x0820dbd5` means "came out of the world file", anything else is config placement, a mission, or the console. Prints one `[world]` block per file loaded. The man count is deliberate: it is the control that distinguishes "this world has no heroes" from "the watches are not firing", which on the first run of this instrument was the actual answer. Reads the starting world out of the game's own loader instead of re-implementing a load chain ~150 stream constructors deep — [../subsystems/starting-world.md](../subsystems/starting-world.md). |
-| `THEOC_WORLD_FILE` | path | off | Serve one chosen file for every `init.dat` the guest opens. Which map's world is loaded is otherwise a menu choice the unattended harnesses cannot drive; the redirect is sound because a world file names its own scenario id and `LoadGame` builds the matching `cGameInfo` from it, so the campaign's open can serve `scn3/init.dat` and still load it as scenario 3. Pairs with `THEOC_DUMP_WORLD`; nine headless runs cover the whole tree. Note the `LoadGame(...)` line prints the **guest** path, so it still says `data/campaign/init.dat` — the redirect is logged separately, once per guest path. |
-| `THEOC_NEW_WORLD` | presence | off | **Build a world instead of loading one — the game's own campaign builder, recovered.** Both launchers (`SetupGame` `0x081457e0`, the scenario one `0x08145550`) take a mode: 0 "init mode" generates, 1 "edit mode" loads paused, 2 "normal mode" loads and plays. The menu sends 2; this rewrites it to 0, so no code path is added — one is selected. The world is built from `/realm/realm.raw` + `hero.cfg`/`mitem.cfg` and dated **1323/07/04** against the shipped save's 1419/07/04. It also serves `RSA4096`-wrapped copies of those two config files from an anonymous temp file, because they ship as plain text and `cTextFile` rejects that — your tree is untouched and the plain text stays editable. Lands **paused, in the game's own edit mode**, so pair with `THEOC_CONSOLE=1` and use `save`. The result is a scaffold, not a campaign: fewer AI provinces, a different unit mix and **no slaves** — [../subsystems/starting-world.md](../subsystems/starting-world.md). |
-| `THEOC_WORLD_OUT` | path | `init.generated.dat` beside the original | Where the console's `save` writes. `save` natively overwrites `<mapdir>/init.dat` — the shipped world, with no prompt and no undo — so the write is redirected by default whenever it is reachable at all (which is only under `THEOC_EDIT` or `THEOC_NEW_WORLD`, both ours). Set this to the original path to overwrite deliberately. |
-| `THEOC_KEYLOG` | presence | off (first 24 keys only) | Logs every key event for the whole session as `[input] key eKey=0x.. down sc=N quals=0x..`, instead of the 24-event boot budget. The question it answers is the one a broken shortcut always poses: **did the chord reach the guest at all?** A chord that never arrives and a chord that arrives and is ignored look identical on screen and need opposite fixes — a host input bug versus a game gate. `quals` is the SDL modifier state, so a swallowed Alt is visible too. |
-| `THEOC_REPORT_CLICKS` | presence | off | Logs every mouse-button-down as `[click] x,y btn= win=WxH screen=0x…`, in a form that pastes straight into a `THEOC_CLICKS` path. The active `cScreen*` (`Intuition+0x24`) doubles as a screen identity — clicks sharing that value are on the same screen. |
-| `THEOC_LOUD_ABORT` | presence | off | Default policy is bring-up-friendly: guest `abort()` (the tail of `Fatal()`) logs and returns so the caller continues past non-critical Fatals. Set this and `abort` instead walks the g++ 2.95 EBP chain (max 24 frames, labelled) and `request_stop()`s the current call, so a real fault surfaces at its origin instead of hiding as a silent `OpenSubsystems` restart. |
-| `THEOC_ABORT_CAP` | int | `32` | How many ignored aborts before the host gives up and stops. The default policy above returns into guest code that has already decided it cannot continue, so control flow past it is undefined — on Windows that produced an endless `Init` restart loop (see [other-os-ports.md](other-os-ports.md)). Past the cap the host prints the diagnosis and stops rather than spewing. A healthy run aborts **zero** times, so raising this is only for deliberately pushing through a known-benign Fatal. |
-| `THEOC_HEAP_TEST` | presence | off | Runs the guest allocator's randomized alloc/free/realloc self-test standalone and exits (arena mapped, nothing else allocated). It guards the failure that would be worse than a leak: two live blocks overlapping. Deliberately does not continue into boot — it leaves the arena fragmented. |
-| `THEOC_TREE` | presence | off | One-shot dump of the `cVObject` widget tree (node address, vtable, x/y/w/h, `(empty)` when fully clipped) during the native `PaintTree` walk. **Dead in the current build:** it lives in `port/src/mvos.cpp`, the legacy pure-HLE MVOS layer, which `port/CMakeLists.txt` has commented out of the target. Previously undocumented. |
+#### `THEOC_VERBOSE [presence, or a level]`
+
+Default: off (quiet)
+
+Enables verbose boot log in the terminal. `THEOC_VERBOSE=1` is the default verbosity for
+debugging issues and produces most of what you need to figure out any issues.
+
+`=2` adds the deeper per-trap detail. It also puts ffmpeg's own `av_log` back to its default level, which is silenced at the quiet level
+
+In quiet mode the binary still prints things the user can act on — a failed bind,
+a cutscene that would not open, a `.ctors` run with a non-zero fault column.
+
+#### `THEOC_FPS [presence]`
+
+Default: off
+
+Per-second `[fps]` line on stderr: fps, guest blocks/s and blocks/frame (the saturation check), heartbeat and mixer redirect rates, `usleep` ms/s and call count, `gettimeofday`/s, `select`/s, audio queue depth in seconds and underruns/s, guest heap live MB and frontier growth MB/s.
+
+The fps figure is not a proxy for sim rate: the async-cursor path presents out-of-band, so province reports ~30 presents/s while `cProvince_Do` still steps 12×/s.
+
+To read the *simulation* rate, use the `usleep` call count — the game issues one frame-limiter sleep per sim step, so `usleep` calls ÷ ~3.5 slices ≈ sim Hz — or set `THEOC_LEGACY_CURSOR=1` to put presents back on the frame.
+
+The sleep column also carries `(N slices/frame, +M ms each)` — see "Reading the sleep slices" below, which is the first thing to look at when timing is questioned on a new host.
+
+#### `THEOC_PROFILE [presence]`
+
+Default: off
+
+Size-weighted guest basic-block histogram (Σ instruction bytes ≈ work), rolling top-15 dumped every 3s so the window tracks whatever is on screen. Host trap/stub/scratch pages (≥ `0x50000000`) are excluded; addresses are labelled `game 0x…` / `mvos+0x…` for the two Ghidra DBs. Armed just before `Start`, so boot and `.ctors` are not in the sample. Found the hot blit functions.
+
+#### `THEOC_TRACE [presence]`
+
+Default: off
+
+32-entry ring of the last basic-block entries, dumped (oldest-first, labelled) when `Start` faults. Essential exactly when the EBP walk cannot help: at `eip=0` the frame pointer is usually 0 too, and this is then the only thing that shows how control got there.
+
+#### `THEOC_WATCHDOG [seconds]`
+
+Default: off and **10s** when the value is ≤ 1
+
+Host thread, armed on the first present. Polls the present counter every 250ms; after the given stall it samples `exec_blocks` and the trap sequence over 500ms and reports uptime, stall length, guest running/not-running, the last guest EIP, the last trap name and live heap. 
+
+Arms the guest block counter itself — its whole verdict is read off `exec_blocks`, and that counter used to be armed by `THEOC_FPS` alone (see "A counter nobody armed" below).
+
+#### `THEOC_WATCHDOG_SAMPLE [path]`
+
+Default: off
+
+**macOS only**
+
+On a **host-side** stall only (guest not executing), shells out to `sample <pid> 1 -file <path>` to capture a native stack of exactly that moment. An aggregate profile over a 40s run cannot isolate a 1.5s window.
+
+On Linux and Windows it prints one line saying it is unavailable and points at the stall report's last-trap field plus `THEOC_SLOWLOG`.
+
+#### `THEOC_SLOWLOG [milliseconds]`
+
+Default: off; **250ms** when the value is ≤ 1
+
+Prints `[slow] <section> took N ms` for any host-side section that blocks the emulation thread past the threshold. Covers every trap dispatch, every plugin dispatch, `OpenDisplay` and `present`. The deliberate frame-cap sleep is credited out, or every capped frame would report as an 83ms "slow" section and bury the real ones.
+
+#### `THEOC_DUMP_WORLD [presence]`
+
+Default: off
+
+What actually ships in a world file. Four *passive* guest watches (`Machine::add_watch` — the instruction still executes; nothing is patched):
+
+- `LoadGame` `0x081a07f0` for the path, 
+- `CreateMan_fromStream` `0x081becfc` for each man's caste byte,
+- the `cHero` stream ctor `0x080b22f6` for the hero id,
+- and `Item_CreateById` `0x0820d1f0` for the item id **plus its return address**
+ 
+`0x0820dbd5` means "came out of the world file", anything else is config placement, a mission, or the console. Prints one `[world]` block per file loaded. The man count is the control that distinguishes "this world has no heroes" from "the watches are not firing".
+
+Reads the starting world out of the game's own loader instead of re-implementing a load chain ~150 stream constructors deep — [../subsystems/starting-world.md](../subsystems/starting-world.md). |
+
+#### `THEOC_WORLD_FILE [path]`
+
+Default: off
+
+Serve one chosen file **for every** `init.dat` the guest opens. Primarily meant for unattended harness use or testing; the redirect is sound because a world file names its own scenario id and `LoadGame` builds the matching `cGameInfo` from it, so the campaign's open can serve `scn3/init.dat` and still load it as scenario 3. Pairs with `THEOC_DUMP_WORLD`; nine headless runs cover the whole tree. Note the `LoadGame(...)` line prints the **guest** path, so it still says `data/campaign/init.dat` — the redirect is logged separately, once per guest path.
+
+#### `THEOC_NEW_WORLD [presence]`
+
+Default: off
+
+Instead of loading the campaign, this builds one using the game's own recovered campaign builder.
+
+Both campaign launchers (`SetupGame` `0x081457e0`, and the scenario one `0x08145550`) take a mode:
+- `0` "init mode" generates it
+- `1` "edit mode" loads it with the game paused
+- `2` "normal mode" loads and plays
+
+The menu in the shipped game sends `2`; this rewrites it to `0`.
+
+The world is built from `/realm/realm.raw` + `hero.cfg`/`mitem.cfg` and dated `1323/07/04` against the shipped campaign's `1419/07/04`. It also serves `RSA4096`-wrapped copies of those two config files from an anonymous temp file, so the tree is untouched and the plain text stays editable.
+
+Lands **paused, in the game's own edit mode**, so pair with `THEOC_CONSOLE=1` and use `save`. The result is a scaffold that was likely intended to be edited by the developers, not a fully playable campaign: fewer AI provinces, a different unit mix and **no slaves** — [../subsystems/starting-world.md](../subsystems/starting-world.md).
+
+#### `THEOC_WORLD_OUT [path]`
+
+Default: `init.generated.dat` beside the original
+
+Output location for the console's `save` command write. `save` natively overwrites `<mapdir>/init.dat` (the shipped world), so the write is redirected by default whenever it is reachable at all (which is only under `THEOC_EDIT` or `THEOC_NEW_WORLD`, both the port's). Set this to the original path to overwrite deliberately.
+
+#### `THEOC_KEYLOG [presence]`
+
+Default: off (first 24 keys only)
+
+Logs every key event for the whole session as `[input] key eKey=0x.. down sc=N quals=0x..`, instead of the 24-event boot budget. The question it answers is the one a broken shortcut always poses: **did the chord reach the guest at all?** A chord that never arrives and a chord that arrives and is ignored look identical on screen and need opposite fixes — a host input bug versus a game gate. `quals` is the SDL modifier state, so a swallowed Alt is visible too. |
+
+#### `THEOC_REPORT_CLICKS [presence]`
+
+Default: off
+
+Logs every mouse-button-down as `[click] x,y btn= win=WxH screen=0x…`, in a form that pastes straight into a `THEOC_CLICKS` path. The active `cScreen*` (`Intuition+0x24`) doubles as a screen identity — clicks sharing that value are on the same screen.
+
+#### `THEOC_LOUD_ABORT [presence]`
+
+Default: off
+
+Default policy is bring-up-friendly: guest `abort()` (the tail of `Fatal()`) logs and returns so the caller continues past non-critical Fatals. Set this and `abort` instead walks the g++ 2.95 EBP chain (max 24 frames, labelled) and `request_stop()`s the current call, so a real fault surfaces at its origin instead of hiding as a silent `OpenSubsystems` restart.
+
+#### `THEOC_ABORT_CAP [int]`
+
+Default: 32
+
+How many ignored aborts before the host gives up and stops. The default policy above returns into guest code that has already decided it cannot continue, so control flow past it is undefined — on Windows that produced an endless `Init` restart loop (see [other-os-ports.md](other-os-ports.md)). Past the cap the host prints the diagnosis and stops rather than spewing. A healthy run aborts **zero** times, so raising this is only for deliberately pushing through a known-benign Fatal.
+
+#### `THEOC_HEAP_TEST [presence]`
+
+Default: off
+
+Runs the guest allocator's randomized alloc/free/realloc self-test standalone and exits (arena mapped, nothing else allocated). It guards the failure that would be worse than a leak: two live blocks overlapping. Deliberately does not continue into boot — it leaves the arena fragmented.
+
+#### `THEOC_TREE [presence]`
+
+Default: off
+
+One-shot dump of the `cVObject` widget tree (node address, vtable, x/y/w/h, `(empty)` when fully clipped) during the native `PaintTree` walk. **Dead in the current build:** it lives in `port/src/mvos.cpp`, the legacy pure-HLE MVOS layer, which `port/CMakeLists.txt` has commented out of the target. Kept for documentation.
+
 
 ### Self-drivers and harnesses
 
-| Variable | Argument / units | Default | What it does |
-|---|---|---|---|
-| `THEOC_SOAK` | cycles | off; 5 when the value parses ≤ 0 | Drives menu → Prophecy → OK → province → map → exit → confirm → menu repeatedly, printing a `[soak]` resource snapshot (heap live/frontier, host RSS, guest ESP, stub bytes, open fds) at the same point in every cycle. Steps wait on the active `cScreen*` changing, not on a stopwatch; each carries a deadline (90/90/60/60/60s) and fails loudly with a snapshot. This is the load/unload pattern that found G15. |
-| `THEOC_SOAK_PLAY` | seconds | 20 (also when the value parses ≤ 0) | Province dwell inside each soak cycle. |
-| `THEOC_CLICKS` | `"x,y;x,y;…"` | off | Click path for the render-bug harness. 3s settle before the first click, 2s between clicks, each click paced aim → press → release three frames apart. |
-| `THEOC_MOUSE_SWEEP` | presence | off | After the click path finishes, drags the pointer across the screen a few pixels per frame (7px/frame horizontally, sine vertically) so a failed background restore leaves a visible track. |
-| `THEOC_SHOT_EVERY` | N frames | off | Saves every Nth presented frame as `<dir>/frame_%03d.bmp`, capped at 40 files. Also fires from the cutscene present path (`SMPEG_playvideoframe`), which is capture-only — a synthesized click there would skip the thing being photographed. |
-| `THEOC_SHOT_DIR` | path | `.` | Destination directory for the above. |
-| `THEOC_AUTO_PROVINCE` | presence | off | Self-drives menu → Prophecy (80,260) → OK (466,537) into province view on a wall clock (steps at 1.5/1.7/1.9s and 3.5/3.7/3.9s), for unattended timing tests. Wall-clock rather than frame-counted because fps varies wildly across screens. One-way trip — it cannot cycle; that is what `THEOC_SOAK` is for. |
-| `THEOC_AUTO_MENU` | presence | off | Bring-up driver: once an 800×600 menu has presented 45 frames, synthesizes aim/down/up on the Single Player button (80,260; `menu.cfg` "single 20 250") at frames 45/50/55. Guarded on `width()==800` so it cannot fire on another screen. |
-| `THEOC_LONGRUN` | seconds | off; **60s** when the value parses ≤ 0 | The multi-hour session harness. Prints a four-line `[health]` snapshot on that interval — wall-clock time (so an out-of-band note like "reloaded a save at 21:44" can be lined up against the samples), uptime, fps and the frame cap in effect, **guest blocks/s and blocks/frame** (the same saturation check `[fps]` gives, so a slow interval can be classified rather than guessed at), **live-set growth** since start and per interval, the frontier as a level with its own rate and the resulting arena headroom (**withheld as `n/a (warm-up)` for the first 0.5 h**, because the since-start frontier rate is dominated by the one-time ~27 MB scenario load: a ten-minute trial otherwise reports a terrifying "+6498 MB/h -> 0.0 h headroom" while the live set is dead flat), host RSS delta, guest ESP, stub bytes, open fds, audio queue depth and underrun frames, and how many log lines have been suppressed. Also **rate-limits repeatable log lines** (`[slow]`, ignored aborts: a burst of 5 then one per 60s, with the dropped count surfaced in `[health]`), so a stuck condition cannot write gigabytes overnight. **`Alt+M` stamps a numbered `[mark]` line into the log** and forces the next `[health]` out immediately, so an interval boundary lands on the event instead of wherever the timer was; the hotkey is live only while this harness is armed, because Alt is a modifier the game itself uses. Arms `THEOC_WATCHDOG=30` and lifts `THEOC_START_SEC` to unlimited, each unless set explicitly — the Start budget's 600s default otherwise caps a multi-hour session at ten minutes. Everything goes to **stderr**, like every other instrument, so `2>log` captures the whole session. |
-| `THEOC_AUTO_KEYS` | presence | off | Taps SPACE (down, then up 0.2s later) every 6s through the real SDL event path, from both present sites so it also fires during cutscenes. The mouse self-drivers never press a key, so the keyboard half of the input path had no unattended coverage — and SPACE is exactly the key that wedged `cIntuition::PushKeyInput`. |
-| `THEOC_SERVER` | presence | off (boots `data/cd/linux/theocracy.real`) | Boots the shipped dedicated server `data/cd/linux/server` instead — same host, same linker, same HLE. Headless is *derived*, not declared: `server` carries no `_12cApplication.Video` requirement flag, so video/input/blit bring-up is skipped automatically. |
-| `THEOC_START_ANYWAY` | presence | off | Calls `Start__12cApplication` even when `OpenSubsystems` did not return cleanly. For bringing up a boot path that dies in subsystem open, when you want to see how far the game itself gets. Previously undocumented. |
+These are mostly for long-run or headless testing. Completely useless to players.
 
-### A/B reverts (escape hatches for a landed fix)
+#### `THEOC_SOAK [cycles]`
+
+Default: off; 5 when the value parses ≤ 0
+
+Drives menu → Prophecy → OK → province → map → exit → confirm → menu repeatedly, printing a `[soak]` resource snapshot.
+
+The snapshot contains: heap live/frontier, host RSS, guest ESP, stub bytes, open fds at the *same point* in every cycle.
+
+Steps wait on the active `cScreen*` changing, not on a stopwatch; each carries a deadline (90/90/60/60/60s) and fails loudly with a snapshot.
+
+#### `THEOC_SOAK_PLAY [seconds]`
+
+Default: 20 (also when the value parses ≤ 0)
+
+Province dwell inside each soak cycle.
+
+#### `THEOC_CLICKS ["x,y;x,y;…"]`
+
+Default: off
+
+Click path for the render-bug harness. 3s settle before the first click, then 2s between clicks. Each click is paced as aim → press → release three frames apart.
+
+#### `THEOC_MOUSE_SWEEP [presence]`
+
+Default: off
+
+After the click path finishes, drags the pointer across the screen a few pixels per frame (7px/frame horizontally, sine vertically) so a failed background restore leaves a visible track.
+
+Originally used for testing fix attempts for a cursor ghosting issue that is now resolved.
+
+#### `THEOC_SHOT_EVERY [N frames]`
+
+Default: off
+
+Saves every Nth presented frame as `<dir>/frame_%03d.bmp`, capped at 40 files. Also fires from the cutscene present path (`SMPEG_playvideoframe`), which is capture-only.
+
+Originally used for verifying various fixes headless and in scripts.
+
+#### `THEOC_SHOT_DIR [path]`
+
+Default: `.`
+
+Destination directory for the above.
+
+#### `THEOC_AUTO_PROVINCE [presence]`
+
+Default: off
+
+Self-drives menu → Prophecy (80,260) → OK (466,537) into province view on a wall clock (steps at 1.5/1.7/1.9s and 3.5/3.7/3.9s), for unattended timing tests. Wall-clock rather than frame-counted because fps varies wildly across screens. One-way trip — it cannot cycle; that is what `THEOC_SOAK` is for.
+
+#### `THEOC_AUTO_MENU [presence]`
+
+Default: off
+
+Bring-up driver: once an 800×600 menu has presented 45 frames, synthesizes aim/click/release on the Single Player button (80,260; `menu.cfg` "single 20 250") at frames 45/50/55. Guarded on `width()==800` so it cannot fire on another screen.
+
+#### `THEOC_LONGRUN [seconds]`
+
+Default: off; 60s when the value parses ≤ 0
+
+A multi-hour session harness. Prints a `[health]` snapshot on the set interval, which contains a ridiculous number of measurements, so this harness is best used sparingly and with long sessions.
+
+It measures wall-clock time, uptime, fps and the frame cap in effect, guest blocks/s and blocks/frame (the same saturation check `[fps]` gives, so a slow interval can be classified rather than guessed at), live-set growth since start and per interval, the frontier as a level with its own rate and the resulting arena headroom (withheld as `n/a (warm-up)` for the first 0.5 h, because the since-start frontier rate is dominated by the one-time ~27 MB scenario load: a ten-minute trial otherwise reports a terrifying "+6498 MB/h -> 0.0 h headroom" while the live set is dead flat), host RSS delta, guest ESP, stub bytes, open fds, audio queue depth and underrun frames, and how many log lines have been suppressed.
+
+Also rate-limits repeatable log lines (`[slow]`, ignored aborts: a burst of 5 then one per 60s, with the dropped count surfaced in `[health]`), so a stuck condition cannot write gigabytes overnight.
+
+**Pressing `Alt+M` stamps a numbered `[mark]` line into the log** and forces the next `[health]` out immediately, so an interval boundary lands on the event instead of wherever the timer was; the hotkey is live only while this harness is armed, because Alt is a modifier the game itself uses.
+
+Arms `THEOC_WATCHDOG=30` and lifts `THEOC_START_SEC` to unlimited, each unless set explicitly. Everything goes to **stderr**, like every other instrument, so `2>log` captures the whole session.
+
+#### `THEOC_AUTO_KEYS [presence]`
+
+Default: off
+
+Taps SPACE (down, then up 0.2s later) every 6s through the real SDL event path, from both present sites so it also fires during cutscenes. The mouse self-drivers never press a key, so the keyboard half of the input path had no unattended coverage — and SPACE is exactly the key that wedged `cIntuition::PushKeyInput`.
+
+#### `THEOC_SERVER [presence]`
+
+Default: off (boots `data/cd/linux/theocracy.real`)
+
+Boots the shipped dedicated server `data/cd/linux/server` instead — same host, same linker, same HLE. Headless — `server` carries no `_12cApplication.Video` requirement flag, so video/input/blit bring-up is skipped automatically.
+
+#### `THEOC_START_ANYWAY [presence]`
+
+Default: off
+
+Calls `Start__12cApplication` even when `OpenSubsystems` did not return cleanly. For bringing up a boot path that dies in subsystem open, when you want to see how far the game itself gets.
+
+
+### A/B reverts
 
 Each of these restores the behaviour a specific fix replaced, so the fix can be
-A/B'd against the bug it cured rather than argued about.
+A/B'd against the bug it cured. Mostly useless for players.
 
-| Variable | Argument | Default | Reverts |
-|---|---|---|---|
-| `THEOC_LEGACY_SLEEP` | presence | off | Reverts both sleep fixes at once: `usleep` goes back to a blind, 100ms-capped sleep with the 30Hz tick and the sound slice serviced only at present (the present-coupled clock that pinned province at 12fps), and with it the re-entrant sleep that delivers ticks *during* a long sleep. Pair it with `THEOC_FRAME_MS=83` to get the pre-2026-08-03 behaviour whole. |
-| `THEOC_LEGACY_KEYMB` | presence | off | The cutscene-skip key mailbox. Never posts, so intros become unskippable. A/B switch for input-path hangs. |
-| `THEOC_LEGACY_SPRITE` | presence | off | The single-buffer `cSprite::AfterSwapBuffer` patch. Restores the double-buffer slot swap, i.e. the cursor-trail bug on static screens. |
-| `THEOC_PROVINCE_MS` | milliseconds | unset = stock 83 (12fps) | Retunes `cProvince_Do`'s frame limiter by rewriting its `0x14585` µs operand. **This is a game-speed control**, not a smoothness one: province steps its simulation once per frame with no wall-clock input anywhere in `cMan::Do`, so `33` gives ~30fps *and* ~2.5× game speed, and `166` gives ~6fps at ~0.5×. The coupling is the engine's design — see [frame-timing.md](frame-timing.md), "Why province stays at 12fps". Range 10–1000 ms; the operand is verified before writing, and a mismatch refuses rather than patches. **`50` (20fps, 1.67×) is the tested sweet spot** — see [frame-timing.md](frame-timing.md). |
-| `THEOC_LEGACY_CURSOR` | presence | off | The `cGD_LFB16::Refresh` implementation. Restores the inherited empty flush, so the engine's 30Hz between-frame pointer repaints are discarded and the cursor follows the scene's frame rate (12fps in province). |
-| `THEOC_NATIVE_BLIT` | `0` disables | on | The native LFB16 blit overrides (`PutBitmap8C1_AMask`, `PutBitmap8`, `PutBitmap8_AMask`, `PutBitmap`, `VLineAlfa`); `=0` falls back to the emulated libmvos rasteriser. **Only a leading `0` turns it off.** |
-| `THEOC_REAL_LOCK` | presence | off | The faked single-instance lock. `bind()` on port 5043 is normally faked OK so two clients can run on one Mac; setting this honours it for real, which is also the proof that the socket transport and errno translation work end to end (the second instance gets a genuine `EADDRINUSE` and the guest says "You can run only one Theocracy in the same time!"). |
-| `THEOC_LEGACY_SCALE` | set, non-empty, not `"0"` | off | Sharp-bilinear presentation. Reverts to integer scale + nearest — the G18 behaviour, perfectly hard pixel blocks and a ~5% area loss to the integer floor. The same fallback engages automatically if the renderer reports no `SDL_RENDERER_TARGETTEXTURE` or the 3× intermediate cannot be created, with a `[video]` line saying so. |
-| `THEOC_NO_HIDPI` | set, non-empty, not `"0"` | off | `SDL_WINDOW_ALLOW_HIGHDPI`, in both windowed and fullscreen. Reverting means macOS hands SDL the window's point size and the OS upscales again — two resamples. |
+#### `THEOC_LEGACY_SLEEP [presence]`
+
+Default: off
+
+Reverts both sleep fixes at once: `usleep` goes back to a blind, 100ms-capped sleep with the 30Hz tick and the sound slice serviced only at present (the present-coupled clock that pinned province at 12fps), and with it the re-entrant sleep that delivers ticks *during* a long sleep.
+
+#### `THEOC_LEGACY_KEYMB [presence]`
+
+Default: off
+
+The cutscene-skip key mailbox. Never posts, so intros become unskippable. A/B switch for input-path hangs.
+
+#### `THEOC_LEGACY_SPRITE [presence]`
+
+Default: off
+
+The single-buffer `cSprite::AfterSwapBuffer` patch. Restores the double-buffer slot swap, i.e. the cursor-trail bug on static screens.
+
+#### `THEOC_PROVINCE_MS [milliseconds]`
+
+Default: unset = stock 83 (12fps)
+
+Retunes `cProvince_Do`'s frame limiter by rewriting its `0x14585` µs operand. **This is a game-speed control**, not a smoothness one: province steps its simulation **once per frame** with no wall-clock input anywhere in `cMan::Do`, so `33` gives ~30fps *and* ~2.5× game speed, and `166` gives ~6fps at ~0.5×. The coupling is the engine's design — see [frame-timing.md](frame-timing.md), "Why province stays at 12fps". Range 10–1000 ms; the operand is verified before writing.
+
+Author's note: a value of around `50` (20fps, 1.67×) is the tested sweet spot for modern-ish play feel — see [frame-timing.md](frame-timing.md) for details.
+
+#### `THEOC_LEGACY_CURSOR [presence]`
+
+Default: off
+
+Restores the inherited empty flush, so the engine's 30Hz between-frame pointer repaints are discarded and the cursor follows the scene's frame rate (12fps in province). The implementation of `cGD_LFB16::Refresh`.
+
+#### `THEOC_NATIVE_BLIT [passing 0 disables]`
+
+Default: on
+
+The native LFB16 blit overrides (`PutBitmap8C1_AMask`, `PutBitmap8`, `PutBitmap8_AMask`, `PutBitmap`, `VLineAlfa`); `=0` falls back to the emulated libmvos rasteriser. **Only a leading `0` turns it off.** |
+
+#### `THEOC_REAL_LOCK [presence]`
+
+Default: off
+
+The faked single-instance lock. `bind()` on port 5043 is normally faked OK so two clients can run on one Mac; setting this honours it for real, which is also the proof that the socket transport and errno translation work end to end (the second instance gets a genuine `EADDRINUSE` and the guest says "You can run only one Theocracy in the same time!").
+
+#### `THEOC_LEGACY_SCALE [anything but 0]`
+
+Default: off
+
+Behavior: set, non-empty, not `"0"`
+
+Sharp-bilinear presentation. Reverts to integer scale + nearest, perfectly hard pixel blocks and a ~5% area loss to the integer floor. The same fallback engages automatically if the renderer reports no `SDL_RENDERER_TARGETTEXTURE` or the 3× intermediate cannot be created, with a `[video]` line saying so.
+
+#### `THEOC_NO_HIDPI [anything but 0]`
+
+Default: off
+
+Behavior: set, non-empty, not `"0"`
+
+`SDL_WINDOW_ALLOW_HIGHDPI`, in both windowed and fullscreen. Reverting means macOS hands SDL the window's point size and the OS upscales again — two resamples.
+
 
 ### Configuration
 
-Not diagnostics, but they shape every run and belong in one list.
+Not diagnostics, but they shape every run and belong in one list. Actually useful things for players.
 
-| Variable | Argument / units | Default | What it does |
-|---|---|---|---|
-| `THEOC_DATA` | path | `data/game` | Install root. Guest paths `data/…` resolve under it. |
-| `THEOC_CD` | path | `data/cd` | CD root. `/mnt/cdrom/*` remaps here (`VM_GetCDRomName` opens `cd.key` and checks for "Theocracy"), and `movie/*.mpg` / bare `*.mpg` resolve to `<cd>/movie/…`. Previously mentioned only in a parenthetical. |
-| `THEOC_SKIP_MOVIES` | presence | off | `SMPEG_new` succeeds without the file and never decodes; status goes straight to STOPPED. Fast boot. |
-| `THEOC_FRAME_MS` | milliseconds | 16 (~60fps ceiling) since 2026-08-03; was `83` | Minimum present-to-present interval, applied to every screen. It used to be a *pacer* compensating for our own `usleep` truncating the guest's frame-limiter sleep; now the sleep is honoured in full and province paces itself via `cProvince_Do`'s `Sleep(0x14585 − elapsed)`, so 16ms never fires there. It survives as a **ceiling** because `RealmGameLoop` calls `usleep` zero times — it has no limiter at all, and uncapped it free-ran at ~100fps. `83` restores the old global clamp; `0` is genuinely uncapped. |
-| `THEOC_AUDIO_MS` | milliseconds | 120 | Target mixer queue depth, which *is* the audio latency. Too high delays SFX, too low re-introduces underrun stutter. |
-| `THEOC_CD_AUDIO` | path | first of `data/cd-uk`, `data/cd-audio`, `data/cd/audio` that has tracks | Directory of **ripped CD audio tracks** — the music, which is Redbook audio and therefore not a file the game ever reads ([music-and-redbook.md](../subsystems/music-and-redbook.md)). Filenames are matched on the **first digit run in the basename, read as the absolute track number on the disc**, so macOS's `2 Audio Track.aiff`, `track02.flac` and `02.wav` all mean track 2. With no rip present every CD ioctl falls back to the historical blanket success and the game behaves exactly as it did before the virtual drive existed — an absent rip is the normal case, since the tracks are copyrighted and out of git. |
-| `THEOC_MUSIC_VOL` | 0–100 | 100 | Host-side music level, applied on top of whatever the guest set via `CDROMVOLCTRL`. It exists because **there is no reference for the music-vs-SFX balance**: on real hardware the drive fed the sound card's CD line at a level set outside the game entirely, so nothing in the binaries says how loud music should be against a sword hit. Set by ear. `0` mutes music while still consuming it, so the track still ends when it should and the guest still advances. |
-| `THEOC_CD_TRACE` | presence | off | Log every CD ioctl the guest issues — `READTOCHDR`, `SUBCHNL` status/track, stop/pause/resume/volume, and each `idle -> StartTrackForMood` auto-advance. Track *changes* are logged unconditionally (`[cd] play track N`), so this is only needed when the question is why a change did or did not happen. The first thing to reach for when the wrong music plays on a screen: the mood→track table is fixed and known, so a `[cd] play track N` that disagrees with it means the guest chose it, not the host. |
-| `THEOC_START_SEC` | seconds | 600; `0` = unlimited; negative clamps to 0. **`THEOC_LONGRUN` defaults it to `0`** unless set explicitly | Host wall-clock budget for the entire `Start()` call (intros + menu + play). Not an in-game timer. A timeout while the window is still open is reported as "host Start timeout — still in game" and counted as a live session, not a failure — but it *reads* like a fault, so suspect it first whenever a session ends at a suspiciously round elapsed time with nothing wrong in the log. |
-| `THEOC_VIDEO_HOLD` | seconds | 2 | How long the window is held open after `Start` returns, so a final frame can be read. Previously visible only inside a sample command line. |
-| `THEOC_FIX_SAVE` | path | off | Repairs one `.tsg` save in place and exits without booting — the offline half of the save-corruption fix, and how it is tested (no display, no data tree). Does both jobs: collapses the duplicate province groups *and* normalises the header. See [../subsystems/save-format.md](../subsystems/save-format.md). |
-| `THEOC_NO_SAVE_FIX` | presence | off | Stops the host touching a save the game closed — both the group collapse and the header normalisation. The A/B revert for the save fix: with it set, saves grow 4–5 counter units per save again and corrupt at ~51, and the header goes back to carrying uninitialised stack. One knob for the whole hook deliberately, so that "leave my saves alone" means it. |
-| `THEOC_SCANLINES` | percent, 0–90 (clamped) | 0 (off) | CRT-lite: darkens one row in every three of the sharp-bilinear intermediate, which is exactly one dark line per guest pixel row regardless of window size. 25 is a light hint, 60 heavy. A taste knob, off by default — scanlines are polarising and cost brightness. No effect under `THEOC_LEGACY_SCALE` or during cutscenes, neither of which uses the intermediate. |
-| `THEOC_FULLSCREEN` | set, non-empty, not `"0"` | off | Borderless fullscreen at the desktop resolution (`FULLSCREEN_DESKTOP`, never an exclusive mode switch); 4:3 is preserved with pillarbox bars. Falls back to windowed if creation fails. `Alt+Enter` (⌥Return) toggles at runtime. |
-| `THEOC_CONSOLE` | presence | off | Arms the in-game developer console — **Alt+V** opens, **Alt+C** closes, on both the realm and province screens. No game patching: Alt+V is captured in the SDL hook and serviced at the next present as a guest call to `Edit__10cVOConsole(g_LogConsole)`, through the same one-redirect-per-present path the timer and sound slices use. Refused unless a `cShell` is attached (`g_LogConsole+0x38`), which is true exactly while a game screen is live. Skipped for headless images. Full chain: [../subsystems/dev-console.md](../subsystems/dev-console.md). |
-| `THEOC_EDIT` | presence | off | Forces the game's own **edit mode** on (`g_GameSession+0x50`, the byte `cGameSession.md` used to call `bPaused`). The mode exists in the binary but no shipped path selects it — every `SetupGame` call site passes normal. **It freezes the simulation**, which is what edit mode *is*, and is what makes the console `save` command legal. Re-applied per present because the game builds a new `cGameSession` on every load and re-initialises the flag; 58 sites read it and none writes it back, so stamping is sufficient. Independent of `THEOC_CONSOLE`, though `save` is the main reason to want it. See [../subsystems/dev-console.md](../subsystems/dev-console.md#edit-mode). |
+#### `THEOC_DATA [path]`
+
+Default `data/game`
+
+Install root. Guest paths `data/…` resolve under it.
+
+#### `THEOC_CD [path]`
+
+Default: `data/cd`
+
+CD root. `/mnt/cdrom/*` remaps here (`VM_GetCDRomName` opens `cd.key` and checks for "Theocracy"), and `movie/*.mpg` / bare `*.mpg` resolve to `<cd>/movie/…`.
+
+#### `THEOC_SKIP_MOVIES [presence]`
+
+Default: off
+
+`SMPEG_new` succeeds without the file and never decodes; status goes straight to STOPPED. Fast boot but also missing campaign videos.
+
+#### `THEOC_FRAME_MS [milliseconds]`
+
+Default: 16 (~60fps ceiling); was `83`
+
+Minimum present-to-present interval, applied to every screen. It used to be a *pacer* compensating for our own `usleep` truncating the guest's frame-limiter sleep; now the sleep is honoured in full and province paces itself via `cProvince_Do`'s `Sleep(0x14585 − elapsed)`, so 16ms never fires there. It survives as a **ceiling** because `RealmGameLoop` calls `usleep` zero times — it has no limiter at all, and uncapped it free-ran at ~100fps. `83` restores the old global clamp; `0` is genuinely uncapped.
+
+#### `THEOC_AUDIO_MS [milliseconds]`
+
+Default: 120
+
+Target mixer queue depth, which *is* the audio latency. Too high delays SFX, too low re-introduces an underrun stutter on modern systems.
+
+#### `THEOC_CD_AUDIO [path]`
+
+Default: first of `data/cd-uk`, `data/cd-audio`, `data/cd/audio` that has tracks
+
+Directory of **ripped CD audio tracks**. The music on the disc is Redbook audio and therefore not a file the game ever reads ([music-and-redbook.md](../subsystems/music-and-redbook.md)). It means this part had to be implemented separately from the ground up. Filenames are matched on the **first digit run in the basename, read as the absolute track number on the disc**, so `2 Audio Track.aiff`, `track02.flac` and `02.wav` all mean track 2. With no rip present every CD ioctl falls back to the historical blanket success and the game behaves exactly as it did before the virtual drive existed — an absent rip is the normal case, since the tracks are copyrighted and out of git. This means that the game runs fine without the OST and handles it gracefully.
+
+#### `THEOC_MUSIC_VOL [0–100]`
+
+Default: 100
+
+Host-side music level, applied on top of whatever the guest set via `CDROMVOLCTRL`. It exists because there is no reference for the music-vs-SFX balance: on real hardware the drive fed the sound card's CD line at a level set outside the game entirely, so nothing in the binaries says how loud music should be against a sword hit. `0` mutes music while still consuming it, so the track still ends when it should and the guest still advances.
+
+#### `THEOC_CD_TRACE [presence]`
+
+Default: off
+
+Log every CD ioctl the guest issues — `READTOCHDR`, `SUBCHNL` status/track, stop/pause/resume/volume, and each `idle -> StartTrackForMood` auto-advance. Track *changes* are logged unconditionally (`[cd] play track N`), so this is only needed when the question is why a change did or did not happen. The first thing to reach for when the wrong music plays on a screen: the mood→track table is fixed and known, so a `[cd] play track N` that disagrees with it means the guest chose it, not the host.
+
+#### `THEOC_START_SEC [seconds]`
+
+Default: 600; `0` = unlimited; negative clamps to 0. **`THEOC_LONGRUN` defaults it to `0`** unless set explicitly
+
+Host wall-clock budget for the entire `Start()` call (intros + menu + play). Essentially a runtime limit implemented mostly for headless and scripted tests. Should be set to 0 on regular play sessions.
+
+Not an in-game timer. A timeout while the window is still open is reported as "host Start timeout — still in game" and counted as a live session, not a failure — but it *reads* like a fault, so suspect it first whenever a session ends at a suspiciously round elapsed time with nothing wrong in the log.
+
+#### `THEOC_VIDEO_HOLD [seconds]`
+
+Default: 2
+
+How long the window is held open after `Start` returns, so a final frame can be read. Previously visible only inside a sample command line. Effectively meaningless for regular play.
+
+#### `THEOC_FIX_SAVE [path]`
+
+Default: off
+
+Repairs one `.tsg` save in place and exits without booting — the offline half of the save-corruption fix, and how it is/was tested (no display, no data tree). Does both jobs: collapses the duplicate province groups *and* normalises the header. See [../subsystems/save-format.md](../subsystems/save-format.md) for details.
+
+#### `THEOC_NO_SAVE_FIX [presence]`
+
+Default: off
+
+Disables the game fixing the saves — both the group collapse and the header normalisation. The A/B revert for the save fix: with this set, saves grow 4–5 counter units per save again and corrupt at ~51, and the header goes back to carrying uninitialised stack. One knob for the whole hook deliberately, so that "leave my saves alone" means it.
+
+#### `THEOC_SCANLINES [percent, 0–90 (clamped)]`
+
+Default: 0 (off)
+
+CRT-lite simulation: darkens one row in every three of the sharp-bilinear intermediate, which is exactly one dark line per guest pixel row regardless of window size. 25 is a light hint, 60 heavy. A taste knob, off by default — scanlines are polarising and cost brightness. Authot's note: author likes 35 as that's a nice balance while still giving plenty of retro effect.
+
+No effect under `THEOC_LEGACY_SCALE` or during cutscenes, neither of which uses the intermediate.
+
+#### `THEOC_FULLSCREEN [set, non-empty, not "0"]`
+
+Default: off
+
+Borderless fullscreen at the desktop resolution (`FULLSCREEN_DESKTOP`, never an exclusive mode switch); 4:3 is preserved with pillarbox bars. Falls back to windowed if creation fails. `Alt+Enter` (⌥Return) toggles at runtime.
+
+#### `THEOC_CONSOLE [presence]`
+
+Default: off
+
+Arms the in-game developer console — **Alt+V** opens, **Alt+C** closes, on both the realm and province screens. No game patching: Alt+V is captured in the SDL hook and serviced at the next present as a guest call to `Edit__10cVOConsole(g_LogConsole)`, through the same one-redirect-per-present path the timer and sound slices use. Refused unless a `cShell` is attached (`g_LogConsole+0x38`), which is true exactly while a game screen is live. Skipped for headless images. Full chain: [../subsystems/dev-console.md](../subsystems/dev-console.md).
+
+#### `THEOC_EDIT [presence]`
+
+Default: off
+
+Forces the game's own edit mode on (`g_GameSession+0x50`, the byte `cGameSession.md` used to call `bPaused`). The mode exists in the binary but no shipped path selects it — every `SetupGame` call site passes normal. It freezes the simulation, which is what edit mode *is*, and is what makes the console `save` command legal. Re-applied per present because the game builds a new `cGameSession` on every load and re-initialises the flag; 58 sites read it and none writes it back, so stamping is sufficient.
+
+Note: most likely the main tool used by game designers to craft the retail campaign once it was generated by the engine.
+
+Independent of `THEOC_CONSOLE`, though `save` is the main reason to want it. See [../subsystems/dev-console.md](../subsystems/dev-console.md#edit-mode).
+
 
 ---
 
 ## Which instrument for which symptom
 
+It = game session.
+
 | Symptom | Reach for |
 |---|---|
-| **It froze.** | `THEOC_WATCHDOG=1` first — it tells you which side is stuck. Guest still running → the reported EIP is the spin; take it to Ghidra. Guest not executing → add `THEOC_SLOWLOG=250` to name the handler, and `THEOC_WATCHDOG_SAMPLE=/path/stack.txt` for a native stack of exactly that moment. |
-| **It's slow.** | `THEOC_FPS=1`. Blocks/s high and flat → genuinely CPU-bound; then `THEOC_PROFILE=1` for the hot blocks. Blocks/s low while fps is low → a host-side wait, and the `usleep` ms/s, heartbeat/s and mixer/s columns on the same line say which. Drive it there unattended with `THEOC_AUTO_PROVINCE=1`. |
-| **It crashed at `eip=0`.** | The zero-GOT scan (always on) is already in the log — if it says 0 slots, it is *not* an unresolved import. Then `THEOC_TRACE=1`, because at `eip=0` the frame pointer is normally 0 and the EBP backtrace prints "no frame pointer". `eip=0` with `EBP=0` means a smashed frame; look for who wrote past a buffer. |
-| **Audio stutters.** | `THEOC_FPS=1` — `underrun=N/s` counts callback samples pulled from an empty queue, and `audio q=` is the current depth in seconds. Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
-| **A visual bug.** | Frames, not logs. `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` to capture (it covers cutscenes too), `THEOC_CLICKS="x,y;x,y"` to drive to the screen, `THEOC_MOUSE_SWEEP=1` when the bug needs a moving pointer across consecutive frames. Lift the coordinates with `THEOC_REPORT_CLICKS=1` first. For geometry and scaling, read the `[video]` line before looking at the screen. |
-| **A multi-hour session.** | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. **Press `Alt+M` whenever the activity changes** — battle, reload, panel, idle. Without markers a session is one undifferentiated slope and every segment boundary is a guess; with them the tool prints a per-segment table (fitted MB/h, MB/1k frames, mean fps and blk/frame between one marker and the next) and rules them onto the chart. A controlled trial is one marked segment. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. **Growth per 1k frames is the figure to compare across runs**, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
-| **It leaks over a long session.** | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. **Watch `live`, not `frontier`** — see the note below. Note there is no allocation-site histogram; attributing a slow leak would need one built. |
-| **A missing import.** | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
+| It froze | `THEOC_WATCHDOG=1` first — it tells you which side is stuck. Guest still running → the reported EIP is the spin; take it to Ghidra. Guest not executing → add `THEOC_SLOWLOG=250` to name the handler, and `THEOC_WATCHDOG_SAMPLE=/path/stack.txt` for a native stack of exactly that moment. |
+| It's slow | `THEOC_FPS=1`. Blocks/s high and flat → genuinely CPU-bound; then `THEOC_PROFILE=1` for the hot blocks. Blocks/s low while fps is low → a host-side wait, and the `usleep` ms/s, heartbeat/s and mixer/s columns on the same line say which. Drive it there unattended with `THEOC_AUTO_PROVINCE=1`. |
+| It crashed at `eip=0` | The zero-GOT scan (always on) is already in the log — if it says 0 slots, it is *not* an unresolved import. Then `THEOC_TRACE=1`, because at `eip=0` the frame pointer is normally 0 and the EBP backtrace prints "no frame pointer". `eip=0` with `EBP=0` means a smashed frame; look for who wrote past a buffer. |
+| Audio stutters | `THEOC_FPS=1` — `underrun=N/s` counts callback samples pulled from an empty queue, and `audio q=` is the current depth in seconds. Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
+| A visual bug | Frames, not logs. `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` to capture (it covers cutscenes too), `THEOC_CLICKS="x,y;x,y"` to drive to the screen, `THEOC_MOUSE_SWEEP=1` when the bug needs a moving pointer across consecutive frames. Lift the coordinates with `THEOC_REPORT_CLICKS=1` first. For geometry and scaling, read the `[video]` line before looking at the screen. |
+| A multi-hour session | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. **Press `Alt+M` whenever the activity changes** — battle, reload, panel, idle. Without markers a session is one undifferentiated slope and every segment boundary is a guess; with them the tool prints a per-segment table (fitted MB/h, MB/1k frames, mean fps and blk/frame between one marker and the next) and rules them onto the chart. A controlled trial is one marked segment. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. Growth per 1k frames is the figure to compare across runs, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
+| It leaks over a long session | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. Watch `live`, not `frontier` — see the note below. Note there is no allocation-site histogram; attributing a slow leak would need one built. |
+| A missing import | The trap report at exit prints `UNIMPLEMENTED hit: N` with a call-count-sorted list of names — but only for imports that were *called*, so a path you never drove reports nothing. The zero-GOT scan after linking is the complement: it names every JMP_SLOT/GLOB_DAT slot still holding 0, before anything calls through it. `[link] unresolved strong UND` from `resolve()` is the third, and it only fires for STRONG symbols. |
 
 ### Reading the sleep slices — the host-timing check
 
-**Added 2026-08-04.** The sleep column of `[fps]` reads:
+The sleep column of `[fps]` reads:
 
 ```
 sleep 677ms/s in 43 usleep (3.18 slices/frame, +2.78ms each)
@@ -226,12 +508,11 @@ comparable to each other:
 
 | Host | slices/frame | overshoot/slice | How measured |
 |---|---|---|---|
-| macOS (`usleep`) | 3.00–3.17 | **+0.64 ms** (0.50–0.80) | this instrument, 2026-08-04, interactive province at 11.5 fps via `THEOC_AUTO_PROVINCE=1`, 19 samples |
-| Windows (VM, waitable timer) | 3.78 | ~1.0 ms | derived by hand from a 6-min in-game run, 2026-08-04 — [other-os-ports.md](other-os-ports.md) |
+| macOS (`usleep`) | 3.00–3.17 | **+0.64 ms** (0.50–0.80) | this instrument, interactive province at 11.5 fps via `THEOC_AUTO_PROVINCE=1`, 19 samples |
+| Windows (VM, waitable timer) | 3.78 | ~1.0 ms | derived by hand from a 6-min in-game run — [other-os-ports.md](other-os-ports.md) |
 
-**Take this reading in the real configuration or not at all.** The first macOS
-measurement was made headless under `SDL_VIDEODRIVER=dummy` and read **+2.1 …
-+3.2 ms**, 3–5× the true figure, which briefly made macOS look *worse* than the
+The first macOS measurement was made headless under `SDL_VIDEODRIVER=dummy` and read +2.1 …
++3.2 ms, 3–5× the true figure, which briefly made macOS look *worse* than the
 Windows VM. The dummy-driver run was sitting at 10.4 fps rather than 12, and the
 frame rate being off was the visible tell. Overshoot is a scheduling
 measurement: it absorbs whatever else the machine is doing, so a headless or
@@ -241,39 +522,29 @@ contended run inflates it and is not comparable to a session anyone plays.
 
 The guest heap has two numbers and only one of them answers "is this leaking":
 
-- **frontier** — how far the bump allocator has ever reached. A **high-water
-  mark**: it cannot fall, and it stops rising the moment freed blocks satisfy
+- **frontier** — how far the bump allocator has ever reached. A high-water
+  mark: it cannot fall, and it stops rising the moment freed blocks satisfy
   new requests.
 - **live** — bytes currently allocated. Rises on a leak, *falls* on a teardown
   or a save reload.
 
-`[health]` originally derived every growth figure from the frontier. That was
-sound before G15, when `free()` was a no-op and the two moved together — and
-silently wrong after it. Measured on a 2.28 h session (2026-07-27): **105 of 137
-samples reported `interval +0.000 MB/h`** while the live set climbed **+7.2
-MB/h**, dead linear. The instrument built to find a leak read zero straight
+`[health]` originally derived every growth figure from the frontier.
+Measured on a 2.28 h session 105 of 137 samples reported `interval +0.000 MB/h` while the live set climbed
++7.2 MB/h, dead linear. The instrument built to find a leak read zero straight
 through one.
 
 So growth is now measured on `live`, signed, and the frontier is reported as a
 level with its own rate — because headroom against the 128 MB arena genuinely
 *is* a frontier question (it is the frontier that runs into the end of it).
 
-**The general lesson**, which is the same one `frame-timing.md` teaches about
-clocks: when an instrument reads exactly zero, confirm it *can* be non-zero
-before believing it.
-
 ### A counter nobody armed
-
-The same lesson, caught again on 2026-08-01 and worth its own note because the
-zero this time was in the *other* direction — an instrument that always gave the
-same confident answer rather than an obviously dead one.
 
 `Machine::exec_blocks()` only counts if a block hook was installed, and the hook
 was installed by `THEOC_FPS` alone. Three instruments read the counter:
 
 - `[fps]` — armed it itself, so it was always right.
-- `[health]` — did not report it at all, which is why the 2026-07-31 session
-  cannot say whether its 11.5 fps battle was the guest doing more work or the
+- `[health]` — did not report it at all, which is why a session
+  couldn't say whether its 11.5 fps battle was the guest doing more work or the
   host falling behind. It reports it now.
 - **the watchdog** — its entire verdict is `db ? "STILL RUNNING (spinning)" :
   "NOT EXECUTING (stuck host-side)"`. With the counter unarmed, `db` is 0 every
@@ -322,10 +593,7 @@ pointer)", that is itself the finding: go to `THEOC_TRACE`.
 hit, split into implemented (with total calls) and **UNIMPLEMENTED** (with total
 calls, then listed by name, most-called first), followed by guest heap live MB,
 frontier MB, arena MB and free-block count. `0 unimplemented` is the standing
-regression bar for every commit. **On stderr**, like every other instrument — it
-was on stdout until 2026-08-01, which meant the documented `2>session.log`
-capture recipe dropped it: the 2026-07-31 two-hour session exited normally and
-still has no end-of-run allocator state, because it went to a terminal.
+regression bar for every commit. On stderr, like every other instrument.
 `Mvos::report` adds a vtable-slots-hit line in the legacy layer. `main` prints
 the matching `.ctors` tally (ok / aborted / no-return / faulted).
 
@@ -340,7 +608,7 @@ the request size against live, frontier and arena. `[slow]`, `[soak]`,
 subsystems; the soak driver switches stdout to line buffering on start so guest
 prints and our stderr diagnostics interleave in the right order.
 
-### The first line names the build — 2026-08-04
+### Build log line
 
 ```
 === Theocracy guest-libmvos host vX.Y.Z ===
@@ -359,9 +627,7 @@ Examples:
 **CMake** variable `-DTHEOC_VERSION=...` overrides it.
 
 
-### Which stream: stdout is the guest's, stderr is ours
-
-Settled 2026-08-02, after the same defect surfaced a third time.
+### Log stream split
 
 - **stdout** — the *guest's* output, and nothing else. Four sites, all in
   `traps.cpp`: the `puts` and `printf` handlers, and the two write paths that
@@ -369,56 +635,8 @@ Settled 2026-08-02, after the same defect surfaced a third time.
 - **stderr** — everything the *port* says: every `[tag]` line, the boot
   narrative, the `.ctors` tally, the trap report.
 
-The rule exists because the documented way to capture a session is
-`2>session.log`, so anything of ours on stdout is **absent from the log the
-analysis is done on** — while still being visible on the terminal during the
-run, which is exactly what makes it easy to miss. It has now cost three
-measurements:
 
-| When | What was lost |
-|---|---|
-| 2026-07-31 | `TrapLayer::report()` — the two-hour session exited normally and has no end-of-run allocator state |
-| 2026-08-01 | `[video]` and `[click]` — trial 2's +1.08 MB step could not be attributed to a fullscreen toggle from the log; the operator had to remember it |
-| 2026-08-02 | `[console]` and `[edit]` — would have made console use invisible during the battle trials |
-
-The first two were fixed one site at a time, which is why there was a third. All
-115 host `printf` sites across `port/src` now write to stderr, and the split is
-stated in `traps.cpp` above `register_builtins` so the next diagnostic starts on
-the right stream. Verified with `THEOC_HEAP_TEST=1`, which needs no display:
-**stdout is 0 bytes**.
-
-The general form is the same as "A counter nobody armed" above — an instrument
-is only as good as the path that delivers it, and that path is worth checking
-from the consumer's end rather than the author's.
-
----
-
-## Lessons the instruments encode
-
-**An instrument that infers liveness from a counter must be disarmed wherever
-that counter legitimately stops advancing.** The stall watchdog reported a >2s
-host-side stall entering the province. It was measuring its own shutdown: once
-`Start` returns, the window hold presents through `Video::keep_open_for`, which
-never touches the present counter the watchdog reads — so "no frames + guest not
-executing" fired on a process that was simply exiting. A captured stack showed
-`~TrapLayer`. `main` now calls `stop_watchdog()` before the wind-down, with the
-comment "frames stop legitimately now". The same commit closed the mirror-image
-gap: `dispatch_plugin` was not updating the watchdog counters at all, yet it
-hosts the heaviest host-side work in the port (`OpenDisplay`,
-`SwapBuffers`/present), so "stuck inside present" was indistinguishable from
-"stuck nowhere".
-
-**A silently rejected input is unfalsifiable from the log, so failure paths must
-dump their raw bytes.** The engine never sets `sin_family` — the single-instance
-lock binds `{family=0, port=5043, INADDR_ANY}`. Linux tolerates `AF_UNSPEC` on a
-socket already created `AF_INET`; BSD returns `EAFNOSUPPORT`. The first cut of
-`guest_to_host_sin` returned −1 silently, which surfaced as an unexplained
-`Fatal` three layers up in guest code and cost a debugging cycle. The failure
-path now always dumps the raw guest sockaddr. The same lesson recurs in the
-linker: `R_386_JMP_SLOT` used to be `m.w32(P, S)` with no check, so an
-unresolved symbol silently wrote 0 to the GOT and the trap report kept reporting
-0 unimplemented while the game died on a missing import — which is why the
-zero-GOT scan exists.
+## Some lessons on instruments
 
 **`eip=0` with `EBP=0` is a smashed frame, not a null call.** Linux/i386 `struct
 stat` (`_STAT_VER_LINUX`) is exactly 88 bytes and callers put it on the stack;
@@ -448,13 +666,6 @@ pointer to differ" survives a slow load, where a wall-clock script would desync
 every later click onto the wrong screen. Every step still carries a deadline,
 because a step that never completes is a bug to report loudly, not a driver that
 hangs silently.
-
-**A harness with a blind spot is worse than no harness where the bugs live.**
-Frame capture originally ran only from the normal present path, but cutscenes
-present from `SMPEG_playvideoframe` — so the harness was blind over exactly the
-frames a video-scaling bug shows up in. `shot_tick` was split out of
-`render_probe_tick` so the cutscene path can drive capture *without* the click
-and sweep drivers, which would skip the cutscene being photographed.
 
 **Deliberate waits must be credited out of a "slow" measure.** The frame cap
 sleeps up to 83ms on purpose. Without `slow_credit_ms_`, every capped frame

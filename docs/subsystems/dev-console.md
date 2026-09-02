@@ -5,10 +5,10 @@ single-player, and what `THEOC_CONSOLE=1` does about it. Addresses are **Ghidra
 space**: game `0x08048000`, libmvos `0x00010000` (libmvos file offset = Ghidra −
 `0x10000`).
 
-The short version: the console was **never compiled out**. It is fully linked,
+The short version: the console was never compiled out. It is fully linked,
 constructed on every realm and province screen, and sits behind exactly one
-never-taken branch. It is also, as shipped, **half-wired** — even in the
-multiplayer battles where the branch *is* taken, a typed command goes nowhere.
+never-taken branch. It is also half-wired as shipped — even in the multiplayer
+battles where the branch *is* taken, a typed command goes nowhere.
 
 ## The two consoles
 
@@ -32,7 +32,7 @@ and the realm loop (`RealmGameLoop`, `0x81a67a0`).
 = the `cConsoleVO` widget and `+0x4c` = link state (`0` unlinked, `1` linked,
 `2` linked as requester — this is the game's `DAT_085c0fcc`).
 
-## How you would open it, and where it dies
+## The open path, and where it stops
 
 `InGame_HandleKeyCommand` (`0x81e1aa0`) is the **Alt+key** dispatcher. Its two
 callers (`FUN_080bfff0`, `FUN_08125d30`) route a key event by reading the
@@ -56,8 +56,8 @@ The case selector is the raw eKey, and case `0x21` is **V**. So the chord is
 081e20c0: e8 ff cf e6 ff   call 0x0804f0c4           ; Edit__10cVOConsole
 ```
 
-`Edit__10cVOConsole` has **exactly one call site in the entire game binary** —
-that one. There is no second way in.
+`Edit__10cVOConsole` has exactly one call site in the entire game binary, and
+that is it.
 
 `cVOConsole::Edit` itself only links the console's widget into the screen as a
 **requester** (a modal overlay) and sets link state `+0x4c = 2`. It requires
@@ -65,9 +65,9 @@ that one. There is no second way in.
 
 ## Why `+0x2c` is always 0 in single-player
 
-`g_GameSession+0x2c` is the **multiplayer/battle-mode flag**, not a debug
-switch. Scanning the game for accesses through the `g_GameSession` pointer
-(`0x84c9610`) gives 65: **61 reads, 4 writes**. The writes are the entire story.
+`g_GameSession+0x2c` is the multiplayer/battle-mode flag; it has no debug
+meaning. Scanning the game for accesses through the `g_GameSession` pointer
+(`0x84c9610`) gives 65 — 61 reads and 4 writes, and the writes settle it.
 
 | Site | Value | Function |
 |---|---|---|
@@ -76,23 +76,20 @@ switch. Scanning the game for accesses through the `g_GameSession` pointer
 | `0x81458e5` | `0` | `SetupGame` again, 4 instructions later |
 | `0x829c679` | `1` | `NetGame_InitBattle` (`0x829c630`) |
 
-Two things worth knowing:
-
-- **`GameSession_Construct` never writes `+0x2c` at all.** It initialises `+0x2d`,
-  `+0x2e…`, `+0x48`, `+0x4c`, `+0x50` — but leaves the battle flag as whatever
-  `operator new` returned. The SP clears are therefore *defensive init against
-  uninitialised heap*, not a deliberate "disable the console" decision.
-- `SetupGame` clears it **twice**, straddling the `+0x2d` write. Both stores are
-  real in the disassembly and both are on the join path every branch falls into.
+`GameSession_Construct` never writes `+0x2c` at all. It initialises `+0x2d`,
+`+0x2e…`, `+0x48`, `+0x4c` and `+0x50`, but leaves the battle flag as whatever
+`operator new` returned — so the single-player clears are defensive init against
+uninitialised heap rather than a decision to disable the console. `SetupGame`
+clears it twice, straddling the `+0x2d` write; both stores are real in the
+disassembly and both are on the join path every branch falls into.
 
 So the console is not disabled for release. It is live in netgame battles, and
 single-player simply never sets the flag it happens to key off.
 
 ## The second problem: the command console has no shell
 
-This is the part that is easy to miss, and it makes the obvious patch useless.
-
-On ENTER, `cConsoleVO::Key` case `0x48` calls `cConsole::Input(owner, line)`.
+Patching the branch above is not enough, because of this. On ENTER,
+`cConsoleVO::Key` case `0x48` calls `cConsole::Input(owner, line)`.
 `Input` formats the line into the ring and then dispatches through the object's
 own vtable at `+0x3c`, slot `+0xc` — which for both `cConsole` and `cVOConsole`
 resolves to `cConsole::Process`. And `Process` is null-safe:
@@ -114,13 +111,13 @@ attach *different* shells:
 | `0x80bb917` | province (`FUN_080bb590`) | `add eax,0x409dc` → province`+0x409dc` | `push 0x85c0fe0` |
 | `0x81a6c90` | realm (`RealmGameLoop`) | `add eax,0x5d8` → `g_World+0x5d8` | `push 0x85c0fe0` |
 
-⇒ **The interactive console executes nothing, even in multiplayer.** It opens,
+So the interactive console executes nothing, even in multiplayer. It opens,
 edits a line, and drops it. The design was clearly meant to be "type in the
 bottom strip, read output in the big box" — `cShell+0x44` is a back-pointer to
 the console the shell reports *to*, and it points at the log console — but the
 input half was never connected.
 
-## Why the realm screen has no opener at all
+## The realm screen has no opener at all
 
 `InGame_HandleKeyCommand` is **not** a global hotkey handler. Key events reach
 whichever `cVObject` has focus, through that widget class's `vtable+0x10`
@@ -134,12 +131,12 @@ in `RealmGameLoop`), and its handler never routes Alt+key anywhere near case
 `0x21`. `RealmGameLoop`'s own event drain (`g_RealmScreen+0x70..0x7c`) does not
 dispatch at all — it only `delete`s events of type `-1`.
 
-⇒ On the realm screen there is **no branch to patch, at any address**. Which is
-why the whole approach had to change.
+So on the realm screen there is no branch to patch at any address, which is why
+the port opens the console itself rather than patching the game.
 
 ## What `THEOC_CONSOLE=1` does
 
-**It does not patch the game.** It calls the opener itself:
+It does not patch the game. It calls the opener itself:
 
 ```
 Alt+V (SDL event hook)  ->  console_open_pending_
@@ -152,8 +149,9 @@ call the same way the timer and sound slices do (a nested `uc_emu_start` crashes
 Unicorn). Being screen-independent, it works on realm and province alike, and it
 needs no patch site, no opcode signature and no `g_GameSession+0x2c` games.
 
-**Why `g_LogConsole` and not `g_CmdConsole`** (the strip the shipped call
-opens): the command console is a dead end on both halves — no shell at `+0x38`
+`g_LogConsole` is used rather than `g_CmdConsole`, the strip the shipped call
+opens, because the command console is a dead end on both halves: no shell at
+`+0x38`
 to execute with, and it is not the shell's print target either. `g_LogConsole`
 is both, so input, echo and output land in one visible box.
 
@@ -265,8 +263,8 @@ load is hoisted far from each comparison. Two independent classification passes
 disagreed, so no split is claimed here.
 
 - **Confirmed top-level and hidden** (read directly from the code, sitting in the
-  same ladder as `onlycheat`/`printid`): `zila`, `bagoy`, `tomy` —
-  Hungarian, and almost certainly developer nicknames used as personal shortcuts.
+  same ladder as `onlycheat`/`printid`): `zila`, `bagoy`, `tomy`. They are
+  Hungarian given names; what each does has not been read.
 - **Clearly sub-arguments** by form and by the commands they neighbour: `on`,
   `off`, `enable`, `disable`, `add`, `sub`, `set`, `all`, `closest`, `null`,
   `alfa`, `clear`.
@@ -289,8 +287,7 @@ against in `ProcessCommand`:
 | Province | `getdump`, `setdump`, `clrdump` |
 
 Typing them yields `Unknown command.` They are the residue of a help string that
-outlived its implementation — worth knowing before hunting for a handler that
-does not exist.
+outlived its implementation.
 
 ## Edit mode
 
@@ -385,7 +382,7 @@ matching each subcode against the ~19 UI handlers that push the same shape.
 **None of this works on the realm screen**, for the reason in the previous
 section: only the province view's widget routes Alt+key here.
 
-### The dead-key bug (fixed 2026-08-02)
+### The dead-key bug
 
 Alt+I, Alt+U and Alt+N are all implemented above and all did nothing under the
 port, while Alt+A worked. The cause was **not** in the game.
@@ -404,11 +401,11 @@ never consume `SDL_TEXTINPUT` — every key is translated from the raw scancode 
 bought nothing and cost five keys. The fullscreen toggle reuses the window
 (`SDL_SetWindowFullscreen`), so one call covers the session.
 
-**The lesson is the platform one:** a host that translates raw scancodes is not
-thereby immune to the host's input method. The composer sits *above* the key
-event, so the port loses the keystroke before any of its own translation runs —
-and it fails on a set of keys defined by the keyboard layout, which is why the
-failures looked patternless until the letters were listed out.
+Translating raw scancodes does not make a host immune to the host's input
+method: the composer sits *above* the key event, so the port loses the keystroke
+before any of its own translation runs. It fails on a set of keys defined by the
+keyboard layout, which is why the failures looked patternless until the letters
+were listed out.
 
 ## Cheats
 
@@ -442,9 +439,9 @@ Print(DAT_084c9124 ? "ProvCheat Enabled" : "ProvCheat Disabled");
 - The effect is to **unlock extra in-game key commands** — the ProvCheat readers
   are the key dispatchers. Decoded below.
 
-> **Corrected 2026-07-27.** This section previously said `allcheat` merely
-> reported status and that "there is no write of `0` to either flag anywhere in
-> the binary". Both were wrong. The toggle is a `xor` — `mov al,[flag]; xor al,1;
+> **Corrected.** This section previously said `allcheat` merely reported status
+> and that "there is no write of `0` to either flag anywhere in the binary".
+> Both were wrong. The toggle is a `xor` — `mov al,[flag]; xor al,1;
 > mov [flag],al` on RealmCheat and `xor byte [flag],1` on ProvCheat — and the
 > ad-hoc scan behind the original claim did not decode `88 /r` (store) or the
 > `80 /6` (xor) group, so a read-modify-write read as "never written".
@@ -520,8 +517,8 @@ you need the console, which needs multiplayer battle mode.
 
 ## Status
 
-**Working on both screens, verified interactively (2026-07-27).** Alt+V opens,
-Alt+C closes, and the command sets respond on realm and province.
+Working on both screens, verified interactively: Alt+V opens, Alt+C closes, and
+the command sets respond on realm and province.
 
 - **The qualifier mask is resolved.** `SetExitKey` stores the key at
   `cConsoleVO+0xb8` and a mask at `+0xbc`; `cConsoleVO::Key` closes when
@@ -535,23 +532,21 @@ Alt+C closes, and the command sets respond on realm and province.
 
 ### Open — and deliberately left so
 
-The cheat/console surface below is **incomplete by choice**, not by oversight.
-The console itself works on both screens and the useful cheats are identified;
-the remainder is tangential to the port, so it is **not tracked anywhere as
-work** and nobody should expect it to be picked up in order. Recorded here so
-the next person knows where the edge is rather than rediscovering it.
+The console works on both screens and the useful cheats are identified. What is
+left below is tangential to the port and is not tracked as work anywhere; it is
+listed so the edge of what was read is visible.
 
-- **`RealmCheat` is entirely unexamined.** Three read sites — `0x81a97a0`,
+- `RealmCheat` is entirely unexamined. Three read sites — `0x81a97a0`,
   `0x81a9821`, `0x81a9b4f`, all in realm-view code. The flag and its toggles are
-  understood; nothing about what it *unlocks* has been looked at.
-- **ProvCheat leftovers.** The `0x84ca13e` selector (keys `1`–`8`/`A` write 0..8
-  into it) — meaning unknown. The ~15 letter-cluster handlers are characterised
-  as a family but not read individually; reading all of them is the arcane part
-  and was explicitly stopped.
-- **`0x84c9125`.** The third cheat byte `onlycheat` toggles; readers not traced.
-- **Province command classification.** 57 literals vs 36 advertised, with no
-  reliable split between top-level commands and sub-arguments. Needs disassembly,
-  not decompile.
+  understood; what it unlocks has not been looked at.
+- ProvCheat leftovers: the `0x84ca13e` selector (keys `1`–`8`/`A` write 0..8
+  into it) has an unknown meaning, and the ~15 letter-cluster handlers are
+  characterised as a family but not read individually. Reading all of them is
+  the arcane part, and it was stopped deliberately.
+- `0x84c9125`, the third cheat byte `onlycheat` toggles. Readers not traced.
+- Province command classification: 57 literals against 36 advertised, with no
+  reliable split between top-level commands and sub-arguments. Needs
+  disassembly rather than the decompile.
 
 ## Cross-references
 
