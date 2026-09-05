@@ -16,30 +16,32 @@ engineering write-up of both binaries, which is meant to outlast the port.
 
 ### Quickstart
 
-1. Grab the latest release appropriate for your system from the releases page,
-  unpack it to a location you have full access to
+1. Grab the latest release for your system from the releases page, and
+  extract it to a folder of your choice
 2. Copy your CD's contents into `data/cd/` inside the port's folder
 3. Copy the installed game files into `data/game/` OR use the provided python tool to extract it:
 ```sh
 python3 tools/phls_extract.py data/cd/tdat.pck data/game
 ```
-5. Make sure your `theoc.cfg` is configured right:
+4. Make sure your `theoc.cfg` is configured right:
 ```
-THEOC_DATA        = data/game    # installed game data
+THEOC_DATA        = data/game    # installed/extracted game data
 THEOC_CD          = data/cd      # the CD contents
 ```
-6. Run it with `./theoc`
+5. (optional) Place the extracted music in a folder and point the config at it
+6. Run it with `./theoc` / `./theoc.bat` / `./theoc.sh`
 
 ### Note
 
 No game code or data is in this repository. Running it needs the Linux release's
-binaries in `data/cd/` and the CD data extracted to `data/game/`, neither of
+binaries in `data/game/` and the CD data copied to `data/cd/`, neither of
 which is distributed here. The Linux binaries shipped on CD unprotected, which
 is why they are the ones the port runs on every platform.
 
 Theocracy was published by Ubi Soft, never re-released, and is on no storefront.
 [`docs/README.md`](docs/README.md) records what is known about who holds the
-rights.
+rights. If you need a copy of the game, I've seen the CD for sale on various
+online second-hand marketplaces.
 
 ## Build and run
 
@@ -71,8 +73,6 @@ stands. The three worth knowing about:
 - [`docs/reference/re-methodology.md`](docs/reference/re-methodology.md) — how
   to read these binaries without repeating our mistakes.
 
-Open tasks are in [`todo.md`](todo.md).
-
 ## Licence
 
 Our own code is `GPL-2.0-or-later` ([`LICENSE`](LICENSE)); the choice is forced
@@ -86,11 +86,23 @@ game binary and are interface facts, not our expression.
 
 # Contributing
 
-The author is not looking for contributors at this stage, and considers the
-port complete.
+This port is considered complete. I'm not accepting code contributions at
+this stage, but if you're running it on hardware or configs I haven't
+tested, test output is genuinely appreciated, since most of my testing was
+on VMs and on a 2014 dual-core mini PC I grabbed for beer money.
 
-While the effort will be appreciated, any and all PRs will be closed without
-review. Visitors are welcome to fork the project to extend it as long the license
-is honored.
+If you want to contribute test output: read the docs, enable the diagnostic
+levers, and attach the logs as text files to a GitHub issue. At minimum
+you'll need `THEOC_FPS=1`; for long runs, set the other levers too.
 
-If you encounter an issue with the port, please open an Issue on GitHub.
+## Pull requests
+
+Effort is very much appreciated, but all PRs will be closed unread. You're
+welcome to fork the project if you want to take it further. The license lets
+you do so freely, so go nuts.
+
+## Issues and bugs
+
+Open a GitHub issue with full detail and clean steps to reproduce. I'm
+generally short on time, so "It doesn't work" with no effort shown will be
+closed on sight. If I can't reproduce it, I can't fix it.
