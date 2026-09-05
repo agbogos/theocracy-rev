@@ -113,17 +113,17 @@ Every runtime knob is in [porting/diagnostics.md](porting/diagnostics.md).
 
 ## The port — what's next
 
-Open tasks are in **[`todo.md`](../todo.md)** at the repo root. It holds tasks
-only; the reasoning stays in these docs. (It replaces the retired
-`task_fifo.md`.)
+**Nothing. The port is done and ready to release.** All three hosts are playable
+and verified by play; the macOS bundle is signed, notarised and played; the last
+outstanding measurement — the bare-metal Windows timing run — was taken and is
+in [porting/other-os-ports.md](porting/other-os-ports.md). There is no remaining
+*direction* either.
 
-**The port is a release candidate.** All three hosts are playable and verified
-by play. One task is outstanding — a bare-metal Windows timing run, blocked on
-hardware — and it qualifies a measurement rather than blocking anything. There
-is no remaining *direction* beyond it either; what is still unknown lives in
-each doc's own **"Open threads"** section. The second entry below is kept here
-rather than moved because it is the record of how a host port is done in this
-project, not a plan.
+There is no task file any more. `todo.md` was deleted once it emptied, as
+`task_fifo.md` was before it; both are in git. What is still unknown lives in
+each doc's own **"Open threads"** section, which is where a reader meets it in
+context. The second entry below is kept here rather than moved because it is the
+record of how a host port is done in this project, not a plan.
 
 - [porting/native-rewrite.md](porting/native-rewrite.md) — why the port stops at
   the emulator. Going further would mean changing the game rather than the host,
@@ -499,9 +499,15 @@ Sub-millisecond sleep was the risk ranked first and the only one that was real;
 a waitable timer fixed it, and contention runs to 2× oversubscription closed the
 question. The other was two implicit initialisations the port was relying on
 without having chosen to — POSIX's auto-binding `listen()`, and a `WSAStartup`
-that a third-party DLL happened to make — both latent on every platform. One
-item outstanding: a bare-metal timing run, which qualifies a measurement rather
-than blocking anything.
+that a third-party DLL happened to make — both latent on every platform.
+
+Nothing outstanding. The bare-metal run has since been taken, on a 2014 two-core
+i3 where the timer resolution really was at Windows' 15.625 ms default: the
+waitable timer holds the province frame at 86 ms against an 83.3 ms target, the
+VM's ~98 ms loaded figure was an artefact of the VM, and `timeBeginPeriod` is
+confirmed to buy nothing. The same session found what does limit that machine,
+which is guest throughput in a 100–150 unit battle rather than anything about
+timing.
 
 #### Windows — the build
 
@@ -518,8 +524,10 @@ runs the *Linux* binary. See
 
 #### macOS — what is next
 
-Nothing outstanding. Playability is closed, and so is the modernisation list —
-two of its last three items as *won't-do* once their premises were checked.
+Nothing outstanding. The signed, notarised bundle has been played through
+interactively, which was the last thing no automated check could reach.
+Playability is closed, and so is the modernisation list — two of its last three
+items as *won't-do* once their premises were checked.
 Province stays at its designed 12fps and
 [porting/frame-timing.md](porting/frame-timing.md) says why with evidence;
 `THEOC_PROVINCE_MS` is the one pacing control the engine admits. There is no

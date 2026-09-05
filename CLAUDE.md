@@ -12,12 +12,10 @@ port is one goal; the reverse-engineering write-up in `docs/` is the other.
 2. `docs/porting/host-architecture.md` before touching `port/src`;
    `docs/porting/diagnostics.md` before debugging anything.
 
-**Open tasks live in `todo.md`** (since 2026-08-04), split into what needs the
-user's machine/hardware and what an agent can do unattended. Put a task there
-rather than in prose — burying one in a paragraph is how it gets missed. It
-holds tasks only; the reasoning goes in `docs/`, which it links to. (The older
-`task_fifo.md` was retired on 2026-08-03 and is not coming back — its history is
-in git.)
+**There is no task file.** `todo.md` was deleted when it emptied, and
+`task_fifo.md` before it; both are in git and neither is coming back. The port
+is finished, so a queue of work would be fiction. If real work appears, put it
+in the doc that owns the subject rather than reviving a central list.
 
 `docs/porting/other-os-ports.md` is a direction rather than a task list.
 `docs/porting/native-rewrite.md` is *not* one: it records why replacing the

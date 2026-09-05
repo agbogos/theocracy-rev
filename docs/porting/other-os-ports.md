@@ -735,7 +735,106 @@ untested and is now part of what bare metal answers.
 
 **Status: the sleep-primitive question is closed.** The waitable timer is the
 right call, it holds up to 2× oversubscription, and no code change is indicated.
-What is left is one bare-metal run, for the reasons above and in the note.
+The bare-metal run that was outstanding has since happened, below.
+
+### Bare metal, on a machine where nothing had raised the timer resolution
+
+An Intel i3-4160T — two Haswell cores, four threads, 3.1 GHz, a 35 W desktop
+part from 2014 — bought secondhand for this one measurement. `--busy` was driven
+from `NUMBER_OF_PROCESSORS`, so **`--busy 4` puts four spinners on two physical
+cores and `--busy 8` is 2× oversubscription**; neither is comparable to the VM's
+12 logical CPUs, and the frame numbers under load should not be read against it.
+
+The environment line is the one the VM could never produce:
+`NtQueryTimerResolution current: 15.6250 ms (range 0.5000 .. 15.6250)`. That is
+1/64 s exactly — 156250 units of the 100 ns FILETIME tick, so the clock converts
+without a remainder — and it is the default the whole probe was written to meet.
+
+Idle, the sleep primitives separate exactly as predicted:
+
+| 0.100 ms requested | min | median |
+|---|---|---|
+| `Sleep()` | 6.77 ms | **15.65 ms** |
+| `Sleep()` + `timeBeginPeriod(1)` | 1.04 ms | 1.13 ms |
+| waitable timer (`HIGH_RESOLUTION`) | 0.51 ms | **0.62 ms** |
+| waitable timer + `timeBeginPeriod(1)` | 0.56 ms | 0.69 ms |
+
+30 Hz heartbeat lateness, median: 10.94 ms for `Sleep()`, **0.33 ms** for the
+waitable timer. Province frame: 94.38 ms for `Sleep()` against **83.74 ms** for
+the timer, target 83.33.
+
+**Two things this settles that the VM only implied.** The naive path really is
+unusable at the true default — 15.65 ms for a 0.1 ms request, one full tick,
+every time. And **the port is right not to call `timeBeginPeriod`**: the
+waitable timer alone (83.74 ms) matches the timer with the global resolution
+raised (83.52 ms), so raising it process-wide buys nothing measurable and the
+port declines to do it. That was a judgement call in `traps.cpp`; it is now a
+measurement.
+
+Under contention the ranking survives and the margin shrinks, the same shape the
+VM showed — heartbeat lateness 6.30 ms at `--busy 4`, 33.17 ms at `--busy 8`;
+ticks per frame 2.78 and 3.78, never collapsing toward 1, which was the
+criterion that mattered.
+
+### The in-game run — and what actually limits this machine
+
+Seven minutes, `THEOC_FPS=1`, one ordinary session: new campaign, province view
+with building placement, map view, then units sent to attack, a battle of
+roughly 100–150 units, and a loss back to the map. Clean throughout — 0 faults,
+0 aborts, no `[slow]` line, watchdog silent. Four cutscenes played.
+
+The quiet province is the number the run was for:
+
+```
+[fps] 11.6 fps | guest 3.0M blk/s (0.26M/frame) | heartbeat 29/s mixer 10/s
+      sleep ... in 40 usleep (2.50 slices/frame, +0.27ms each) | ...
+```
+
+**86.2 ms against an 83.3 ms target, at 2.50 slices/frame and +0.27 ms of
+overshoot per slice** — the probe predicted 2.50 slices and 83.7 ms, and the
+game delivered it. The VM's idle province frame was 87.0 ms and its loaded one
+97.9 ms, so **bare metal beats both, and the ~98 ms figure was a VM artefact**.
+
+Then the battle, and it is worth being precise about what gives way, because the
+symptom looks like the timing bugs this document is otherwise about:
+
+| | quiet province | map view | battle (100–150 units) |
+|---|---|---|---|
+| guest blocks/frame | 0.26M | 0.02–0.03M | 2.13M median, 4.52M peak |
+| guest blocks/s | 3.0M | 2.0M | **7.9M median, 9.5M peak** |
+| fps | 11.6 | 60–62 | 3.7 median |
+| heartbeat | 29/s | 30/s | **0/s** |
+| `usleep` calls/s | 40 | 0 | **0** |
+
+**`blk/s` pinning at ~9.5M while `blk/frame` climbs is the whole story.** That
+is the emulator's throughput ceiling on this CPU, and the degradation is gradual
+and legible across eight seconds — `blk/frame` 0.26 → 0.61 → 1.08M while the
+heartbeat falls 28 → 10 → 0/s and `usleep` falls 40 → 15 → 0. The frame limiter
+is not being starved; **it is never reached**, because the frame has already
+overrun its budget and has nothing left to sleep away. The heartbeat stops for
+the same reason. Audio starves with it — the queue sits at 0.00 s for the
+duration. When the screen changes at the end of the battle, the next second
+reads 41 fps and the one after 62, with the heartbeat back at 30/s.
+
+So this is a throughput measurement, not a timing one, and
+`docs/porting/frame-timing.md`'s rule survives inverted intact: under this
+emulator wall-clock bugs masquerade as performance bugs, and here a genuine
+performance limit masqueraded as a wall-clock bug. `blk/s` against `blk/frame`
+is what tells them apart, and it took one line of the instrument to do it.
+
+**What this does and does not say about other machines.** It says a 2014
+two-core 35 W part saturates below what a battle this size asks for: holding 12
+fps at the median battle frame needs 25.6M blk/s and the machine delivers 9.5M.
+It does **not** support a claim about modern hardware, and an earlier draft of
+this section made one — extrapolating from a guessed single-thread multiplier to
+"marginal even on a current machine". That was withdrawn. The ceiling is a
+per-machine quantity and only this one has been measured; the macOS and Linux
+figures elsewhere in these docs are work-limited rather than saturated, so they
+say nothing about where their roofs are. Reported experience on an Apple Silicon
+laptop is that the game is comfortable at every frame rate tried, with dips but
+nothing of this order. **Measuring a second ceiling would need the same battle
+run on another host with `THEOC_FPS=1`, reading `blk/s` at saturation** — which
+nothing currently depends on.
 
 ### Two latent defects closed
 
@@ -1000,6 +1099,16 @@ platforms, bare metal on each, and `THEOC_FPS`'s structural columns — guest
 blocks/frame and blocks/s — rather than the frame rate, for the reason the
 province differential already gives above.
 
+### Open thread — one cutscene's sample count differs between instruments
+
+The bare-metal session's `[audio] cutscene sound` lines agree exactly with the
+headless `[mpeg] decoded` counts above for `ubi_logo` (198144) and `intro`
+(1096128), and differ for `logo`: **442368 against 438336**, 4032 samples more.
+These are two different instruments on two different code paths — the guest's
+SMPEG surface versus the host decoder — so this is not yet a contradiction, and
+two of three agreeing exactly is the reason it is worth writing down rather than
+dismissing. Nothing depends on it; a cutscene plays correctly either way.
+
 ## Packaging a Linux bundle
 
 `tools/package-linux.sh [amd64|arm64]` builds and packages in one step, entirely
@@ -1097,9 +1206,10 @@ than the screen:
 
 Frame and sample counts are identical on amd64 and arm64, and identical to what
 the full-fat ffmpeg produced. **Windows is verified as far as cross-building
-allows** — same configure line, same sonames, closure resolved, bundle built —
-but nothing has *played* a cutscene there since the change; that is a task in
-[`todo.md`](../../todo.md).
+allows** — same configure line, same sonames, closure resolved, bundle built.
+It has since *played* cutscenes there too: the bare-metal session opened
+`ubi_logo`, `logo`, `intro` and `josda` and reported audio for each, on a build
+carrying the minimal ffmpeg.
 
 Two smaller things this dragged out:
 

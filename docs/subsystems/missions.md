@@ -369,7 +369,7 @@ parsed, and they are a live channel for both heroes and items:
   code-only audit cannot see. Supporting evidence in the binary: his portrait is
   preloaded by a caste registration (`0x08254def`, in the same block as heroes
   1–8), which the game would not do for content that never appears. Not yet
-  verified byte-wise in `init.dat` — see `todo.md`.
+  verified byte-wise in `init.dat` — see "Open threads" below.
 - The **ten undescribed-and-uncreated** items remain the interesting
   correlation, but "no player will ever hold one" is withdrawn until `init.dat`
   is read.
