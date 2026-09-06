@@ -508,6 +508,12 @@ private:
     // pointer, once after painting the new one — and presenting on the first
     // would show the erased state as its own frame.
     bool gd_refresh_dirty_ = false;
+    // True when cSprite::AfterSwapBuffer's slot swap has been patched out.
+    // The async pointer's saved background then has to be invalidated at
+    // each present; see HLE_SwapBuffers.
+    bool sprite_patched_ = false;
+    bool legacy_asyncbg_ = false;   // THEOC_LEGACY_ASYNCBG: A/B the fix
+    uint64_t async_stale_restores_ = 0;  // presents leaving slot B valid
     void install_gd_refresh(Machine& m, uint32_t mvos_base);
     // Copy the guest LFB to SDL and present. Just the pixels — none of the
     // per-frame bookkeeping HLE_SwapBuffers does (fps/soak/auto-keys/edit mode),

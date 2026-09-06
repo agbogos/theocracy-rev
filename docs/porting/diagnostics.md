@@ -226,7 +226,9 @@ Default: off
 
 After the click path finishes, drags the pointer across the screen a few pixels per frame (7px/frame horizontally, sine vertically) so a failed background restore leaves a visible track.
 
-Originally used for testing fix attempts for a cursor ghosting issue that is now resolved.
+Built for the G17 cursor-trail work, and it still measures that: on Credits, pixels differing from a mid-run baseline stay flat at ~684 with the fix and grow past 3900 without it.
+
+**It cannot exercise the async pointer path at all.** Motion once per frame means the between-frame repaint never has anything to repaint, and `cGD_LFB16::Refresh` fires zero times in a 20-second run. Any bug in that path — G22 was one — needs a hand on a mouse, or a driver that moves the pointer on the heartbeat rather than the present. That driver does not exist.
 
 #### `THEOC_SHOT_EVERY [N frames]`
 
@@ -288,6 +290,16 @@ Calls `Start__12cApplication` even when `OpenSubsystems` did not return cleanly.
 
 
 ### A/B reverts
+
+#### `THEOC_LEGACY_ASYNCBG [presence]`
+
+Default: off (slot invalidated)
+
+Stops `HLE_SwapBuffers` clearing `cSprite`'s async saved-background flag (`sprite+0x20`), which is the G22 fix in [guest-libmvos.md](guest-libmvos.md). With this set, `cSprite::Refresh` restores a background captured before the last scene redraw and stamps it over fresh pixels — the area under the pointer flickers to older content and sprites there vanish. Only visible when frames are slow.
+
+Pairs with `THEOC_LEGACY_SPRITE`, which reverts the G17 patch this one fixes the fallout of. The two defects are opposite, so a change to either path should be checked against both: pointer smearing on a *static* screen (Credits) and flicker under the pointer on a *busy* one (province, battle).
+
+The trap report line `async pointer stale-bg: N present(s) left cSprite slot B valid` counts the defect directly. It reads 0 under every self-driver, because none of them can trigger the async path at all — see G22.
 
 Each of these restores the behaviour a specific fix replaced, so the fix can be
 A/B'd against the bug it cured. Mostly useless for players.

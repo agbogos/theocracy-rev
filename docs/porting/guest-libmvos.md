@@ -608,6 +608,10 @@ Verified by screenshot on Credits and Load Game (trail gone, single cursor),
 province view unaffected, and a 3-cycle soak with heap/ESP identical to the
 pre-fix baseline.
 
+**The two slots are one per *path*, not one per buffer, and removing the swap
+broke the other path.** See G22 — this fix caused a second defect that took
+until after 1.0 to notice.
+
 ### Render-bug harness
 
 Added `THEOC_CLICKS="x,y;x,y"` (drive a
@@ -616,6 +620,73 @@ a track) and `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` (dump frames via
 `Video::save_bmp`). Menu button coordinates come from `data/menu/menu.cfg`
 (`credits 20 450` → click ~65,460; the offset from the cfg entry to a hit is
 about +45,+10).
+
+## G22 — the other half of the sprite slot pair
+
+G17 removed `AfterSwapBuffer`'s slot swap to make the single-buffer restore
+correct. That was right about the frame path and wrong about everything else,
+because the two saved-background slots are not one per framebuffer — they are
+**one per code path**:
+
+| Slot | Fields | Valid flag | Used by |
+|---|---|---|---|
+| A | `+0x24..+0x38` | `+0x38` | `BeforeSwapBuffer` / `AfterSwapBuffer` — the frame |
+| B | `+0x0c..+0x20` | `+0x20` | `cSprite::Refresh` — the 30Hz async repaint (G20) |
+
+`RestoreBg` checks the flag at *slot*`+0x14`, which is what identifies `+0x38`
+and `+0x20` as belonging to the two slots rather than being unrelated bytes, and
+it is exactly the pair the original swap exchanges (`0x8b6db..0x8b6e4`).
+`cSprite::Refresh` reads slot B at `0x8b737`–`0x8b74c`: `cmpb $0,0x20(%esi)`,
+then `add $0xc,%eax` and `RestoreBg`.
+
+So the swap was doing two jobs, and only one of them was about buffers: it also
+rotated the frame path's fresh save into the slot the async path would restore
+from. Without it, slot B is written only by the async path — so a `Refresh`
+restores a rectangle captured before the scene was redrawn and stamps those
+stale pixels back over it. On screen: the area under the pointer flickers to
+older content and sprites drawn there vanish. It scales with frame time, so it
+is invisible in ordinary play and obvious when the game is struggling.
+
+**The fix** is to clear slot B's valid flag at each present, in
+`HLE_SwapBuffers`. `Refresh` already guards on that flag and skips straight to
+save-and-paint, and skipping is correct rather than a compromise — the frame
+just presented has erased the old pointer. `THEOC_LEGACY_ASYNCBG=1` reverts.
+
+Confirmed by play: no smearing and no flicker. Both directions were checked,
+because a fix that suppresses the async restore is exactly how the *G17* bug
+would come back.
+
+### What could and could not be measured
+
+The credits screen gives a clean number for the G17 half. Counting pixels that
+differ from a mid-run baseline, with `THEOC_CLICKS="80,460"` and
+`THEOC_MOUSE_SWEEP=1`:
+
+| | pixels differing, over 20 captures |
+|---|---|
+| patched (either way) | 683 → 684, flat |
+| `THEOC_LEGACY_SPRITE=1` | 813 → 3910, monotonic |
+
+Flat ~684 is the cursor in two positions; the growth is the trail. Use a
+baseline frame from *after* the click — the first frames are still the menu, and
+comparing against those reports 80% of the screen differing and means nothing.
+
+**The G22 half cannot be reproduced by any self-driver, and that is
+structural.** `cGD_LFB16::Refresh` fired zero times in a 20-second province run
+with the sweep active: `THEOC_MOUSE_SWEEP` moves the pointer once per *frame*,
+and the async repaint exists precisely for motion *between* frames, so the 30Hz
+tick always finds nothing to do. A hand on a mouse decouples motion from the
+frame rate; a frame-paced driver cannot. Reproducing this headless needs a
+driver that injects motion on the heartbeat instead of the present, which does
+not exist yet.
+
+Two dead ends worth not repeating. Diffing screenshots between two runs proved
+nothing: the self-drivers are wall-clock paced, so the runs sat one frame apart
+and the diff picked up an animating region rather than the defect — the giveaway
+was that the "broken" run's rectangle matched the *next* frame of the good run,
+not an older one. And the stale-restore counter in the trap report reads 0 under
+every self-driver for the same reason the bug does not reproduce; it is only
+meaningful during real play.
 
 ## G18 — presentation: fullscreen, and movie aspect-fit
 

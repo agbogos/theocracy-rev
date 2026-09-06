@@ -4235,6 +4235,13 @@ void TrapLayer::report() const {
     // Everything else diagnostic ([health], [fps], [watchdog], faults) is
     // already on stderr; this was the one instrument that was not.
     std::fprintf(stderr, "\n=== trap report ===\n");
+    if (sprite_patched_)
+        std::fprintf(stderr, "  async pointer stale-bg: %llu present(s) left "
+                             "cSprite slot B valid%s\n",
+                     (unsigned long long)async_stale_restores_,
+                     legacy_asyncbg_ ? " — each one a stale restore "
+                                       "(THEOC_LEGACY_ASYNCBG=1)"
+                                     : " and were invalidated");
     std::fprintf(stderr, "  implemented imports hit: %u  (%llu calls)\n", impl,
                  (unsigned long long)impl_hits);
     std::fprintf(stderr, "  UNIMPLEMENTED hit:       %u  (%llu calls)\n", todo,
@@ -5232,6 +5239,47 @@ uint32_t TrapLayer::dispatch_plugin(Machine& m, uint32_t slot, uint32_t esp) {
             // screen already.
             gd_refresh_dirty_ = false;
 
+            // Invalidate the async pointer's saved background.
+            //
+            // cSprite has two saved-background slots: A at +0x24 (flag +0x38)
+            // and B at +0x0c (flag +0x20). They are not two buffers for one
+            // path -- they are one per path. BeforeSwapBuffer/AfterSwapBuffer
+            // use A; cSprite::Refresh, the 30Hz async repaint, uses B. The
+            // original AfterSwapBuffer swaps the pair every frame, and that
+            // swap is the only thing keeping the two paths' backgrounds
+            // coherent.
+            //
+            // We remove the swap (see install_plugins_and_video) because with
+            // one buffer the restore has to be of the same rect that was saved.
+            // The cost is that slot B is then written only by the async path:
+            // a Refresh restores a rectangle captured before the scene was
+            // redrawn and stamps those stale pixels back over it, which reads
+            // on screen as the area under the pointer flickering to older
+            // content and sprites drawn there vanishing. It scales with how
+            // long a frame takes, so it only shows when the game is struggling.
+            //
+            // Clearing the flag here is enough: Refresh guards on it
+            // (`cmpb $0,0x20(%esi); je`) and skips straight to save-and-paint.
+            // Skipping the restore is not a compromise, it is correct -- the
+            // frame just presented has already erased the old pointer.
+            if (sprite_patched_) {
+                if (uint32_t spr = pointer_sprite()) {
+                    uint8_t valid = 0;
+                    try { m.read(spr + 0x20, &valid, 1); } catch (...) {}
+                    // Slot B still valid at present time means the next async
+                    // Refresh will restore a background captured before this
+                    // frame -- one stale rectangle stamped over fresh pixels.
+                    // Counting it here measures the defect directly, without
+                    // depending on two runs staying frame-aligned (they do not:
+                    // the self-drivers are wall-clock paced).
+                    if (valid) async_stale_restores_++;
+                    if (!legacy_asyncbg_ && valid) {
+                        uint8_t zero = 0;
+                        try { m.write(spr + 0x20, &zero, 1); } catch (...) {}
+                    }
+                }
+            }
+
             // One guest redirect per present (no nested uc_emu_start). Prefer
             // sound when its ~90ms slice is due so the 33ms timer cannot starve
             // the mixer; otherwise fire SIGALRM → TimerSystem::Proc.
@@ -5331,6 +5379,11 @@ void TrapLayer::install_plugins_and_video(Machine& m, uint32_t mvos_base) {
         if (!std::getenv("THEOC_LEGACY_SPRITE")) {
             m.write(swap_at, jmp, sizeof jmp);
             m.write(mvos_base + 0x8b6ec, nops, sizeof nops);
+            sprite_patched_ = true;   // HLE_SwapBuffers invalidates slot B
+            legacy_asyncbg_ = std::getenv("THEOC_LEGACY_ASYNCBG") != nullptr;
+            if (legacy_asyncbg_)
+                std::fprintf(stderr, "  [cursor] async saved-bg invalidation DISABLED "
+                             "(THEOC_LEGACY_ASYNCBG=1)\n");
             std::fprintf(stderr, "  [HLE] cSprite::AfterSwapBuffer -> single-buffer restore "
                         "(no slot swap; THEOC_LEGACY_SPRITE=1 to revert)\n");
         }
