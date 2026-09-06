@@ -70,3 +70,5 @@ __pycache__/
 /port/deps-ffmpeg-win/
 /port/deps-ffmpeg-linux-*/
 /port/deps-ffmpeg-macos-arm64/
+
+CLAUDE.md
