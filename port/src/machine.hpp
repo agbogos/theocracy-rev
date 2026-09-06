@@ -19,6 +19,7 @@ constexpr uint32_t TRAP_BASE = 0x77000000;  // 1 byte per import; RX
 constexpr uint32_t VT_TRAP_BASE = 0x78000000; // 1 byte per synthesized vtable slot; RX
 constexpr uint32_t PLUGIN_TRAP_BASE = 0x76000000; // synthetic dlsym exports (Query/Create*)
 constexpr uint32_t STUB_BASE = 0x79000000;    // tiny guest x87 stub for float returns
+constexpr uint32_t RESUME_BASE = 0x7a000000;  // 1 byte; return address for a spliced guest call
 constexpr uint32_t FLOAT_SCRATCH = STUB_BASE + 0x800;
 constexpr uint32_t GUEST_FB_BASE = 0x53000000; // RGB565 framebuffer for HLE OpenDisplay
 constexpr uint32_t GUEST_FB_SIZE = 0x00400000; // 4 MB (≥ 1600×1200×2)
@@ -115,6 +116,25 @@ public:
     // Used e.g. to green-run the sound mixer after SwapBuffers present.
     void redirect_guest(uint32_t eip, uint32_t esp);
 
+    // Call a guest function from a trap handler and regain control when it
+    // returns. `redirect_guest` alone cannot do this: it hands the spliced call
+    // the handler's own return address, so the handler is finished the moment it
+    // splices. This plants a one-byte trap of ours as the return address
+    // instead, runs `k` with the guest's EAX when the call comes back, and then
+    // completes the trapped function's `ret` with whatever `k` returns.
+    //
+    //   handler:  m.call_guest_then(fn, {a, b}, [state](Machine& m, uint32_t r) {
+    //                 return final_value;   // becomes the trapped call's EAX
+    //             });
+    //             return 0;                 // return immediately after
+    //
+    // `k` may call call_guest_then again to chain a further call. It must own
+    // its state; the handler's locals are gone by the time it runs. This does
+    // not nest uc_emu_start — see host-architecture.md.
+    using Continuation = std::function<uint32_t(Machine&, uint32_t guest_result)>;
+    void call_guest_then(uint32_t fn, const std::vector<uint32_t>& args,
+                         Continuation k);
+
     uc_engine* uc() const { return uc_; }
 
     // Guest EIP profiler (THEOC_PROFILE): a size-weighted basic-block histogram
@@ -181,6 +201,16 @@ private:
     uint64_t prof_ticks_ = 0;
     std::unordered_map<uint32_t, uint64_t> prof_;   // block-start EIP -> Σ bytes
     std::chrono::steady_clock::time_point prof_last_;
+
+    // Pending spliced calls: where the trapped function must return to, and
+    // what to run when the guest call comes back. A stack, because a spliced
+    // function can hit a trap that splices again.
+    struct ResumeFrame { uint32_t outer_esp, retaddr; Continuation k; };
+    std::vector<ResumeFrame> resume_;
+    bool resume_installed_ = false;
+    bool in_resume_ = false;
+    uint32_t resume_outer_esp_ = 0, resume_retaddr_ = 0;
+    void install_resume_trap();
 
     struct TrapRegion { uint32_t lo, hi; TrapFn fn; };
     uc_engine* uc_ = nullptr;

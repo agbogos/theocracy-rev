@@ -3370,13 +3370,26 @@ void TrapLayer::fps_tick(Machine& m) {
         "heartbeat %.0f/s mixer %.0f/s\n"
         "      sleep %.0fms/s in %d usleep (%.2f slices/frame, +%.2fms each) | "
         "gettimeofday %d/s | select %d/s | "
-        "audio q=%.2fs underrun=%llu/s | heap %.1fMB live (+%.2fMB/s frontier)\n",
+        "audio q=%.2fs/%ums underrun=%llu/s | snd asked %.0f/s served %.0f/s "
+        "(full %.0f floor %.0f dry %.0f gap %.0fms) | heap %.1fMB live "
+        "(+%.2fMB/s frontier)\n",
         fps, bps / 1e6, bpf / 1e6,
         fps_timer_fires_ / secs, fps_sound_fires_ / secs,
         (fps_usleep_us_ / 1000.0) / secs, fps_usleep_calls_,
         slices_per_frame, over_ms,
         (int)(fps_gettime_calls_ / secs), (int)(fps_select_calls_ / secs),
-        qdepth / 44100.0, (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)),
+        qdepth / 44100.0, snd_target_ms_,
+        (unsigned long long)(underrun / 2 / (uint64_t)(secs < 1 ? 1 : secs)),
+        (snd_asked_ - fps_snd_asked_) / secs,
+        (snd_served_ - fps_snd_served_) / secs,
+        (snd_no_full_ - fps_snd_full_) / secs,
+        (snd_no_floor_ - fps_snd_floor_) / secs,
+        // "dry": asked, not served, and NOT because the queue was full. That is
+        // the only combination that can starve audio, so it is the one number
+        // worth correlating with the underrun count on this same line.
+        (double)((snd_asked_ - fps_snd_asked_) - (snd_served_ - fps_snd_served_)
+                 - (snd_no_full_ - fps_snd_full_)) / secs,
+        ask_gap_ms_,
         heap_live_ / 1048576.0,
         ((heap_next_ - fps_heap_base_) / 1048576.0) / secs);
 
@@ -3388,6 +3401,10 @@ void TrapLayer::fps_tick(Machine& m) {
     fps_sound_fires_ = 0;
     fps_usleep_us_ = 0;
     fps_usleep_calls_ = 0;
+    fps_snd_asked_ = snd_asked_;
+    fps_snd_served_ = snd_served_;
+    fps_snd_full_ = snd_no_full_;
+    fps_snd_floor_ = snd_no_floor_;
     fps_sleep_act_us_ = 0;
     fps_sleep_slices_ = 0;
     fps_gettime_calls_ = 0;
@@ -4110,10 +4127,37 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     // drains below (guard further down), with only a light floor to avoid re-firing
     // every yield. Serviced from both present AND usleep so throughput is decoupled
     // from the frame rate; the target depth is the audio latency.
-    if (redirecting_sound_ || soft_threads_.empty()) return false;
+    // Why a slice was NOT served is the thing the log could never say: there
+    // are five ways out of this function and they mean completely different
+    // problems. Underruns that survive a fix for one of them look identical to
+    // underruns caused by another.
+    snd_asked_++;
+    if (redirecting_sound_) { snd_no_reentrant_++; return false; }
+    if (soft_threads_.empty()) { snd_no_thread_++; return false; }
     auto now = std::chrono::steady_clock::now();
-    if (next_sound_slice_.time_since_epoch().count() != 0 && now < next_sound_slice_)
+
+    // How far apart the chances to feed the mixer are arriving. In healthy play
+    // this is ~17ms (tens of yields per second); in a heavy battle it stretches
+    // to 150-200ms, because the only opportunities are the present and usleep
+    // and both collapse with the frame rate. The queue has to bridge that gap
+    // or it runs dry before the next chance, whatever the service rate is --
+    // which is why chaining slices halved the *volume* of dropped audio without
+    // reducing the number of seconds that dropped any.
+    //
+    // Decaying max rather than an average: react immediately when the gap grows
+    // and fall back within about a second when frames recover, so the extra
+    // latency exists only while it is buying something.
+    if (last_sound_ask_.time_since_epoch().count() != 0) {
+        double gap = std::chrono::duration_cast<std::chrono::microseconds>(
+                         now - last_sound_ask_).count() / 1000.0;
+        if (gap > 500.0) gap = 500.0;      // a scenario load is not a frame rate
+        ask_gap_ms_ = gap > ask_gap_ms_ * 0.9 ? gap : ask_gap_ms_ * 0.9;
+    }
+    last_sound_ask_ = now;
+    if (next_sound_slice_.time_since_epoch().count() != 0 && now < next_sound_slice_) {
+        snd_no_floor_++;
         return false;
+    }
 
     // Every cThread::Launch calls pthread_create with the SAME start_routine
     // (cThread::Entry) and differs only in `arg`, the cThread* — so the entry
@@ -4150,7 +4194,7 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
         }
         if (!pick) pick = &t;
     }
-    if (!pick) return false;
+    if (!pick) { snd_no_running_++; return false; }
     {   // One line, once: how many cThreads are live and which one feeds audio.
         // This is the observation the music work predicted and could not make.
         static bool logged;
@@ -4167,30 +4211,157 @@ bool TrapLayer::maybe_redirect_sound(Machine& m, uint32_t esp) {
     // jitter (steady-state yields are ~16ms apart) but low enough that queued
     // audio isn't heard late. This depth IS the audio latency; too high delays
     // SFX, too low re-introduces underrun stutter. THEOC_AUDIO_MS tunes it.
-    static const size_t audio_target = []{
+    static const int base_ms = []{
         const char* e = std::getenv("THEOC_AUDIO_MS");
-        int ms = e ? atoi(e) : 120;              // ~120ms buffer / latency
-        return (size_t)(44100.0 * ms / 1000.0);  // int16 entries @ 22050Hz stereo
+        return e ? atoi(e) : 120;                // ~120ms floor / latency
     }();
+    static const bool fixed_q = std::getenv("THEOC_LEGACY_AUDIOQ") != nullptr;
+
+    // Bridge the measured gap with margin, never below the floor and never
+    // above a bound that keeps worst-case latency defensible. THEOC_AUDIO_MS
+    // raises the floor (constant latency, which is why its default stays 120);
+    // this raises the ceiling only while frames are slow.
+    //
+    // The deeper queue does mean more already-rendered audio that a cancelled
+    // sound can still play out. That is bounded by the same gap it is bridging:
+    // at 5fps the simulation advances 200ms per frame anyway, so ~300ms of
+    // committed audio is on the order of one frame of game time.
+    double need_ms = (double)base_ms;
+    if (!fixed_q) {
+        double bridge = ask_gap_ms_ * 1.5 + 30.0;
+        if (bridge > need_ms) need_ms = bridge;
+        if (need_ms > 400.0) need_ms = 400.0;
+    }
+    const size_t audio_target = (size_t)(44100.0 * need_ms / 1000.0);
+    snd_target_ms_ = (uint32_t)need_ms;
     {
         std::lock_guard<std::mutex> lock(audio_mu_);
-        if (audio_q_.size() > audio_target)
-            return false;
+        if (audio_q_.size() > audio_target) { snd_no_full_++; return false; }
     }
+    snd_served_++;
 
-    uint32_t ret = m.r32(esp);
-    uint32_t sp = esp;
-    sp -= 4;
-    m.w32(sp, pick->arg);
-    sp -= 4;
-    m.w32(sp, ret);
     next_sound_slice_ = now + std::chrono::milliseconds(15);  // light floor; buffer guard is the real limit
     fps_sound_fires_++;
     static int nred;
     if (nred++ < 4)
         std::fprintf(stderr, "  [audio] green-run Entry=%#x arg=%#x\n", pick->entry, pick->arg);
-    m.redirect_guest(pick->entry, sp);
+
+    // One slice is ~91ms of audio (one OSS fragment) and the device drains
+    // ~11/s, so a single slice per trap only keeps up while traps arrive at
+    // 11/s or better. They do not: slices are served from the present and from
+    // usleep, and in a heavy battle both collapse together -- measured 4-6
+    // served/s against 11 needed, with the decline counters at zero because
+    // the function was barely being *asked*.
+    //
+    // So chain slices instead of taking one and returning. call_guest_then
+    // gives the handler control back when the guest slice returns, at which
+    // point the queue depth is re-checked and another goes out if it is still
+    // short. Service rate stops depending on the frame rate.
+    //
+    // The queue *target* is unchanged. This only makes the queue actually
+    // reach 120ms instead of sitting at zero -- it does not buffer deeper, so
+    // the amount of already-rendered audio that a cancelled sound can still
+    // play out is the same as during ordinary play. Raising THEOC_AUDIO_MS
+    // would widen that; this does not.
+    schedule_sound_chain(m, esp, pick->arg, audio_target, 1);
     return true;
+}
+
+// Run one mixer slice and, when it returns, decide whether to run another.
+// `depth` counts slices already issued in this trap so a wedged queue cannot
+// spin: SOUND_CHAIN_MAX bounds the work a single trap can do, and the frame it
+// borrows time from is one that would otherwise have starved the mixer anyway.
+void TrapLayer::schedule_sound_chain(Machine& m, uint32_t esp, uint32_t arg,
+                                     size_t target, int depth) {
+    static constexpr int SOUND_CHAIN_MAX = 6;   // ~550ms of audio, far past target
+    uint32_t entry = 0;
+    for (auto& t : soft_threads_) if (t.arg == arg) { entry = t.entry; break; }
+    if (!entry) return;
+
+    redirecting_sound_ = true;
+    m.call_guest_then(entry, {arg},
+        [this, esp, arg, target, depth](Machine& mm, uint32_t) -> uint32_t {
+            redirecting_sound_ = false;
+            if (depth >= SOUND_CHAIN_MAX) { snd_chain_capped_++; return 0; }
+            size_t q;
+            { std::lock_guard<std::mutex> lock(audio_mu_); q = audio_q_.size(); }
+            if (q > target) return 0;           // filled: let the guest carry on
+            snd_chained_++;
+            fps_sound_fires_++;
+            schedule_sound_chain(mm, esp, arg, target, depth + 1);
+            return 0;
+        });
+}
+
+// ---- Machine::call_guest_then self-test (THEOC_RESUME_TEST) -----------------
+// The resume path is emulator core, and a fault in it surfaces as stack
+// corruption far from the cause. Trap a synthetic address, have the handler
+// call a real guest function and come back, and check both the side effect and
+// the value the trapped call returns. cMixer::Silence16 is used because it is
+// the simplest guest function with an observable effect: it zeroes chans*count
+// int16 at a caller-supplied address.
+bool TrapLayer::resume_selftest(Machine& m) {
+    if (!mvos_base_) return false;
+    constexpr uint32_t TEST_TRAP = 0x7b000000;
+    constexpr uint32_t OFF_SILENCE16 = 0x82290;
+    const uint32_t silence = mvos_base_ + OFF_SILENCE16;
+    const uint32_t mixer = SCRATCH + 0x60000;   // fake cMixer: +6 = channels
+    const uint32_t bufA = SCRATCH + 0x61000, bufB = SCRATCH + 0x62000;
+    const uint32_t count = 64;
+
+    uint8_t one = 1;
+    m.write(mixer + 6, &one, 1);
+    std::vector<uint8_t> dirty(count * 2, 0xAA), got(count * 2);
+
+    int bad = 0;
+    auto check = [&](bool ok, const char* what) {
+        if (!ok) { std::fprintf(stderr, "  [resume] FAIL: %s\n", what); ++bad; }
+    };
+    auto zeroed = [&](uint32_t at) {
+        m.read(at, got.data(), got.size());
+        return std::all_of(got.begin(), got.end(), [](uint8_t b) { return b == 0; });
+    };
+
+    // add_code_traps maps its window, so it can only be registered once; the
+    // three cases swap this instead.
+    static std::function<uint32_t(Machine&)> body;
+    m.add_code_traps(TEST_TRAP, 1, [](Machine& mm, uint32_t, uint32_t) -> uint32_t {
+        return body(mm);
+    });
+
+    // One call, then finish. The continuation's value must reach the caller.
+    m.write(bufA, dirty.data(), dirty.size());
+    body = [silence, mixer, bufA](Machine& mm) -> uint32_t {
+        mm.call_guest_then(silence, {mixer, bufA, count},
+                           [](Machine&, uint32_t) -> uint32_t { return 0x1234; });
+        return 0;
+    };
+    check(m.call(TEST_TRAP, {}) == 0x1234, "single: return value");
+    check(zeroed(bufA), "single: guest function ran");
+
+    // Two chained calls. Breaks if each frame is not built from the same base.
+    m.write(bufA, dirty.data(), dirty.size());
+    m.write(bufB, dirty.data(), dirty.size());
+    body = [silence, mixer, bufA, bufB](Machine& mm) -> uint32_t {
+        mm.call_guest_then(silence, {mixer, bufA, count},
+            [silence, mixer, bufB](Machine& m2, uint32_t) -> uint32_t {
+                m2.call_guest_then(silence, {mixer, bufB, count},
+                                   [](Machine&, uint32_t) -> uint32_t { return 0x5678; });
+                return 0;   // ignored: the chain continues
+            });
+        return 0;
+    };
+    check(m.call(TEST_TRAP, {}) == 0x5678, "chained: return value");
+    check(zeroed(bufA), "chained: first call ran");
+    check(zeroed(bufB), "chained: second call ran");
+
+    // A handler that splices nothing must still return normally.
+    body = [](Machine&) -> uint32_t { return 0x9abc; };
+    check(m.call(TEST_TRAP, {}) == 0x9abc, "no splice: plain handler");
+
+    std::fprintf(stderr, "[resume] call_guest_then self-test %s\n",
+                 bad ? "FAILED" : "passed");
+    return bad == 0;
 }
 
 uint32_t TrapLayer::dispatch(Machine& m, uint32_t slot, uint32_t esp) {
@@ -4235,6 +4406,19 @@ void TrapLayer::report() const {
     // Everything else diagnostic ([health], [fps], [watchdog], faults) is
     // already on stderr; this was the one instrument that was not.
     std::fprintf(stderr, "\n=== trap report ===\n");
+    if (snd_asked_)
+        std::fprintf(stderr,
+                     "  audio slices: asked %llu, served %llu (%.1f%%) — declined: "
+                     "queue-full %llu, floor %llu, reentrant %llu, no-thread %llu, "
+                     "none-running %llu; chained %llu, capped %llu\n",
+                     (unsigned long long)snd_asked_, (unsigned long long)snd_served_,
+                     100.0 * (double)snd_served_ / (double)snd_asked_,
+                     (unsigned long long)snd_no_full_, (unsigned long long)snd_no_floor_,
+                     (unsigned long long)snd_no_reentrant_,
+                     (unsigned long long)snd_no_thread_,
+                     (unsigned long long)snd_no_running_,
+                     (unsigned long long)snd_chained_,
+                     (unsigned long long)snd_chain_capped_);
     if (sprite_patched_)
         std::fprintf(stderr, "  async pointer stale-bg: %llu present(s) left "
                              "cSprite slot B valid%s\n",

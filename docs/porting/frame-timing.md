@@ -479,3 +479,29 @@ incremental native-override seam. `THEOC_NATIVE_BLIT=0` disables it.
 | `THEOC_AUDIO_MS=N` | Mixer queue target = audio latency in ms (default 120). Lower = less latency, more underrun risk. |
 | `THEOC_LEGACY_SLEEP=1` | Revert Bug-1 fix (blind `usleep`, heartbeat only from present). |
 | `THEOC_NATIVE_BLIT=0` | Revert to emulated libmvos rasteriser. |
+
+
+## Audio continuity and perceived smoothness
+
+Measured on a played battle, comparing the mixer scheduling before and after
+the change described in [diagnostics.md](diagnostics.md) (`THEOC_AUDIO_MS`):
+
+| | seconds dropping audio | dropped frames |
+|---|---|---|
+| one slice per yield, fixed 120 ms queue | 42.9% | 648k |
+| chained slices, adaptive queue | 6.1% | 151k |
+
+The second run had more slow seconds than the first (101 against 47), so the
+improvement is not a lighter workload.
+
+Worth recording separately: the session was reported as feeling markedly
+smoother to play even though the frame stutter was measurably worse than the
+baseline. Continuous audio across a dropped frame reads as a continuous scene;
+a gap in the audio reads as the whole game hitching. Province is frame-capped
+by design and cannot be raised (above), so of the two, the audio path is where
+effort still changes what a player experiences.
+
+Residue: about 6% of seconds still drop something, and 92% of that is scenario
+loading, where the guest yields nothing at all for a second or more. Separately,
+~30 simultaneous sound effects produce marginal stutter — many channels mixed in
+one slice is a cost per slice, which queue depth cannot address.

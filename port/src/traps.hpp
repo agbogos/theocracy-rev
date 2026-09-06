@@ -514,6 +514,32 @@ private:
     bool sprite_patched_ = false;
     bool legacy_asyncbg_ = false;   // THEOC_LEGACY_ASYNCBG: A/B the fix
     uint64_t async_stale_restores_ = 0;  // presents leaving slot B valid
+    // Why maybe_redirect_sound declined. Five exits, five different diagnoses:
+    // queue-full is healthy, floor is the 15ms gate, reentrant means we were
+    // already inside a slice, no-thread/none-running mean the mixer cThread was
+    // not there to run. Printed in the trap report.
+    uint64_t snd_asked_ = 0, snd_served_ = 0, snd_no_full_ = 0, snd_no_floor_ = 0,
+             snd_no_reentrant_ = 0, snd_no_thread_ = 0, snd_no_running_ = 0;
+    // Per-second baselines so [fps] can print rates alongside the underrun count.
+    uint64_t fps_snd_asked_ = 0, fps_snd_served_ = 0, fps_snd_full_ = 0,
+             fps_snd_floor_ = 0;
+    uint64_t snd_chained_ = 0, snd_chain_capped_ = 0;
+    // Adaptive queue depth: the decaying-max interval between chances to feed
+    // the mixer, and the target it currently implies. THEOC_LEGACY_AUDIOQ pins
+    // the target to THEOC_AUDIO_MS instead.
+    std::chrono::steady_clock::time_point last_sound_ask_{};
+    double ask_gap_ms_ = 0.0;
+    uint32_t snd_target_ms_ = 0;
+    // Issue one mixer slice via call_guest_then and re-check the queue when it
+    // returns, chaining until the target depth or SOUND_CHAIN_MAX is reached.
+    void schedule_sound_chain(Machine& m, uint32_t esp, uint32_t arg,
+                              size_t target, int depth);
+
+public:
+    // THEOC_RESUME_TEST: end-to-end check of Machine::call_guest_then.
+    bool resume_selftest(Machine& m);
+
+private:
     void install_gd_refresh(Machine& m, uint32_t mvos_base);
     // Copy the guest LFB to SDL and present. Just the pixels — none of the
     // per-frame bookkeeping HLE_SwapBuffers does (fps/soak/auto-keys/edit mode),

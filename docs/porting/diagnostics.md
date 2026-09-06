@@ -97,6 +97,15 @@ Host thread, armed on the first present. Polls the present counter every 250ms; 
 
 Arms the guest block counter itself — its whole verdict is read off `exec_blocks`, and that counter used to be armed by `THEOC_FPS` alone (see "A counter nobody armed" below).
 
+#### `THEOC_RESUME_TEST [presence]`
+
+Default: off
+
+Headless check of `Machine::call_guest_then`, the mechanism that lets a trap
+handler call guest code and carry on afterwards
+([host-architecture.md](host-architecture.md)). Three cases: one spliced call, a
+chained pair, and a handler that splices nothing. Exits with the result.
+
 #### `THEOC_WATCHDOG_SAMPLE [path]`
 
 Default: off
@@ -316,6 +325,13 @@ Default: off
 
 The cutscene-skip key mailbox. Never posts, so intros become unskippable. A/B switch for input-path hangs.
 
+#### `THEOC_LEGACY_AUDIOQ [presence]`
+
+Default: off (target adapts)
+
+Pins the mixer queue target to `THEOC_AUDIO_MS` instead of letting it grow to
+bridge the measured gap between service opportunities.
+
 #### `THEOC_LEGACY_SPRITE [presence]`
 
 Default: off
@@ -397,7 +413,27 @@ Minimum present-to-present interval, applied to every screen. It used to be a *p
 
 Default: 120
 
-Target mixer queue depth, which *is* the audio latency. Too high delays SFX, too low re-introduces an underrun stutter on modern systems.
+Floor for the mixer queue depth, in milliseconds of audio. The queue depth is
+the audio latency, so this is the minimum latency.
+
+The effective target is not fixed. Mixer slices can only be issued when the
+guest yields — at a present or a `usleep` — and in a heavy battle both collapse
+with the frame rate, to 150–200 ms apart. A 120 ms queue drains before the next
+opportunity arrives, whatever the service rate. So the interval between
+opportunities is measured and the target is set to bridge it, floored here and
+capped at 400 ms. `[fps]` prints `audio q=`*depth*`/`*target*`ms` and the
+measured `gap`.
+
+Raising this floor is the wrong lever and was measured: 300 ms halved the
+underruns in a battle, and the added latency on effects was rejected, because a
+floor applies during ordinary play as well. Adapting instead costs latency only
+while frames are slow — in the menu and realm the gap is ~17 ms and the target
+sits at the floor.
+
+A deeper queue holds more already-rendered audio, so a sound cancelled in the
+simulation plays out longer. That is bounded by the gap being bridged: at 5 fps
+the simulation advances 200 ms per frame, so a ~300 ms queue is about one frame
+of game time.
 
 #### `THEOC_CD_AUDIO [path]`
 
@@ -485,7 +521,7 @@ It = game session.
 | It froze | `THEOC_WATCHDOG=1` first — it tells you which side is stuck. Guest still running → the reported EIP is the spin; take it to Ghidra. Guest not executing → add `THEOC_SLOWLOG=250` to name the handler, and `THEOC_WATCHDOG_SAMPLE=/path/stack.txt` for a native stack of exactly that moment. |
 | It's slow | `THEOC_FPS=1`. Blocks/s high and flat → genuinely CPU-bound; then `THEOC_PROFILE=1` for the hot blocks. Blocks/s low while fps is low → a host-side wait, and the `usleep` ms/s, heartbeat/s and mixer/s columns on the same line say which. Drive it there unattended with `THEOC_AUTO_PROVINCE=1`. |
 | It crashed at `eip=0` | The zero-GOT scan (always on) is already in the log — if it says 0 slots, it is *not* an unresolved import. Then `THEOC_TRACE=1`, because at `eip=0` the frame pointer is normally 0 and the EBP backtrace prints "no frame pointer". `eip=0` with `EBP=0` means a smashed frame; look for who wrote past a buffer. |
-| Audio stutters | `THEOC_FPS=1` — `underrun=N/s` counts callback samples pulled from an empty queue, and `audio q=` is the current depth in seconds. Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
+| Audio stutters | `THEOC_FPS=1`. `underrun=N/s` counts callback samples pulled from an empty queue; `audio q=`*depth*`/`*target* and `gap` show whether the queue is deep enough for how often it can be refilled; `snd asked/served (full/floor/dry/gap)` says why a slice was skipped. Only `dry` can starve audio — `full` means the queue was already topped up and `floor` is the 15 ms gate. Underruns with `dry 0` and a small `gap` are not a scheduling problem: check whether the second was a scenario load (`+MB/s frontier`). Raise `THEOC_AUDIO_MS` to trade latency for margin; `THEOC_LEGACY_SLEEP=1` to confirm whether the fix that decoupled the mixer from the frame rate is what is holding it together. |
 | A visual bug | Frames, not logs. `THEOC_SHOT_EVERY=N` + `THEOC_SHOT_DIR` to capture (it covers cutscenes too), `THEOC_CLICKS="x,y;x,y"` to drive to the screen, `THEOC_MOUSE_SWEEP=1` when the bug needs a moving pointer across consecutive frames. Lift the coordinates with `THEOC_REPORT_CLICKS=1` first. For geometry and scaling, read the `[video]` line before looking at the screen. |
 | A multi-hour session | `THEOC_LONGRUN=60`, redirect stderr to a file, then plot it: `python3 tools/plot_health.py session.log`. **Press `Alt+M` whenever the activity changes** — battle, reload, panel, idle. Without markers a session is one undifferentiated slope and every segment boundary is a guess; with them the tool prints a per-segment table (fitted MB/h, MB/1k frames, mean fps and blk/frame between one marker and the next) and rules them onto the chart. A controlled trial is one marked segment. Don't read 137 samples as text — the question a long session answers is about *slope*, and the tool fits one (and prints the same numbers as a table with `--table`). All growth figures are on the **live set**; the frontier is reported as a level only, because it is a high-water mark that stops moving once freed blocks are reused. `interval` catches a sudden onset, `avg` a slow leak — the average includes the one-time ~29 MB scenario load, so give it ~30 min. Growth per 1k frames is the figure to compare across runs, because the engine is frame-tied: a session at `THEOC_FRAME_MS=50` (20fps) steps the simulation ~1.67× faster than the 83ms default and so allocates ~1.67× as much per wall-clock hour while being no less correct. |
 | It leaks over a long session | `THEOC_SOAK=20 THEOC_SOAK_PLAY=20` and compare the per-cycle `[soak]` snapshots — the numbers to watch are heap live vs frontier, host RSS, guest ESP, stub bytes and fd count. `THEOC_FPS`'s heap column gives the same split live-in-flight. `THEOC_HEAP_TEST=1` if the allocator itself is suspect. Watch `live`, not `frontier` — see the note below. Note there is no allocation-site histogram; attributing a slow leak would need one built. |

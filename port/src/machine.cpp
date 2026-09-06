@@ -172,6 +172,58 @@ void Machine::enable_profiling(uint32_t mvos_base) {
                  "(rolling top-15 every 3s; mvos base %#x)\n", mvos_base);
 }
 
+// ---- spliced guest calls with a return path ---------------------------------
+// Splicing (redirect_guest) gives a handler a tail call and nothing more: the
+// spliced function returns to the handler's caller. Planting our own one-byte
+// trap as the return address instead means the guest's `ret` lands here, where
+// the pending continuation runs and then finishes the trapped call by hand.
+// Still one uc_emu_start throughout.
+void Machine::install_resume_trap() {
+    if (resume_installed_) return;
+    resume_installed_ = true;
+    add_code_traps(RESUME_BASE, 1, [](Machine& m, uint32_t, uint32_t) -> uint32_t {
+        // The guest function's own `ret` popped the address we planted, so EIP
+        // landed here and EAX holds its result. The arguments we pushed are
+        // below ESP and are abandoned; the stack is restored from the frame.
+        ResumeFrame f = std::move(m.resume_.back());
+        m.resume_.pop_back();
+        uint32_t result = m.reg(UC_X86_REG_EAX);
+
+        m.in_resume_ = true;
+        m.resume_outer_esp_ = f.outer_esp;
+        m.resume_retaddr_ = f.retaddr;
+        uint32_t v = f.k(m, result);
+        bool chained = m.trap_raw_;   // k called call_guest_then again
+        m.in_resume_ = false;
+        if (chained) return 0;        // trap_raw_ stays set; code_hook defers
+
+        m.setreg(UC_X86_REG_ESP, f.outer_esp + 4);
+        m.setreg(UC_X86_REG_EAX, v);
+        m.setreg(UC_X86_REG_EIP, f.retaddr);
+        m.trap_raw_ = true;
+        return 0;
+    });
+}
+
+void Machine::call_guest_then(uint32_t fn, const std::vector<uint32_t>& args,
+                              Continuation k) {
+    install_resume_trap();
+    uint32_t outer_esp, retaddr;
+    if (in_resume_) {                 // chaining from inside a continuation
+        outer_esp = resume_outer_esp_;
+        retaddr = resume_retaddr_;
+    } else {                          // first splice, straight from a handler
+        outer_esp = esp();
+        retaddr = r32(outer_esp);
+    }
+    // Build each frame from the same base so a chain does not stack arguments.
+    uint32_t sp = outer_esp;
+    for (size_t i = args.size(); i-- > 0; ) { sp -= 4; w32(sp, args[i]); }
+    sp -= 4; w32(sp, RESUME_BASE);
+    resume_.push_back({outer_esp, retaddr, std::move(k)});
+    redirect_guest(fn, sp);
+}
+
 void Machine::add_code_traps(uint32_t base, uint32_t nslots, TrapFn fn,
                              bool map_region) {
     if (map_region) {

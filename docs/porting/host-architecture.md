@@ -233,6 +233,42 @@ back, so cost is O(1) guest accesses per call instead of O(pixels).
 `install_native_blit` is called from `main.cpp` just before `Start`, and only
 when not headless.
 
+### Calling guest code from a handler: `Machine::call_guest_then`
+
+`redirect_guest` gives a handler a tail call. The spliced function's return
+address is the handler's own, so control never comes back and the handler can do
+no work after the call. That is enough for the heartbeat and the sound slice as
+they were, and not enough for anything that needs the result.
+
+`call_guest_then` plants a one-byte trap of ours at `RESUME_BASE` as the return
+address instead:
+
+```
+handler:  m.call_guest_then(fn, {a, b}, [state](Machine& m, uint32_t result) {
+              return final_value;      // becomes the trapped call's EAX
+          });
+          return 0;                    // return immediately after
+```
+
+The handler writes a cdecl frame below the trapped function's own and redirects
+into `fn`. `fn` runs as ordinary guest code; its `ret` pops `RESUME_BASE` into
+EIP, which fires the resume trap. That hands the guest's EAX to the
+continuation and then emulates the trapped function's `ret` itself — `ESP =
+outer_esp + 4`, `EAX` from the continuation, `EIP` to the original return
+address.
+
+Each frame is built from the same `outer_esp`, so chaining calls does not stack
+arguments. A continuation may call `call_guest_then` again; the last one's
+return value is the trapped function's result. Continuations must own their
+state — the handler's locals are gone by the time one runs.
+
+This does not nest `uc_emu_start`. There is still exactly one, and the rule
+below is unchanged: a handler hands control back to the emulation already
+running rather than starting another.
+
+`THEOC_RESUME_TEST` covers a single call, a chained pair, and a handler that
+splices nothing.
+
 ### Patching guest code in memory
 
 This is a **different mechanism** from trapping an import: the host overwrites
@@ -472,7 +508,9 @@ old carve). The dedicated regions are `GUEST_FB_BASE` (framebuffer), `STUB_CODE`
 but are currently referenced only from the unlinked `mvos.cpp`, so nothing maps
 them in the shipped build — a new user would have to map them first.
 
-**Never nest `uc_emu_start`.** No `Machine::call` from inside a trap handler, a
+**Never nest `uc_emu_start`.** `call_guest_then` above does not weaken this: it
+returns control to the emulation already running. What stays forbidden is
+`Machine::call` from inside a trap handler, a
 code hook, or a block hook. Use `redirect_guest`, or build the guest structure
 by hand instead of calling its constructor (which is what `HLE_OpenDisplay` does
 for `cGD_LFB16`).
