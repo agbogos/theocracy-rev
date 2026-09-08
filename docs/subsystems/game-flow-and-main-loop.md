@@ -61,7 +61,10 @@ The init order is therefore: engine `.so` load (global ctors) → engine bootstr
   - `mode 0` (new game): reset `ManIndexArray` (population and units) and
     `BuildingIndexArray` (buildings), with a `Fatal` if either is not clean,
     then `new` the world object → `g_GameSession` (`0x84c9610`).
-  - `mode 1`: load from save (`FUN_081a07f0`). `mode 2`: load + `FUN_081f9430`.
+  - `mode 1`: load from save (`FUN_081a07f0`). `mode 2`: load +
+    `World_ResumeClock` (`0x81f9430`) — a loaded save starts its game clock;
+    see [game-loop-and-simulation.md](game-loop-and-simulation.md), "Pause is
+    the timer, not the flag".
 
   These `*IndexArray`s are the simulation's entity registries.
 - `OpenRealmScreen` (`0x8146010`): enter gameplay. Sets palette + pointer

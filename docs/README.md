@@ -230,7 +230,9 @@ being rewritten or abandoned.
 -
   [subsystems/game-loop-and-simulation.md](subsystems/game-loop-and-simulation.md)
   — `RealmGameLoop` and `SimulationUpdate`'s fixed timestep with bounded
-  catch-up; the dev-console gating.
+  catch-up; game speed, pause and fast-forward (`tickDuration` = 166 ms/day by
+  default, B/N/M = 1/50/100 days per second, and pause is the `cGameTimer` and
+  not the session flag); the dev-console gating.
 - [subsystems/simulation-step.md](subsystems/simulation-step.md) — one
   deterministic tick; the `ALLIED_JOIN_YEARS` alliance mechanic; and the
   argument for lockstep **as since weakened** — the command queue it

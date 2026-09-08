@@ -89,6 +89,11 @@ port had been capping the realm screen to 12fps on the assumption that it was.
 `SetBySys__8cDayTime`, which is pure wall-clock. Step 9 is the idempotent
 CD-state setter above, and everything else is render, input and focus.
 
+One exception, found later and narrow: the *pacing* is not frame-tied, but at
+the fast-forward speeds the achieved calendar rate is, because
+`SimulationUpdate` discards the sub-tick remainder on any frame that ran a
+tick. See "Game speed, pause and fast-forward" below.
+
 So rendering the realm screen faster is what the original would have done on a
 faster machine. The loop the port has to worry about is province
 (`cProvince_Do`), not this one.
@@ -133,6 +138,98 @@ What follows from it:
 - Units, buildings and provinces are iterated by index arrays, matching the
   `ManIndexArray`/`BuildingIndexArray` from `SetupGame`.
 
+## Game speed, pause and fast-forward
+
+**There is no separate fast-forward loop.** `RealmGameLoop` is the only
+empire/map loop, `SimulationStep` has exactly one caller (`SimulationUpdate`,
+checked by xref), and fast-forwarding is the catch-up `while` above running
+more ticks per frame.
+
+Speed is one field: `tickDuration` (`g_World+0x1408`), **milliseconds per
+tick** — and a tick is a day, so the UI unit is *days per second*. The whole
+set of writes was enumerated by scanning for the displacement
+([re-methodology](../reference/re-methodology.md) §17): three writes, two
+reads, and two `lea`s where `cWorld::Save`/`Load` take its address.
+The default is the only literal, written by the world builder (`0x81fb67a`):
+`0xa6` = 166 ms, so **the default empire speed is ~6 in-game days per second**.
+The other two writes are:
+
+| Where | What it does |
+|---|---|
+| `SetGameSpeed(world, daysPerSec)` (`0x81f9390`) | `tickDuration = 1000/daysPerSec`. `0` pauses, `>= 1` resumes a stopped clock and then sets the rate, `< 0` returns without touching anything — the "leave it alone" value |
+| `GameSpeedPanel_HandleMsg` (`0x81af5a0`) | the panel owning the pause button (child `+0x7c`) and the speed slider (child `+0x16c`); the slider branch writes `1000/value` straight into `tickDuration`, bypassing `SetGameSpeed` |
+
+and the read that is not `SimulationUpdate`'s divisor is `GameSpeedSlider_Do`
+(`0x81af620`), the reverse direction: on message `0x40` it moves the knob to
+match `tickDuration`, and returns `GameSpeed_LockDepth != 0` so the widget can
+render itself as locked. One further caller of `SetGameSpeed` is the
+message-bar handler at `0x8069f40`, which applies a per-message speed from a
+runtime-filled table at `0x859b940` (stride `0x44`) — the mechanism by which an
+event notification can drop the game speed. What populates that table has not
+been read.
+
+### The keys are B, N and M
+
+`eKeyCode` `0x0d`/`0x19`/`0x18` → `SetGameSpeed(1)`, `(50)` and `(100)` days
+per second, in `RealmMapView_Do` (`0x81a96f0`) via the jump table at
+`0x8380060` indexed by `key - 0x0d`. The mapping was read out of the table
+bytes rather than trusted from the decompiler's case labels
+([re-methodology](../reference/re-methodology.md) §5), and `eKeyCode` is
+libmvos's dense enum (`a` = `0x0c`), not a PC scancode — cross-checked against
+the port's own `sdl_scancode_to_ekey` table and against `v` = `0x21` for Alt+V.
+Each is gated on `GameSpeed_LockDepth(world) == 0`. All three sit *above* the
+`0x84c9123` debug gate in that function, so they are shipped player controls
+rather than cheats.
+
+### Pause is the timer, not the flag
+
+`RealmGameLoop`'s `if (g_GameSession+0x50 == 0)` gate is **edit mode**, and it
+never toggles at runtime ([../structs/cGameSession.md](../structs/cGameSession.md)).
+The real pause is the `cGameTimer` at `g_World+0x1410`, a class that names
+itself in its own error string — `"E: cGameTimer::Unlock() : object is not
+locked\n SZOLJ asvanynak!"`, Hungarian, and a colleague's name
+([re-methodology](../reference/re-methodology.md) §9).
+
+It is a nestable stopwatch over `cDayTime`: `+0x10` holds the start timestamp
+while running and the frozen elapsed value while locked, `+0x14` is the lock
+depth.
+
+| | |
+|---|---|
+| `cGameTimer_Lock` (`0x81f5890`) / `_Unlock` (`0x81f58c0`) | freeze / thaw, nested. `_UnlockAll` (`0x81f5900`) forces the depth to 0 |
+| `cGameTimer_GetElapsedMs` (`0x81f5830`) | **returns 0 while locked** — that is the entire mechanism |
+| `cGameTimer_NowMs` (`0x81f5760`) | `SetBySys__8cDayTime` then `sec*1000 + usec/1000`, which is what fixes `tickDuration`'s unit as milliseconds |
+| `World_PauseClock` (`0x81f93f0`) / `_ResumeClock` (`0x81f9430`) / `_ResumeClockAll` (`0x81f9470`) | the same on `g_World`, plus a `cMsgSender` notification: `0` on pause, `1` on resume |
+| `PauseGame` (`0x81fcb00`) / `ResumeGame` (`0x81fcb20`) | nestable *game* pause — they also inc/dec a depth counter at `g_World+0x5c0`, read by `GameSpeed_LockDepth` (`0x81fcb40`) |
+
+So a paused game still calls `SimulationUpdate` every frame: elapsed is 0, it
+computes 0 ticks, and returns having done nothing. `SetupGame` mode 2 calling
+`World_ResumeClock` ([game-flow-and-main-loop.md](game-flow-and-main-loop.md))
+is a loaded save starting its clock.
+
+The depth at `g_World+0x5c0` starts at 0 (`0x81fb5c8`) and is saved with the
+world ([calendar.md](calendar.md) places it in the `.tsg` stream). Its only
+caller pair is `Province_PauseEmpireClock` / `_ResumeEmpireClock`
+(`0x81db1a0` / `0x81db1d0`), which stop and restart the empire calendar once on
+province entry and exit, guarded by the byte at `province+0x40a31`. That is why
+empire time freezes while you are inside a province, and why B/N/M do nothing
+there.
+
+### Fast-forward loses days, and this one is frame-rate dependent
+
+`cGameTimer_Reset` (`0x81f5860`) rebases the timer after a batch of ticks, and
+the call sits **inside** `SimulationUpdate`'s `if (ticks != 0)` branch, so the
+sub-tick remainder is discarded — but only on frames that ran at least one
+tick. At the default 166 ms/day a frame is far shorter than a tick, nothing is
+discarded, and time accumulates exactly. At M (100 days/sec, `tickDuration` =
+10 ms) a 16 ms frame yields one tick and throws away 6 ms, so the calendar runs
+*below* the nominal rate in fps-sized quanta: nominal 100 days/sec comes out
+nearer 60 at 60fps. The 10-tick clamp only bites past 100 ms/frame.
+
+For the port this is the one place where realm frame rate changes game
+behaviour rather than just smoothness, and it is original behaviour, not
+something the emulator introduces.
+
 ## `UpdateProvincePaletteEffects(bitmapBlock)` (`0x81f8ff0`)
 Per-frame cosmetic pass. Derives pulsing color components from the `cDayTime`
 clock, then for each province (`g_World+0x1468`, count `+0x1470`) reads an
@@ -146,6 +243,13 @@ Functions: `RealmGameLoop`, `SimulationUpdate`, `SimulationStep` (`0x81f94a0`,
 inferred), `InitWorldForPlay`, `UpdateProvincePaletteEffects`. Data: `g_World`
 (`0x85c0b74`), `g_GameSession` (renamed from `g_GameWorld`, `0x84c9610`).
 
+Named with the game-speed pass: `SetGameSpeed`, `PauseGame`, `ResumeGame`,
+`GameSpeed_LockDepth`, `World_PauseClock`, `World_ResumeClock`,
+`World_ResumeClockAll`, `Province_PauseEmpireClock`,
+`Province_ResumeEmpireClock`, `RealmMapView_Do`, `GameSpeedPanel_HandleMsg`,
+`GameSpeedSlider_Do`, and the `cGameTimer` methods `_NowMs`, `_IsLocked`,
+`_GetElapsedMs`, `_Reset`, `_Lock`, `_Unlock`, `_UnlockAll`.
+
 ## Open threads (next targets)
 - **`SimulationStep` (`0x81f94a0`)** — the single deterministic tick; decompile
   to find the unit/AI/economy update. This is the core gameplay logic.
@@ -155,8 +259,5 @@ inferred), `InitWorldForPlay`, `UpdateProvincePaletteEffects`. Data: `g_World`
 - **The `cMsgSender` at `+0x5c8`** — decode what message `2` carries. This is
   now the *only* candidate for the command/sync channel, since
   `FUN_081a1fa0`/`FUN_081a2180` turned out to be `cDate_ctor_YMD`/`cDate_Add`.
-- **`tickDuration` (`world+0x1408`)** — its value is unread; no absolute xref
-  exists (it is written through a register-held `this`). Since one tick is one
-  in-game day, this single field sets how fast the calendar runs.
 - Confirm lockstep by checking the IPC receive side consuming the tick-sync
   messages.

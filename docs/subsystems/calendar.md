@@ -185,10 +185,21 @@ So one simulation tick is exactly one in-game day. There is no accumulator and
 no separate calendar clock; the tick *is* the day. Two things follow:
 
 - The whole calendar rate is one number: `tickDuration` at `g_World+0x1408`,
-  the divisor in `SimulationUpdate`'s `ticks = elapsed/tickDuration`. Its value
-  is still unread — there is no absolute xref, since it is written through a
-  register-held `this` — so how many real seconds an in-game day takes is not
-  stated here.
+  the divisor in `SimulationUpdate`'s `ticks = elapsed/tickDuration`, in
+  **milliseconds per day**. Its value *is* now read: the world builder
+  (`0x081fb67a`) writes `0xa6` = 166 ms, so **a default in-game day is 166 ms
+  of wall clock — about 6 days per second** — and the player moves it with the
+  speed control, `SetGameSpeed(world, daysPerSec)` writing `1000/daysPerSec`.
+  The full mechanism, the B/N/M keys and the pause path are in
+  [game-loop-and-simulation.md](game-loop-and-simulation.md), "Game speed,
+  pause and fast-forward". Since the field is in the save stream (above), the
+  chosen speed persists across save/load.
+- The rate is exact only while a frame is shorter than one tick.
+  `cGameTimer_Reset` is called inside `SimulationUpdate`'s `ticks != 0` branch,
+  so a frame that ran at least one tick discards its sub-tick remainder. At
+  166 ms/day that never happens. At the fast-forward speeds (100 days/sec is
+  10 ms/day) a 16 ms frame runs one tick and drops 6 ms, so the calendar
+  advances *slower* than the nominal rate, in fps-sized quanta.
 - Catch-up moves the calendar. `SimulationUpdate` clamps to 10 ticks per call,
   so a stalled frame does not lose days up to that bound, but a stall long
   enough to exceed it permanently loses in-game days, silently. This is

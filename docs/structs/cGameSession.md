@@ -52,3 +52,8 @@ struct cGameSession {          // 0x58
   `bMultiplayerBattle`/`localTribe`/`scenarioID`/`bEditMode`;
   `SimulationStep`/`SimulationUpdate` gate on `bEditMode`;
   `InGame_HandleKeyCommand` gates the console on `bMultiplayerBattle`.
+- **`bEditMode` is not the pause flag**, despite gating the sim call. Runtime
+  pause stops the `cGameTimer` at `g_World+0x1410`, which makes
+  `SimulationUpdate` compute 0 ticks with the gate still open — see
+  [../subsystems/game-loop-and-simulation.md](../subsystems/game-loop-and-simulation.md),
+  "Pause is the timer, not the flag".
