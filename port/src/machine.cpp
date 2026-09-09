@@ -172,6 +172,182 @@ void Machine::enable_profiling(uint32_t mvos_base) {
                  "(rolling top-15 every 3s; mvos base %#x)\n", mvos_base);
 }
 
+// ---- indirect-call edge log (THEOC_ICALL) ------------------------------------
+// See machine.hpp for why this is a block hook and not an instruction hook.
+// data/indirect_sites.tsv is `image site retaddr kind func text`, file
+// addresses; the runtime address is bias + file address, as for the profiler's
+// function tables.
+void Machine::icall_load_sites(uint32_t mvos_base) {
+    const char* path = "data/indirect_sites.tsv";
+    std::FILE* f = std::fopen(path, "r");
+    if (!f) {
+        std::fprintf(stderr, "[icall] no site table at %s -- run "
+                             "tools/indirect_sites.py first\n", path);
+        return;
+    }
+    char line[1024];
+    size_t n = 0, dup = 0;
+    while (std::fgets(line, sizeof line, f)) {
+        char* p = line;
+        char* t1 = std::strchr(p, '\t');   if (!t1) continue;
+        char* t2 = std::strchr(t1 + 1, '\t'); if (!t2) continue;
+        char* t3 = std::strchr(t2 + 1, '\t'); if (!t3) continue;
+        *t1 = *t2 = *t3 = '\0';
+        uint32_t bias = std::strcmp(p, "mvos") == 0 ? mvos_base : 0;
+        char* end = nullptr;
+        uint32_t site = (uint32_t)std::strtoul(t1 + 1, &end, 16);
+        if (end != t2) continue;                         // header row
+        uint32_t ret  = (uint32_t)std::strtoul(t2 + 1, &end, 16);
+        if (end != t3) continue;
+        site += bias; ret += bias;
+        if (!icall_sites_.emplace(ret, site).second) { ++dup; continue; }
+        icall_kind_[site] = (t3[1] == 'j') ? 'j' : 'c';
+        ++n;
+    }
+    std::fclose(f);
+    std::fprintf(stderr, "[icall] %zu indirect sites from %s%s\n", n, path,
+                 dup ? " (some return addresses collided and were dropped)" : "");
+}
+
+// Hot path. `prev` is where the previous block ended; if that is a site's
+// return address, the previous block ended *on* that indirect call and this
+// block is where it went.
+//
+// The one false positive is a block Unicorn cut short for its own reasons
+// immediately before the call, which lands the next block on the call site
+// itself rather than on its target -- so a self-edge is that, not a call.
+void Machine::icall_hook(uc_engine*, uint64_t addr, uint32_t size, void* user) {
+    auto* self = static_cast<Machine*>(user);
+    uint32_t a = (uint32_t)addr;
+    uint32_t prev = self->icall_prev_end_;
+    self->icall_prev_end_ = a + size;
+    if (!prev) return;
+    auto it = self->icall_sites_.find(prev);
+    if (it == self->icall_sites_.end()) return;
+    if (it->second == a) return;                          // TB split, not a call
+    self->icall_edges_[((uint64_t)it->second << 32) | a]++;
+    if ((++self->icall_ticks_ & 0xffff) == 0) {           // ~every 64k edges
+        auto now = std::chrono::steady_clock::now();
+        if (now - self->icall_last_ >= std::chrono::seconds(30)) {
+            self->icall_write();
+            self->icall_last_ = now;
+        }
+    }
+}
+
+void Machine::enable_icall_log(uint32_t mvos_base) {
+    icall_on_ = true;
+    icall_last_ = std::chrono::steady_clock::now();
+    icall_mvos_base_ = mvos_base;
+    icall_load_sites(mvos_base);
+    if (icall_sites_.empty()) { icall_on_ = false; return; }
+    uc_hook h;
+    uc_check(uc_hook_add(uc_, &h, UC_HOOK_BLOCK, (void*)&Machine::icall_hook,
+                         this, 1, 0),
+             "uc_hook_add(icall)");
+}
+
+// Runtime address -> (image, file address). Host trap pages have no image and
+// keep their raw address; seeing one in the table is itself a finding -- it is
+// an indirect call that reached a native override or an HLE import.
+const char* Machine::icall_where(uint32_t addr, uint32_t* file) const {
+    uint32_t mv = icall_mvos_base_;
+    if (mv && addr >= mv && addr < mv + 0x200000) { *file = addr - mv; return "mvos"; }
+    if (addr >= 0x08048000 && addr < 0x09000000) { *file = addr; return "game"; }
+    *file = addr;
+    return "host";
+}
+
+// Written periodically as well as at exit: this log only pays off over a long
+// hand-played session (the interesting sites are battle-only), and losing one
+// to a force-quit would mean asking for the session again.
+void Machine::icall_write() {
+    // Group by site so the summary can separate the sites that only ever go one
+    // place -- which a static tool could have been told, and which subtree.py
+    // can now treat as an ordinary edge -- from the genuinely polymorphic ones.
+    struct Site { std::vector<std::pair<uint32_t, uint64_t>> tgts; uint64_t total = 0; };
+    std::unordered_map<uint32_t, Site> by_site;
+    for (auto& e : icall_edges_) {
+        uint32_t site = (uint32_t)(e.first >> 32), tgt = (uint32_t)e.first;
+        auto& s = by_site[site];
+        s.tgts.push_back({tgt, e.second});
+        s.total += e.second;
+    }
+
+    size_t mono = 0, poly = 0;
+    for (auto& e : by_site) (e.second.tgts.size() == 1 ? mono : poly)++;
+
+    const char* out = std::getenv("THEOC_ICALL_OUT");
+    std::string dest = out ? out : "icall.tsv";
+    std::FILE* f = std::fopen(dest.c_str(), "w");
+    if (f) {
+        // File addresses plus an image tag, not runtime addresses: a runtime
+        // address would have to be un-biased by every reader, and everything
+        // else in data/ is keyed by file address (§1).
+        //
+        // Addresses only. Naming them needs a symbol table, the host has no
+        // business carrying one for a diagnostic, and the tool that generated
+        // the site list already has objdump's labels in hand.
+        std::fprintf(f, "image\tsite\tkind\ttgt_image\ttarget\tcount\n");
+        std::vector<uint32_t> sites;
+        sites.reserve(by_site.size());
+        for (auto& e : by_site) sites.push_back(e.first);
+        std::sort(sites.begin(), sites.end());
+        for (uint32_t site : sites) {
+            auto& s = by_site[site];
+            std::sort(s.tgts.begin(), s.tgts.end(),
+                      [](auto& a, auto& b) { return a.second > b.second; });
+            auto k = icall_kind_.find(site);
+            uint32_t sfile; const char* simg = icall_where(site, &sfile);
+            for (auto& t : s.tgts) {
+                uint32_t tfile; const char* timg = icall_where(t.first, &tfile);
+                std::fprintf(f, "%s\t%08x\t%c\t%s\t%08x\t%llu\n",
+                             simg, sfile, k == icall_kind_.end() ? '?' : k->second,
+                             timg, tfile, (unsigned long long)t.second);
+            }
+        }
+        std::fclose(f);
+    }
+}
+
+void Machine::icall_report() {
+    if (!icall_on_) return;
+    icall_write();
+
+    struct Site { std::vector<std::pair<uint32_t, uint64_t>> tgts; uint64_t total = 0; };
+    std::unordered_map<uint32_t, Site> by_site;
+    for (auto& e : icall_edges_) {
+        uint32_t site = (uint32_t)(e.first >> 32), tgt = (uint32_t)e.first;
+        auto& s = by_site[site];
+        s.tgts.push_back({tgt, e.second});
+        s.total += e.second;
+    }
+    size_t mono = 0, poly = 0;
+    for (auto& e : by_site) (e.second.tgts.size() == 1 ? mono : poly)++;
+
+    std::fprintf(stderr,
+        "\n--- [icall] indirect call/jump targets ---\n"
+        "  sites known %zu, fired %zu (%.1f%%), distinct edges %zu\n"
+        "  of the sites that fired: %zu single-target, %zu polymorphic\n",
+        icall_sites_.size(), by_site.size(),
+        icall_sites_.empty() ? 0.0
+            : 100.0 * (double)by_site.size() / (double)icall_sites_.size(),
+        icall_edges_.size(), mono, poly);
+
+    // The polymorphic ones are the interesting list: each is a dispatch point,
+    // and its target set is the class hierarchy or handler table behind it.
+    std::vector<std::pair<uint32_t, size_t>> v;
+    for (auto& e : by_site)
+        if (e.second.tgts.size() > 1) v.push_back({e.first, e.second.tgts.size()});
+    std::sort(v.begin(), v.end(), [](auto& a, auto& b) { return a.second > b.second; });
+    for (size_t i = 0; i < v.size() && i < 10; ++i) {
+        uint32_t file; const char* img = icall_where(v[i].first, &file);
+        std::fprintf(stderr, "  %-5s %08x  %zu targets\n", img, file, v[i].second);
+    }
+    const char* out = std::getenv("THEOC_ICALL_OUT");
+    std::fprintf(stderr, "  wrote %s\n", out ? out : "icall.tsv");
+}
+
 // ---- spliced guest calls with a return path ---------------------------------
 // Splicing (redirect_guest) gives a handler a tail call and nothing more: the
 // spliced function returns to the handler's caller. Planting our own one-byte

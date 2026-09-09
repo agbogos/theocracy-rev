@@ -616,6 +616,54 @@ decode as `operand?` rather than dropping it.
 An opcode table you enumerate is a table you can be wrong about silently. An
 operand match you classify afterwards is not.
 
+## 19. To cross an indirect call, run it
+
+§18 is about finding every *static* use of something. This is the case where
+no static search can work at all: `call *%eax`. The target is a register, so
+the disassembler stops, and so does any call-closure walk built on it —
+`SimulationStep` reaches 356 such sites, each a point where what the function
+can touch stops being provable.
+
+The emulator does not stop, because it executes them. `THEOC_ICALL`
+([../porting/diagnostics.md](../porting/diagnostics.md)) records `site ->
+target -> count` for every indirect call and jump in a session.
+
+The measurement is a basic-block hook rather than an instruction hook, which is
+what makes it cheap enough to leave on all session: Unicorn ends a block at a
+call or jump, so a block whose *end* equals a known site's return address is
+that site having just executed, and the next block entered is where it went.
+`tools/indirect_sites.py` supplies the return addresses.
+
+Three things this gets wrong if read naively, all of them consequences of the
+mechanism rather than of the guest:
+
+- **A callee that ran as host code executed no guest block.** An HLE'd import
+  or a native override returns without the emulator ever entering it, so the
+  next block seen is the *resumption* — the site's own return address, or for a
+  PLT `jmp *` thunk, a point inside the caller. Charged to the closure, the
+  first invents a self-call and the second invents a call to whatever function
+  happens to contain the resume point. They are separated out as `hostret`.
+- **Native overrides are holes in the coverage, not absences in the game.** An
+  overridden function's own indirect sites can never fire. The two documented
+  battle-only landmarks — `Pathfind_Search` and `LFB16_PutBitmap8C1_LAMask` —
+  are both overridden, so "no battle-only site fired" was read here as "no
+  battle happened" in a session that contained a full interactive battle. It
+  did not mean that; it could not have.
+- **A site that never fired is not a site with no targets.** This is evidence,
+  never proof, and it only ever grows a closure. Folding one hand-played
+  session into the `SimulationStep` walk took it from 371 functions to 736: the
+  static figure was not an over-estimate to be trimmed but an under-count,
+  because everything past an indirect call had been invisible.
+
+And the naming rule of §12 applies harder than usual here. `theocracy.real`
+carries 444 ELF labels for what Ghidra splits into 8630 functions, so a
+"containing function" for a game address computed from the symbol table alone
+attributes huge spans to whichever symbol precedes them. `--resolve` names a
+target only on an exact entry-point match and files everything else under
+`unknown`, rather than emitting a name that would be wrong and then quoted.
+
+---
+
 ---
 
 ## Checklist

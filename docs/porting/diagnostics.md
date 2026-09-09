@@ -83,6 +83,29 @@ Default: off
 
 Size-weighted guest basic-block histogram (Σ instruction bytes ≈ work), rolling top-15 dumped every 3s so the window tracks whatever is on screen. Host trap/stub/scratch pages (≥ `0x50000000`) are excluded; addresses are labelled `game 0x…` / `mvos+0x…` for the two Ghidra DBs. Armed just before `Start`, so boot and `.ctors` are not in the sample. Found the hot blit functions.
 
+#### `THEOC_ICALL [presence]`
+
+Default: off
+
+Records where every indirect call and jump actually went — `call *%eax`, `jmp *0x…(,%eax,4)`, the PLT thunks. A disassembler cannot follow these: the target is a register. This executes them and writes the answer down, as `site -> target -> times taken`.
+
+The mechanism is a basic-block hook, not an instruction hook, so it is cheap enough to leave on for a whole session. Unicorn ends a block at a call or jump, so a block whose *end* address equals a known site's return address is that site having just executed, and the next block entered is where it went — one hash lookup per block, no guest memory read, no disassembler in the host.
+
+The site table comes from `tools/indirect_sites.py`, which enumerates all 8250 sites (7642 call, 608 jump) from `objdump`. Generate it before the run; it is regenerable in seconds and not in git.
+
+Two things to know when reading the output:
+
+- **A site that never fired is not a site with no targets.** This is evidence, not proof. One unattended `THEOC_SOAK=2` fired 10.7% of sites; a hand-played session that reached a battle fired 18.9%.
+- **Native overrides are blind spots.** An overridden function executes no guest code, so its own indirect sites can never fire, and a call *into* one is recorded as the `hostret` class below rather than as a call. For coverage of those bodies, run with `THEOC_NATIVE_BLIT=0 THEOC_NATIVE_MIXER=0 THEOC_NATIVE_PATH=0`.
+
+`tools/indirect_sites.py --resolve <file>` annotates a run with symbol names and classifies each edge — `call`, `hostret`, `hostcall`, `unknown`. The classes and why `unknown` is one bucket are in [re-methodology.md](../reference/re-methodology.md) §19.
+
+#### `THEOC_ICALL_OUT [path]`
+
+Default: `icall.tsv`
+
+Where `THEOC_ICALL` writes its table. Rewritten every 30s as well as at exit, so a force-quit costs at most the last half-minute rather than the whole session.
+
 #### `THEOC_TRACE [presence]`
 
 Default: off

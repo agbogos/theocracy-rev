@@ -72,3 +72,10 @@ __pycache__/
 /port/deps-ffmpeg-macos-arm64/
 
 CLAUDE.md
+
+# Generated: the indirect-call site list (tools/indirect_sites.py) and the edge
+# logs THEOC_ICALL writes. Unlike the /data/*.tsv kept above these are not
+# reference tables — the site list regenerates from the binaries in seconds,
+# and an edge log is one session's evidence, not a fact about the game.
+/data/indirect_sites.tsv
+/icall*.tsv

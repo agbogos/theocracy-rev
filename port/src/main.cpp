@@ -406,6 +406,7 @@ int main(int argc, char** argv) {
         // boot/ctors aren't in the sample.
         if (std::getenv("THEOC_TRACE")) m.enable_block_trace();
         if (std::getenv("THEOC_PROFILE")) m.enable_profiling(guestlink::MVOS_BASE);
+        if (std::getenv("THEOC_ICALL")) m.enable_icall_log(guestlink::MVOS_BASE);
         // Three instruments read exec_blocks(), not one: [fps], the [health]
         // line, and the watchdog's "guest spinning vs stuck host-side" verdict.
         // Arming the counter for THEOC_FPS alone left the other two reading a
@@ -502,6 +503,8 @@ int main(int argc, char** argv) {
 
     if (L.traps) L.traps->stop_watchdog();  // frames stop legitimately now
     if (L.traps) L.traps->report();
+    m.icall_report();     // THEOC_ICALL: where every indirect call went
+
     if (init_ok && open_ok && start_ok)
         LOG_V("\nGuest-libmvos: Init=ok OpenSub=ok Start=ok\n");
     else

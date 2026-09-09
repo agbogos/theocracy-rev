@@ -137,6 +137,26 @@ public:
 
     uc_engine* uc() const { return uc_; }
 
+    // Indirect-call edge log (THEOC_ICALL): where every `call *%eax` actually
+    // went. subtree.py can enumerate the sites but never their targets -- the
+    // target is a register -- so a call closure stops being provable at each
+    // one, 356 of them under SimulationStep alone. The emulator executes them,
+    // so it can just write the answer down.
+    //
+    // The trick that makes it nearly free: Unicorn ends a basic block at a call
+    // or jump, so a block whose *end* address equals a known site's return
+    // address (site + instruction length) is that site having just executed,
+    // and the next block entered is where it went. One hash lookup per block,
+    // no guest memory read, no disassembler in the host. The site table comes
+    // from tools/indirect_sites.py.
+    //
+    // Feed the result back with `subtree.py --edges` to get a closure that is
+    // bounded by measurement instead of open at every indirect call.
+    void enable_icall_log(uint32_t mvos_base);
+    // Writes site->target->count as TSV (THEOC_ICALL_OUT, default icall.tsv)
+    // and a coverage summary. No-op unless the log is on.
+    void icall_report();
+
     // Guest EIP profiler (THEOC_PROFILE): a size-weighted basic-block histogram
     // over guest code, printed as a rolling top-N every few seconds so the dump
     // tracks whatever is on screen. Drive the UI into the slow view and read the
@@ -186,6 +206,20 @@ public:
     }
 
 private:
+    static void icall_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
+    bool     icall_on_ = false;
+    uint32_t icall_prev_end_ = 0;             // end of the last block entered
+    std::unordered_map<uint32_t, uint32_t> icall_sites_;  // retaddr -> site
+    // (site<<32 | target) -> times taken. Packing the pair into the key keeps
+    // the hot path at one lookup; the report unpacks and groups by site.
+    std::unordered_map<uint64_t, uint64_t> icall_edges_;
+    std::unordered_map<uint32_t, char>     icall_kind_;   // site -> 'c' | 'j'
+    void icall_load_sites(uint32_t mvos_base);
+    uint32_t icall_mvos_base_ = 0;
+    void icall_write();
+    uint64_t icall_ticks_ = 0;
+    std::chrono::steady_clock::time_point icall_last_;
+    const char* icall_where(uint32_t addr, uint32_t* file) const;
     static void code_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     static void watch_hook(uc_engine*, uint64_t addr, uint32_t size, void* user);
     static bool mem_hook(uc_engine*, int type, uint64_t addr, int size,

@@ -166,7 +166,27 @@ render itself as locked. One further caller of `SetGameSpeed` is the
 message-bar handler at `0x8069f40`, which applies a per-message speed from a
 runtime-filled table at `0x859b940` (stride `0x44`) — the mechanism by which an
 event notification can drop the game speed. What populates that table has not
-been read.
+been read, but the values it holds have: the game prints them as it builds the
+message buttons, one per slot, alongside the button's help text.
+
+```
+add buttons Message: [3] Speed:0  ... help[Megáll az idő, ha ezt az üzenetet kapod]
+```
+
+*"Time stops if you get this message"* — Hungarian, and a §9 landmark
+([../reference/re-methodology.md](../reference/re-methodology.md)) naming the
+mechanism outright. Over a played campaign the 15 message slots carried only
+two values, and both match `SetGameSpeed`'s contract exactly:
+
+| Speed | Slots | Effect |
+|---|---|---|
+| `0` | 3, 10, 11, 13, 14, 15, 17 | pauses the game |
+| `-1` | 2, 4–9, 16 | the "leave it alone" value — `SetGameSpeed` returns without touching anything |
+
+So the table is a per-message *pause* flag in practice, not a speed selector,
+even though the field is a full speed and `SetGameSpeed` would accept one.
+Where the values are loaded from is still unread; they arrive before the first
+message button is built, which puts the load in scenario or locale loading.
 
 ### The keys are B, N and M
 
