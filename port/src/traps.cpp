@@ -4300,11 +4300,17 @@ void TrapLayer::schedule_sound_chain(Machine& m, uint32_t esp, uint32_t arg,
 // the value the trapped call returns. cMixer::Silence16 is used because it is
 // the simplest guest function with an observable effect: it zeroes chans*count
 // int16 at a caller-supplied address.
-bool TrapLayer::resume_selftest(Machine& m) {
-    if (!mvos_base_) return false;
+// The base is a parameter rather than mvos_base_, which is set only by
+// install_plugins_and_video and so is still 0 headless.  This test wants no
+// display, and diagnostics.md says to pair the self-tests with THEOC_SERVER=1 --
+// which is exactly the case where reading mvos_base_ returned 0 and the test
+// silently reported failure without running or printing anything.
+bool TrapLayer::resume_selftest(Machine& m, uint32_t mvos_base) {
+    if (!mvos_base) mvos_base = mvos_base_;
+    if (!mvos_base) { std::fprintf(stderr, "[resume] no libmvos base\n"); return false; }
     constexpr uint32_t TEST_TRAP = 0x7b000000;
     constexpr uint32_t OFF_SILENCE16 = 0x82290;
-    const uint32_t silence = mvos_base_ + OFF_SILENCE16;
+    const uint32_t silence = mvos_base + OFF_SILENCE16;
     const uint32_t mixer = SCRATCH + 0x60000;   // fake cMixer: +6 = channels
     const uint32_t bufA = SCRATCH + 0x61000, bufB = SCRATCH + 0x62000;
     const uint32_t count = 64;

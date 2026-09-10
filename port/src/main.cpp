@@ -423,7 +423,7 @@ int main(int argc, char** argv) {
         // was CPU-bound emulating these pixel loops). THEOC_NATIVE_BLIT=0 falls
         // back to the emulated libmvos originals for A/B comparison.
         if (std::getenv("THEOC_RESUME_TEST") && L.traps)
-            return L.traps->resume_selftest(m) ? 0 : 1;
+            return L.traps->resume_selftest(m, guestlink::MVOS_BASE) ? 0 : 1;
         if (!headless) install_native_blit(m, guestlink::MVOS_BASE);
 
         // THEOC_PROVINCE_MS — retune cProvince_Do's 12fps frame limiter. A game

@@ -537,7 +537,7 @@ private:
 
 public:
     // THEOC_RESUME_TEST: end-to-end check of Machine::call_guest_then.
-    bool resume_selftest(Machine& m);
+    bool resume_selftest(Machine& m, uint32_t mvos_base = 0);
 
 private:
     void install_gd_refresh(Machine& m, uint32_t mvos_base);

@@ -129,6 +129,17 @@ handler call guest code and carry on afterwards
 ([host-architecture.md](host-architecture.md)). Three cases: one spliced call, a
 chained pair, and a handler that splices nothing. Exits with the result.
 
+It takes the libmvos base as an argument rather than reading `mvos_base_`, which
+is set only by `install_plugins_and_video` and is therefore still 0 headless.
+Before that it returned failure without running or printing anything under
+`THEOC_SERVER=1` -- the one configuration this page tells you to use it in.
+
+Validated by breaking it: forcing the fake mixer's channel count to 0 leaves
+`cMixer::Silence16` with nothing to zero, and the run goes red naming the three
+side-effect checks while the return-value checks still pass, which is the right
+diagnosis. Pointing it at the wrong offset instead aborts the process, which is
+its own evidence that the test really does execute guest code at that address.
+
 #### `THEOC_WATCHDOG_SAMPLE [path]`
 
 Default: off
