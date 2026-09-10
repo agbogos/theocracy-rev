@@ -444,6 +444,23 @@ The stack is untouched, so the trap's return address is still on top: the stub's
 A handler that calls `return_double` should still `return 0`; the value is
 ignored. The only current caller is `__strtod_internal`.
 
+### x87 state is not zero-initialised
+
+Unicorn resets the x87 control word to `0x0000`, which is PC=00: a 24-bit
+mantissa. Linux leaves it at `0x037f` (PC=11, 64-bit), which is what the game
+was compiled against, so `Machine::Machine()` sets it explicitly.
+
+Without it every float in the guest is rounded to single precision. That is
+observable rather than theoretical: `cRandom::Random` scales an integer LCG
+state by a double, and one scaled product is `14.999999682186` — at 24 bits
+that is within half an ulp of `15.0`, rounds up during the multiply, and the
+truncating store then yields `15` where the original yields `14`. The RNG
+stream diverges from the original's.
+
+It was wrong for the whole life of the port before this, so anything recorded
+earlier — saved games, determinism comparisons — ran at 24-bit mantissa and is
+not comparable with a run after it.
+
 ## Adding a new HLE function
 
 **Case 1 — an unresolved import** (the common case; it appears as `[trap] TODO

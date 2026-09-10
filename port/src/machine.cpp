@@ -21,6 +21,17 @@ Machine::Machine() {
     uc_hook h;
     uc_hook_add(uc_, &h, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED |
                 UC_HOOK_MEM_FETCH_UNMAPPED, (void*)&Machine::mem_hook, this, 1, 0);
+
+    // Unicorn resets the x87 control word to 0, which is PC=00: every float
+    // operation rounds to a 24-bit mantissa.  Linux leaves it at 0x037f -- PC=11,
+    // the 64-bit mantissa the guest was compiled against -- so without this the
+    // game computes at single precision throughout and quietly disagrees with
+    // the original.  It is observable: cRandom scales its integer LCG state by a
+    // double, and at 24 bits a product of 14.999999682 rounds to exactly 15.0
+    // before the truncating store, so the RNG returns 15 where the original
+    // returns 14.  See host-architecture.md, "x87 state is not zero-initialised".
+    uint32_t cw = 0x037f;
+    uc_reg_write(uc_, UC_X86_REG_FPCW, &cw);
 }
 
 bool Machine::mem_hook(uc_engine*, int, uint64_t addr, int, int64_t, void* user) {
@@ -82,7 +93,10 @@ std::string Machine::cstr(uint32_t addr, uint32_t max) const {
     return s;
 }
 
-uint32_t Machine::reg(int r) const { uint32_t v; uc_reg_read(uc_, r, &v); return v; }
+// v is zero-initialised because uc_reg_read writes only as many bytes as the
+// register has: reading a 16-bit register (FPCW, FPSW) into an uninitialised
+// uint32_t leaves the top half as stack garbage.
+uint32_t Machine::reg(int r) const { uint32_t v = 0; uc_reg_read(uc_, r, &v); return v; }
 void Machine::setreg(int r, uint32_t v) { uc_reg_write(uc_, r, &v); }
 uint32_t Machine::esp() const { return reg(UC_X86_REG_ESP); }
 
