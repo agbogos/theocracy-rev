@@ -1264,6 +1264,13 @@ harder to *see*: mingw embeds the short literals as instruction immediates, so
 `strings` finds the commit inside a function prologue and the date only as
 fragments. Confirm a PE's stamp by disassembling around the literal; a grep that
 finds nothing is not evidence of a missing stamp.
+**The Linux bundle was built unoptimised.** `package-linux.sh` configured
+with no `CMAKE_BUILD_TYPE`, and `port/CMakeLists.txt` set none, so the Linux
+`theoc` in v1.0.0 is `-O0`; the macOS and Windows scripts pass `Release`. In a
+scripted battle on `feature/native` the native overrides cost 6.5× as much at
+`-O0`. `package-linux.sh` now passes `Release` like the others, and
+`port/CMakeLists.txt` defaults to `RelWithDebInfo` when no type is given.
+
 ## Sequencing
 
 1. ~~**Linux first.**~~ **Done.** It is mostly subtraction, it forces

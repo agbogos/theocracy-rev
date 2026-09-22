@@ -3,6 +3,13 @@
 cmake_minimum_required(VERSION 3.20)
 project(theoc CXX)
 
+# No build type means no optimisation flags at all, i.e. -O0. That was the
+# default here: every dev build and the Linux package ran the native overrides
+# unoptimised. Optimise unless asked not to.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

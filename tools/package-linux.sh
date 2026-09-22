@@ -105,7 +105,8 @@ fi
 # different ffmpeg prefix would keep linking the old one and ship it silently.
 rm -rf "$BUILD"
 cmake -S port -B "$BUILD" $FFMPEG_ARG -DTHEOC_VERSION="$VERSION" \
-      -DTHEOC_STAMP_DATE="$STAMP_DATE" -DTHEOC_COMMIT="$COMMIT" >/dev/null
+      -DTHEOC_STAMP_DATE="$STAMP_DATE" -DTHEOC_COMMIT="$COMMIT" \
+      -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "$BUILD" -j"$(nproc)" >/dev/null
 echo "    built $BUILD/theoc"
 
