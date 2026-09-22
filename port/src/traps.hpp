@@ -478,7 +478,10 @@ private:
     // handler splices _TimerFunction with its return address pointing back at
     // the usleep trap and keeps the unslept remainder here, so the sleep
     // resumes after the tick and the guest sees its full duration.
-    uint32_t sleep_remaining_us_ = 0;  // unslept remainder, 0 = not mid-sleep
+    // When the interrupted sleep ends. A deadline, not a remainder: whatever
+    // runs between the tick and the resume (the heartbeat's guest code, an
+    // async-cursor present) is time the sleep has already spent.
+    std::chrono::steady_clock::time_point sleep_deadline_{};
     uint32_t sleep_resume_ret_   = 0;  // original caller's return address
     bool     sleep_resuming_     = false;
     // True when the SIGALRM handler is the stock _TimerFunction, which ignores

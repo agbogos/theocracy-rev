@@ -1654,7 +1654,7 @@ void TrapLayer::register_builtins() {
         }
 
         // Are we resuming a sleep we interrupted to deliver a tick? Then the
-        // remainder is ours, not the guest's argument — which on re-entry is
+        // time left to its deadline is ours, not the guest's argument — which on re-entry is
         // still the *original* request and would restart the sleep from the top.
         // Guarded on the return address too, in case a spliced handler ever
         // calls usleep itself.
@@ -1662,10 +1662,20 @@ void TrapLayer::register_builtins() {
         bool resumed = false;
         if (sleep_resuming_) {
             sleep_resuming_ = false;
-            if (m.r32(esp) == sleep_resume_ret_) { remaining = sleep_remaining_us_; resumed = true; }
-            sleep_remaining_us_ = 0;
+            if (m.r32(esp) == sleep_resume_ret_) {
+                auto left = std::chrono::duration_cast<std::chrono::microseconds>(
+                                sleep_deadline_ - std::chrono::steady_clock::now()).count();
+                remaining = left > 0 ? (uint32_t)left : 0;
+                resumed = true;
+            }
         }
         if (remaining > 1000000) remaining = 1000000;  // sanity clamp
+        // One deadline per sleep, fixed on the fresh entry. Each slice is then
+        // measured against it rather than subtracted from a remainder: a host
+        // sleep overshoots by a little, a slice runs 3-4 times per frame, and
+        // counting what was asked instead of what passed made every province
+        // frame 8-15 ms long (frame-timing.md, "Bug 2, revisited").
+        if (!resumed) sleep_deadline_ = std::chrono::steady_clock::now() + std::chrono::microseconds(remaining);
 
         // A tick we spliced has just run cIntuition::TimerProc, which repainted
         // the pointer into the LFB and flushed it through cGD_LFB16::Refresh.
@@ -1728,7 +1738,9 @@ void TrapLayer::register_builtins() {
             if (!slice) continue;   // tick is due; next pass delivers it
             sleep_accounted(slice);
             fps_usleep_us_ += slice;
-            remaining -= slice;
+            auto left = std::chrono::duration_cast<std::chrono::microseconds>(
+                            sleep_deadline_ - std::chrono::steady_clock::now()).count();
+            remaining = left > 0 ? (uint32_t)left : 0;
         }
     };
     t["ioctl"] = [this](Machine& m, uint32_t esp) -> uint32_t {
@@ -3464,7 +3476,7 @@ bool TrapLayer::redirect_timer_reentrant(Machine& m, uint32_t esp, uint32_t rema
 
     uint32_t fn = sigalrm_handler_;
     if (!fn) fn = mvos_base_ + 0x922e0;  // _TimerFunction__Fi
-    sleep_remaining_us_ = remaining;
+    (void)remaining;                   // the deadline was fixed on entry
     sleep_resume_ret_   = m.r32(esp);
     sleep_resuming_     = true;
     uint32_t sp = esp - 4;

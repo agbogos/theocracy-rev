@@ -203,15 +203,32 @@ A real kernel
 fires SIGALRM ~3 times inside an 83 ms `usleep` without shortening it. We could
 not: a spliced tick has to *return through the trap*, so delivering one meant
 abandoning the sleep. The way out is to make it return to the **usleep trap**
-instead of to usleep's caller, and keep the remainder in host state:
+instead of to usleep's caller, and keep the sleep's deadline in host state:
 
 ```
 usleep(83333) → sleep 33ms → tick due → splice _TimerFunction ─┐
                                                                 │ returns to
               ← ─────────── usleep trap re-entered ─────────────┘ the trap
               → sleep 33ms → tick due → splice ──→ re-entered
-              → sleep 17ms → remaining == 0 → return to the real caller
+              → sleep 17ms → deadline reached → return to the real caller
 ```
+
+The deadline is fixed when the sleep is entered, as a kernel's is, and every
+slice is measured against it: the loop re-reads the clock after each host
+sleep, and a resume after a tick sleeps only what is left. Two things otherwise
+leak into the frame, because the limiter has already measured elapsed time and
+cannot see them:
+
+| Leak | Size per province frame |
+|---|---|
+| Each host sleep overshoots its slice a little, and a frame has 3–4 slices; subtracting the *requested* slice from a remainder summed the overshoots | 8–15 ms (traced: request 78.5 ms, actual 93.5) |
+| Guest code and the async-cursor present that run between a tick and the resume | the heartbeat's work, 1–3 ms typical |
+
+Measured on `feature/native` in played battles on macOS: mean battle rate
+11.62 → 11.88 fps, 12 fps in 243 of 244 battle seconds, and a sleep ends a mean
+2 ms after its deadline, the host sleep's own resolution. A long frame now comes
+only from a spike in the guest's own work, and the limiter shortens the next
+frame to make it up.
 
 Full duration *and* a 30 Hz heartbeat, with **no guest patch**. The frame is
 tight: `_TimerFunction` returns through `esp-4`, so its `signo` argument lands
